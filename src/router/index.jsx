@@ -1,59 +1,37 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import AppLayout      from '@/components/layout/AppLayout'
 import ProtectedRoute from '@/components/common/ProtectedRoute'
-
-// Pages (lazy 로딩 → 성능 최적화)
-import { lazy, Suspense } from 'react'
-
-const Login    = lazy(() => import('@/pages/Login'))
-const Home     = lazy(() => import('@/pages/Home'))
-const Map      = lazy(() => import('@/pages/Map'))
-const Learning = lazy(() => import('@/pages/Learning'))
-const Notice   = lazy(() => import('@/pages/Notice'))
-const Profile  = lazy(() => import('@/pages/Profile'))
-
-// Fallback
-const PageLoader = () => (
-  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh' }}>
-    <div style={{
-      width: 32, height: 32,
-      borderRadius: '50%',
-      border: '3px solid var(--color-primary-light)',
-      borderTopColor: 'var(--color-primary)',
-      animation: 'spin 0.7s linear infinite',
-    }} />
-    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-  </div>
-)
-
-const wrap = (Component) => (
-  <Suspense fallback={<PageLoader />}>
-    <Component />
-  </Suspense>
-)
+import Login          from '@/pages/Login'
+import Register       from '@/pages/Register'
+import Home           from '@/pages/Home'
+import Map            from '@/pages/Map'
+import Learning       from '@/pages/Learning'
+import Notice         from '@/pages/Notice'
+import Profile        from '@/pages/Profile'
 
 export const router = createBrowserRouter([
+  // 비로그인 페이지
+  { path: '/login',    element: <Login /> },
+  { path: '/register', element: <Register /> },
+
+  // 로그인 필요 페이지
   {
-    path: '/login',
-    element: wrap(Login),
-  },
-  {
+    path: '/',
     element: (
       <ProtectedRoute>
         <AppLayout />
       </ProtectedRoute>
     ),
     children: [
-      { index: true,        element: <Navigate to="/home" replace /> },
-      { path: 'home',       element: wrap(Home) },
-      { path: 'map',        element: wrap(Map) },
-      { path: 'learning',   element: wrap(Learning) },
-      { path: 'notice',     element: wrap(Notice) },
-      { path: 'profile',    element: wrap(Profile) },
+      { index: true,      element: <Navigate to="home" replace /> },
+      { path: 'home',     element: <Home /> },
+      { path: 'map',      element: <Map /> },
+      { path: 'learning', element: <Learning /> },
+      { path: 'notice',   element: <Notice /> },
+      { path: 'profile',  element: <Profile /> },
     ],
   },
-  {
-    path: '*',
-    element: <Navigate to="/home" replace />,
-  },
+
+  // 그 외 → 홈으로
+  { path: '*', element: <Navigate to="/" replace /> },
 ])
