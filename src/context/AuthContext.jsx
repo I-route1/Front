@@ -1,41 +1,53 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 
-/** 사용자 역할 상수 */
 export const USER_ROLES = {
-  PARENT:  'parent',   // 학부모
-  DRIVER:  'driver',   // 기사
-  ACADEMY: 'academy',  // 학원 관리자
-  STUDENT: 'student',  // 학생
+  PARENT:  'parent',
+  DRIVER:  'driver',
+  ACADEMY: 'academy',
+  STUDENT: 'student',
 }
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null)    // 로그인 사용자 정보
-  const [loading, setLoading] = useState(true)    // 초기 로딩
+  const [user, setUser]       = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // TODO: 로컬 스토리지 또는 서버에서 세션 복원
-    const savedUser = sessionStorage.getItem('i-route-user')
-    if (savedUser) {
-      try { setUser(JSON.parse(savedUser)) } catch {}
+    const saved = sessionStorage.getItem('i-route-user')
+    if (saved) {
+      try { setUser(JSON.parse(saved)) } catch {}
     }
     setLoading(false)
   }, [])
 
-  /** 카카오 OAuth 로그인 (추후 구현) */
+  const saveUser = (u) => {
+    setUser(u)
+    sessionStorage.setItem('i-route-user', JSON.stringify(u))
+  }
+
+  /** 일반 로그인 */
+  const loginWithCredentials = async (username, password) => {
+    // TODO: POST /api/auth/login
+    // mock: 아무 아이디/비번이나 허용
+    await new Promise(r => setTimeout(r, 800))
+    if (!username || !password) throw new Error('아이디 또는 비밀번호가 올바르지 않습니다')
+    saveUser({
+      id: 'user-001', name: '홍길동', role: USER_ROLES.PARENT,
+      username, avatar: null,
+      children: [{ id: 'child-001', name: '홍민준', grade: '초6' }],
+    })
+  }
+
+  /** 카카오 OAuth 로그인 */
   const loginWithKakao = async () => {
     // TODO: Kakao OAuth flow
-    // 임시: 개발용 mock 로그인
-    const mockUser = {
-      id:       'mock-001',
-      name:     '홍길동',
-      role:     USER_ROLES.PARENT,
-      avatar:   null,
+    await new Promise(r => setTimeout(r, 500))
+    saveUser({
+      id: 'kakao-001', name: '홍길동', role: USER_ROLES.PARENT,
+      avatar: null,
       children: [{ id: 'child-001', name: '홍민준', grade: '초6' }],
-    }
-    setUser(mockUser)
-    sessionStorage.setItem('i-route-user', JSON.stringify(mockUser))
+    })
   }
 
   const logout = () => {
@@ -43,16 +55,18 @@ export function AuthProvider({ children }) {
     sessionStorage.removeItem('i-route-user')
   }
 
-  const value = {
-    user,
-    loading,
-    isLoggedIn: !!user,
-    role: user?.role ?? null,
-    loginWithKakao,
-    logout,
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{
+      user, loading,
+      isLoggedIn: !!user,
+      role: user?.role ?? null,
+      loginWithCredentials,
+      loginWithKakao,
+      logout,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export const useAuth = () => {
