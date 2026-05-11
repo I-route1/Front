@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 const PAGE_TITLES = {
   '/home':     null,          // 홈은 로고 표시
   '/map':      '실시간 위치',
-  '/learning': '학습 로드맵',
+  '/learning': '학습 리포트',
   '/notice':   '공지사항',
   '/profile':  '마이페이지',
 }
