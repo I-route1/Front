@@ -6,7 +6,7 @@ import BottomNav from './BottomNav'
 const NAV_ITEMS = [
   { to: '/home',     label: '홈',      icon: HomeIcon },
   { to: '/map',      label: '실시간 위치', icon: MapIcon,    badge: 0 },
-  { to: '/learning', label: '학습 로드맵', icon: BookIcon },
+  { to: '/learning', label: '학습 리포트', icon: BookIcon },
   { to: '/notice',   label: '공지사항',   icon: NoticeIcon, badge: 2 },
   { to: '/profile',  label: '마이페이지', icon: ProfileIcon },
 ]

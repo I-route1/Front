@@ -1,7 +1,9 @@
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Home() {
   const { user } = useAuth()
+  const navigate = useNavigate()
 
   return (
     <div>
@@ -61,8 +63,8 @@ export default function Home() {
           <h3 className="section__title">빠른 실행</h3>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {QUICK_ACTIONS.map(({ icon, label, color }) => (
-            <button key={label} style={{
+          {QUICK_ACTIONS.map(({ icon, label, color, to }) => (
+            <button key={label} onClick={() => to && navigate(to)} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
               padding: '14px 8px',
               background: 'var(--color-surface)',
@@ -150,10 +152,10 @@ export default function Home() {
 }
 
 const QUICK_ACTIONS = [
-  { icon: '📍', label: '위치\n확인',  color: '#1A56DB' },
-  { icon: '📞', label: '기사\n연락',  color: '#00C49A' },
-  { icon: '📋', label: '학원\n공지',  color: '#FF6B35' },
-  { icon: '📊', label: '학습\n리포트', color: '#9B59B6' },
+  { icon: '📍', label: '위치\n확인',  color: '#1A56DB', to: '/map' },
+  { icon: '📞', label: '기사\n연락',  color: '#00C49A', to: null },
+  { icon: '📋', label: '학원\n공지',  color: '#FF6B35', to: '/notice' },
+  { icon: '📊', label: '학습\n리포트', color: '#9B59B6', to: '/learning' },
 ]
 
 const SCHEDULES = [
