@@ -81,9 +81,6 @@ const INIT_DAILY_PLAN = [
   { id:5, subject:'과학', task:'물질 변화 정리', time:20, done:false },
 ]
 
-/* ============================================
-   메인
-   ============================================ */
 export default function Learning() {
   const [activeTab, setActiveTab] = useState('grade')
   return (
@@ -419,7 +416,7 @@ function PatternTab() {
 
       <div style={{ margin:'16px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🕐 시간대별 집중도</p>][][ㅐㅐ]
+          <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🕐 시간대별 집중도</p>]
           <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>앱 접속 패턴 기반 분석</p>
           <ResponsiveContainer width="100%" height={170}>
             <BarChart data={GOLDEN_TIME_DATA} margin={{ top:4, right:8, left:-20, bottom:0 }}>
@@ -559,7 +556,6 @@ function PatternTab() {
 }
 
 function SuggestTab() {
-  const [flipped, setFlipped] = useState(null)
   return (
     <div>
       <div style={{ background:'linear-gradient(135deg, #0F3460 0%, #533483 100%)', padding:'24px 20px', color:'white' }}>
