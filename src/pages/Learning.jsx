@@ -556,6 +556,20 @@ function PatternTab() {
 }
 
 function SuggestTab() {
+  const [solving, setSolving] = useState(false)
+  const [showAnswer, setShowAnswer] = useState(false)
+  const [answer, setAnswer] = useState('')
+  const handleSolve = async () => {
+    if (!answer.trim()) {
+      alert('답을 입력해 주세요')
+      return
+    }
+    setSolving(true)
+    // TODO: 백엔드 연결 시 정답 채점 API 호출
+    await new Promise(r => setTimeout(r, 1200))
+    setSolving(false)
+    setShowAnswer(true)
+  }
   return (
     <div>
       <div style={{ background:'linear-gradient(135deg, #0F3460 0%, #533483 100%)', padding:'24px 20px', color:'white' }}>
@@ -599,10 +613,62 @@ function SuggestTab() {
             ))}
           </div>
           <div style={{ background:'var(--color-primary-light)', borderRadius:12, padding:'14px 16px', border:'1px solid #1A56DB30' }}>
-            <p style={{ fontSize:13, fontWeight:700, color:'var(--color-primary)', marginBottom:8 }}>🤖 AI 생성 쌍둥이 문제 (수학 · 분수 나눗셈)</p>
-            <p style={{ fontSize:13, color:'var(--color-text-primary)', lineHeight:1.7 }}>3과 4분의 1을 1과 3분의 2로 나누면 얼마인가요?<br/><span style={{ fontSize:11, color:'var(--color-text-muted)' }}>난이도: 중 · 오답 빈도 1위 유형</span></p>
-            <button style={{ marginTop:10, width:'100%', padding:'10px', borderRadius:10, border:'none', background:'var(--color-primary)', color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit', cursor:'pointer' }}>문제 풀기</button>
-          </div>
+  <p style={{ fontSize:13, fontWeight:700, color:'var(--color-primary)', marginBottom:8 }}>🤖 AI 생성 쌍둥이 문제 (수학 · 분수 나눗셈)</p>
+  <p style={{ fontSize:13, color:'var(--color-text-primary)', lineHeight:1.7 }}>
+    3과 4분의 1을 1과 3분의 2로 나누면 얼마인가요?<br/>
+    <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>난이도: 중 · 오답 빈도 1위 유형</span>
+  </p>
+
+  {/* 답 입력칸 */}
+  <input
+    type="text"
+    value={answer}
+    onChange={e => setAnswer(e.target.value)}
+    placeholder="답을 입력하세요 (예: 39/22)"
+    disabled={showAnswer}
+    style={{
+      width:'100%', marginTop:10, padding:'10px 12px',
+      borderRadius:8, border:'1.5px solid var(--color-border)',
+      background:'white', fontSize:13, fontFamily:'inherit', outline:'none',
+      boxSizing:'border-box',
+    }}
+  />
+
+  {!showAnswer ? (
+    <button
+      onClick={handleSolve}
+      disabled={solving}
+      style={{
+        marginTop:10, width:'100%', padding:'10px', borderRadius:10,
+        border:'none', background:'var(--color-primary)', color:'white',
+        fontSize:13, fontWeight:700, fontFamily:'inherit',
+        cursor: solving ? 'not-allowed' : 'pointer',
+        opacity: solving ? 0.6 : 1,
+      }}
+    >
+      {solving ? '⏳ 채점 중...' : '문제 풀기'}
+    </button>
+  ) : (
+    <div style={{ marginTop:10, padding:'12px', borderRadius:10, background:'#D1FAF0', border:'1px solid #00C49A50' }}>
+      <p style={{ fontSize:13, fontWeight:700, color:'#007A5E' }}>
+        ✓ 정답: 39/22 (1과 17/22)
+      </p>
+      <p style={{ fontSize:11, color:'#007A5E', marginTop:4, opacity:0.85 }}>
+        풀이: 13/4 ÷ 5/3 = 13/4 × 3/5 = 39/20
+      </p>
+      <button
+        onClick={() => { setShowAnswer(false); setAnswer('') }}
+        style={{
+          marginTop:8, padding:'6px 12px', borderRadius:8, border:'none',
+          background:'transparent', color:'#007A5E', fontSize:12, fontWeight:600,
+          fontFamily:'inherit', cursor:'pointer',
+        }}
+      >
+        다시 풀기
+      </button>
+    </div>
+  )}
+</div>
         </div>
       </div>
 
@@ -645,6 +711,29 @@ function PredictTab() {
   const [plan, setPlan]               = useState(INIT_DAILY_PLAN)
   const [newTask, setNewTask]         = useState({ subject:'수학', task:'', time:30 })
   const [showAdd, setShowAdd]         = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [roadmap, setRoadmap] = useState(null)
+
+  // 로드맵 생성 핸들러 추가
+  const handleGenerateRoadmap = async () => {
+    if (!goal.trim() || !targetScore) {
+      alert('목표와 목표 점수를 입력해 주세요')
+      return
+    }
+    setGenerating(true)
+    // TODO: 백엔드 연결 시 AI 로드맵 API 호출
+    await new Promise(r => setTimeout(r, 2000))
+    setRoadmap({
+      weeks: [
+        { week:'1~2주차', focus:'수학 분수 영역 집중 보완', target:'정답률 70%' },
+        { week:'3~4주차', focus:'영어 문법 패턴 학습', target:'관계대명사 마스터' },
+        { week:'5~6주차', focus:'전 과목 모의고사 풀이', target:'평균 85점' },
+        { week:'7~8주차', focus:'약점 단원 재점검', target:'목표 점수 도달' },
+      ],
+      tip: `${goal} 달성을 위해 평일 2시간, 주말 4시간 학습을 추천합니다.`,
+    })
+    setGenerating(false)
+  }
 
   const toggleDone = (id) =>
     setPlan(prev => prev.map(p => p.id===id ? {...p, done:!p.done} : p))
@@ -780,7 +869,63 @@ function PredictTab() {
               <label className="input-label">목표 평균 점수</label>
               <input className="input-field" type="number" placeholder="예: 90" value={targetScore} onChange={e=>setTargetScore(e.target.value)} />
             </div>
-            <button style={{ width:'100%', padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(90deg, #1A56DB, #00C49A)', color:'white', fontSize:15, fontWeight:700, fontFamily:'inherit', cursor:'pointer', boxShadow:'0 4px 16px rgba(26,86,219,0.3)' }}>AI 로드맵 생성</button>
+            <button
+  onClick={handleGenerateRoadmap}
+  disabled={generating}
+  style={{
+    width:'100%', padding:'13px', borderRadius:12, border:'none',
+    background: generating
+      ? 'var(--color-text-muted)'
+      : 'linear-gradient(90deg, #1A56DB, #00C49A)',
+    color:'white', fontSize:15, fontWeight:700, fontFamily:'inherit',
+    cursor: generating ? 'not-allowed' : 'pointer',
+    boxShadow:'0 4px 16px rgba(26,86,219,0.3)',
+    transition:'all 0.2s',
+  }}
+>
+  {generating ? '🤖 AI가 로드맵을 설계 중...' : 'AI 로드맵 생성'}
+</button>
+
+{/* 생성된 로드맵 표시 */}
+{roadmap && (
+  <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid var(--color-border)' }}>
+    <p style={{ fontSize:13, fontWeight:700, marginBottom:12, color:'var(--color-primary)' }}>
+      ✨ 맞춤 로드맵이 완성되었어요!
+    </p>
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      {roadmap.weeks.map((w, i) => (
+        <div key={i} style={{
+          display:'flex', gap:12, padding:'12px 14px', borderRadius:10,
+          background:'var(--color-surface-2)', border:'1px solid var(--color-border)',
+        }}>
+          <div style={{
+            width:36, height:36, borderRadius:10, flexShrink:0,
+            background:'var(--color-primary)', color:'white',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:13, fontWeight:800,
+          }}>{i+1}</div>
+          <div style={{ flex:1 }}>
+            <p style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>
+              {w.week}
+            </p>
+            <p style={{ fontSize:13, fontWeight:600, marginTop:3 }}>{w.focus}</p>
+            <p style={{ fontSize:11, color:'var(--color-success)', marginTop:3, fontWeight:600 }}>
+              🎯 {w.target}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+    <div style={{
+      marginTop:12, padding:'12px 14px', borderRadius:10,
+      background:'var(--color-primary-light)', border:'1px solid #1A56DB30',
+    }}>
+      <p style={{ fontSize:12, color:'var(--color-primary)', lineHeight:1.6, fontWeight:600 }}>
+        💡 {roadmap.tip}
+      </p>
+    </div>
+  </div>
+)}
           </div>
         </div>
       </div>
