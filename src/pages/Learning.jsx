@@ -5,9 +5,6 @@ import {
   PolarGrid, PolarAngleAxis, Radar, BarChart, Bar, Cell,
 } from 'recharts'
 
-/* ============================================
-   상수
-   ============================================ */
 const TABS = [
   { id: 'grade',   label: '📊 성적' },
   { id: 'pattern', label: '🧠 학습패턴' },
@@ -31,9 +28,6 @@ const getGrade = (score) => {
 /* 백분위 추정 (백엔드 연결 전 간이 계산) */
 const getPercentile = (score) => Math.min(99, Math.round(score * 0.9 + 5))
 
-/* ============================================
-   초기 Mock 데이터
-   ============================================ */
 const INIT_TREND = [
   { date:'24.03', 국어:78, 수학:62, 영어:85, 사회:70, 과학:74 },
   { date:'24.06', 국어:82, 수학:58, 영어:88, 사회:75, 과학:71 },
@@ -119,9 +113,6 @@ export default function Learning() {
   )
 }
 
-/* ============================================
-   1. 성적 탭 — 실제 입력 반영
-   ============================================ */
 function GradeTab() {
   const [trendData, setTrendData] = useState(INIT_TREND)
   const [showForm, setShowForm]   = useState(false)
@@ -405,9 +396,6 @@ function GradeTab() {
   )
 }
 
-/* ============================================
-   2. 학습패턴 탭
-   ============================================ */
 function PatternTab() {
   const [selfEval, setSelfEval] = useState({ 이해도:0, 집중도:0 })
   const [feedback, setFeedback] = useState('')
@@ -431,7 +419,7 @@ function PatternTab() {
 
       <div style={{ margin:'16px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🕐 시간대별 집중도</p>
+          <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🕐 시간대별 집중도</p>][][ㅐㅐ]
           <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>앱 접속 패턴 기반 분석</p>
           <ResponsiveContainer width="100%" height={170}>
             <BarChart data={GOLDEN_TIME_DATA} margin={{ top:4, right:8, left:-20, bottom:0 }}>
@@ -570,9 +558,6 @@ function PatternTab() {
   )
 }
 
-/* ============================================
-   3. 맞춤추천 탭
-   ============================================ */
 function SuggestTab() {
   const [flipped, setFlipped] = useState(null)
   return (
@@ -581,41 +566,6 @@ function SuggestTab() {
         <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>AI 분석 기반</p>
         <h2 style={{ fontSize:20, fontWeight:800 }}>맞춤 학습 솔루션</h2>
         <p style={{ fontSize:13, opacity:0.7, marginTop:6, lineHeight:1.5 }}>약점을 보완하고 강점을 극대화하는 개인 맞춤형 추천</p>
-      </div>
-
-      <div style={{ margin:'16px 16px 0' }}>
-        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🔁 오늘의 복습 카드</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>에빙하우스 망각곡선 기반 · 카드를 눌러 내용 확인</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {REVIEW_CARDS.map((card,i) => (
-              <div key={i} onClick={() => setFlipped(flipped===i ? null : i)} style={{
-                padding:'14px 16px', borderRadius:12, cursor:'pointer',
-                background: flipped===i ? 'var(--color-primary)' : 'var(--color-surface-2)',
-                border:`1.5px solid ${flipped===i ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                transition:'all 0.2s',
-              }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <span style={{ fontSize:18 }}>{card.emoji}</span>
-                  <div style={{ flex:1 }}>
-                    <p style={{ fontSize:13, fontWeight:700, color: flipped===i ? 'white' : 'var(--color-text-primary)' }}>{card.unit}</p>
-                    <p style={{ fontSize:11, color: flipped===i ? 'rgba(255,255,255,0.7)' : 'var(--color-text-muted)', marginTop:2 }}>{card.subject} · 복습 기한: {card.due}</p>
-                  </div>
-                  <span style={{ fontSize:11, color: flipped===i ? 'rgba(255,255,255,0.8)' : 'var(--color-text-muted)' }}>{flipped===i ? '접기 ▲' : '펼치기 ▼'}</span>
-                </div>
-                {flipped===i && (
-                  <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid rgba(255,255,255,0.2)' }}>
-                    <p style={{ fontSize:12, color:'rgba(255,255,255,0.9)', lineHeight:1.6 }}>
-                      💡 핵심 개념을 다시 정리하고, 유사 문제 3문항을 풀어보세요.<br/>
-                      오늘 복습하지 않으면 기억 보존율이 40% 이하로 떨어집니다.
-                    </p>
-                    <button style={{ marginTop:10, padding:'8px 14px', borderRadius:8, border:'none', background:'rgba(255,255,255,0.2)', color:'white', fontSize:12, fontWeight:700, fontFamily:'inherit', cursor:'pointer' }}>복습 문제 풀기 →</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div style={{ margin:'12px 16px 0' }}>
@@ -693,9 +643,6 @@ function SuggestTab() {
   )
 }
 
-/* ============================================
-   4. 성장예측 탭
-   ============================================ */
 function PredictTab() {
   const [goal, setGoal]               = useState('')
   const [targetScore, setTargetScore] = useState('')
@@ -838,32 +785,6 @@ function PredictTab() {
               <input className="input-field" type="number" placeholder="예: 90" value={targetScore} onChange={e=>setTargetScore(e.target.value)} />
             </div>
             <button style={{ width:'100%', padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(90deg, #1A56DB, #00C49A)', color:'white', fontSize:15, fontWeight:700, fontFamily:'inherit', cursor:'pointer', boxShadow:'0 4px 16px rgba(26,86,219,0.3)' }}>AI 로드맵 생성</button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ margin:'12px 16px 16px' }}>
-        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🏆 유사 목표 달성 선배 경로</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>같은 목표를 달성한 선배 학생들의 학습 데이터</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {[
-              { step:'1단계', period:'1~2개월', task:'기초 개념 완성 (수학·영어 취약 단원)', icon:'📖' },
-              { step:'2단계', period:'3~4개월', task:'심화 문제풀이 + 오답 반복 학습', icon:'✍️' },
-              { step:'3단계', period:'5~6개월', task:'실전 모의고사 주 2회 + 시간 관리 훈련', icon:'⏱️' },
-              { step:'달성',  period:'목표',    task:'목표 점수 도달', icon:'🎉' },
-            ].map((s,i,arr) => (
-              <div key={i} style={{ display:'flex', gap:14, alignItems:'flex-start' }}>
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-                  <div style={{ width:36, height:36, borderRadius:'50%', background: i===arr.length-1 ? 'var(--color-success)' : 'var(--color-primary-light)', border:`2px solid ${i===arr.length-1 ? 'var(--color-success)' : 'var(--color-primary)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>{s.icon}</div>
-                  {i<arr.length-1 && <div style={{ width:2, height:24, background:'var(--color-border)', marginTop:4 }} />}
-                </div>
-                <div style={{ paddingTop:6 }}>
-                  <p style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>{s.step} <span style={{ color:'var(--color-text-muted)', fontWeight:500 }}>({s.period})</span></p>
-                  <p style={{ fontSize:12, color:'var(--color-text-secondary)', marginTop:2 }}>{s.task}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </div>
