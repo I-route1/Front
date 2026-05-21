@@ -1,5 +1,5 @@
 export const SUBJECTS = ['국어', '수학', '영어', '사회', '과학']
-export const EXAM_TYPES = ['중간고사', '기말고사', '모의고사']
+export const EXAM_TYPES = ['중간고사', '기말고사']
 export const SUBJECT_COLORS = {
   국어:'#1A56DB', 수학:'#FF6B35', 영어:'#00C49A', 사회:'#9B59B6', 과학:'#FFB800',
 }

@@ -1,9 +1,13 @@
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
+import { useNavigate, Navigate } from 'react-router-dom'
+import { useAuth, USER_ROLES, getDefaultRoute } from '@/context/AuthContext'
 
 export default function Home() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const navigate = useNavigate()
+
+  if (role === USER_ROLES.ACADEMY) {
+    return <Navigate to={getDefaultRoute(role)} replace />
+  }
 
   return (
     <div>
