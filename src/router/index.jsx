@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import AppLayout from '@/components/layout/AppLayout'
 import ProtectedRoute from '@/components/common/ProtectedRoute'
+import RoleHomeRedirect from '@/components/common/RoleHomeRedirect'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Home from '@/pages/Home'
@@ -9,6 +10,7 @@ import Learning from '@/pages/Learning'
 import Notice from '@/pages/Notice'
 import Profile from '@/pages/Profile'
 import DriverBoardingList from '@/pages/DriverBoardingList'
+import AdminLearning from '@/pages/AdminLearning'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -24,12 +26,13 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Navigate to="home" replace /> },
+      { index: true, element: <RoleHomeRedirect /> },
       { path: 'home', element: <Home /> },
       { path: 'map', element: <Map /> },
       { path: 'learning', element: <Learning /> },
       { path: 'notice', element: <Notice /> },
       { path: 'profile', element: <Profile /> },
+      { path: 'admin/learning',  element: <AdminLearning /> },
     ],
   },
 

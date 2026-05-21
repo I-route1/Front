@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth, getDefaultRoute } from '@/context/AuthContext'
 
 export default function Login() {
-  const { loginWithKakao, loginWithCredentials, isLoggedIn } = useAuth()
+  const { loginWithKakao, loginWithCredentials, isLoggedIn, role } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({ username: '', password: '' })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (isLoggedIn) navigate('/home', { replace: true })
-  }, [isLoggedIn, navigate])
+    if (isLoggedIn) navigate(getDefaultRoute(role), { replace: true })
+  }, [isLoggedIn, role, navigate])
 
   const update = (key, val) => {
     setForm(prev => ({ ...prev, [key]: val }))
