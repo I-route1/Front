@@ -140,7 +140,7 @@ export default function OverviewTab() {
       {riskStudents.length > 0 && (
         <div style={{ margin:'12px 16px 0' }}>
           <div style={{ background:'#FFF5F5', borderRadius:16, border:'1px solid #FF3B3B30', padding:16 }}>
-            <p style={{ fontSize:14, fontWeight:700, color:'var(--color-danger)', marginBottom:12 }}>⚠️ 즉시 관심 필요 학생</p>
+            <p style={{ fontSize:14, fontWeight:700, color:'var(--color-danger)', marginBottom:12 }}>⚠️ 상담 필요 학생</p>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {riskStudents.map(s => (
                 <div key={s.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', borderRadius:10, background:'white', border:'1px solid #FF3B3B20' }}>
@@ -157,7 +157,7 @@ export default function OverviewTab() {
                       평균 {s.avgScore}점 · {s.trendVal}점 하락
                     </p>
                   </div>
-                  <span style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:20, background:'#FF3B3B15', color:'var(--color-danger)' }}>즉시 상담</span>
+                  <span style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:20, background:'#FF3B3B15', color:'var(--color-danger)' }}>상담 필요</span>
                 </div>
               ))}
             </div>
