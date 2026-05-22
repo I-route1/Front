@@ -2,17 +2,17 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 
 const DEFAULT_NAV = [
-  { to: '/home',     label: '홈',   icon: HomeIcon },
-  { to: '/map',      label: '지도', icon: MapIcon,    badge: 0 },
+  { to: '/home', label: '홈', icon: HomeIcon },
+  { to: '/map', label: '지도', icon: MapIcon, badge: 0 },
   { to: '/learning', label: '학습', icon: BookIcon },
-  { to: '/notice',   label: '공지', icon: NoticeIcon, badge: 2 },
-  { to: '/profile',  label: '마이', icon: ProfileIcon },
+  { to: '/board', label: '게시판', icon: NoticeIcon, badge: 2 },
+  { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
 const ACADEMY_NAV = [
   { to: '/admin/learning', label: '학습', icon: BookIcon },
-  { to: '/notice',         label: '공지', icon: NoticeIcon, badge: 2 },
-  { to: '/profile',        label: '마이', icon: ProfileIcon },
+  { to: '/board', label: '게시판', icon: NoticeIcon, badge: 2 },
+  { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
 export default function BottomNav() {
@@ -55,6 +55,7 @@ function HomeIcon() {
     </svg>
   )
 }
+
 function MapIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -63,6 +64,7 @@ function MapIcon() {
     </svg>
   )
 }
+
 function BookIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -71,6 +73,7 @@ function BookIcon() {
     </svg>
   )
 }
+
 function NoticeIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -78,6 +81,7 @@ function NoticeIcon() {
     </svg>
   )
 }
+
 function ProfileIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
