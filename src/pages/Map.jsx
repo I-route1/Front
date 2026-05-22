@@ -8,11 +8,29 @@ const MOCK_ROUTE = [
   { lat: 35.8765, lng: 128.6060 },
 ]
 
+// 🚀 모킹데이터: 나중에 이 부분만 삭제하고 서버 통신 코드로 교체합니다.
+const mockVehicleInfo = {
+  vehicleNumber: '경산 71자 1234',
+  driverName: '김태균',
+  agency: '경산 초등학교',
+  contact: '010-1234-5678',
+  photo: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'
+};
+
 export default function Map() {
   const mapRef = useRef(null)
   const [status, setStatus] = useState('moving')
   const [speed, setSpeed] = useState(32)
   const [eta, setEta] = useState(14)
+
+  // 🚀 추가 상태: 기사 정보 보관 바구니 및 바텀 시트 토글 스위치
+  const [driverInfo, setDriverInfo] = useState(null)
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
+
+  // 처음 화면 로드 시 모킹 데이터를 상태에 주입
+  useEffect(() => {
+    setDriverInfo(mockVehicleInfo)
+  }, [])
 
   useEffect(() => {
     let mapInterval = null;
@@ -22,7 +40,6 @@ export default function Map() {
         const container = mapRef.current;
         if (!container) return;
 
-        // 0px 버그 방지를 위한 명시적 크기 할당
         container.style.width = '100%';
         container.style.height = '100%';
 
@@ -96,7 +113,6 @@ export default function Map() {
       });
     };
 
-    // 보안을 위해 환경변수(.env)에서 키를 안전하게 불러옴
     const scriptId = 'kakao-map-sdk-script';
     let script = document.getElementById(scriptId);
 
@@ -121,9 +137,9 @@ export default function Map() {
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
       {/* 상태 바 */}
-      <div style={{ background: STATUS_CONFIG[status].bg, color: 'white', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ background: STATUS_CONFIG[status].bg, color: 'white', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 5 }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', animation: status === 'moving' ? 'pulse 1.5s ease-in-out infinite' : 'none' }} />
         <span style={{ fontSize: 14, fontWeight: 600 }}>{STATUS_CONFIG[status].label}</span>
         <span style={{ fontSize: 12, opacity: 0.8, marginLeft: 'auto' }}>{STATUS_CONFIG[status].sub}</span>
@@ -133,7 +149,16 @@ export default function Map() {
       <div style={{ flex: 1, minHeight: 400, background: '#E8F0FE', position: 'relative' }}>
         <div ref={mapRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
 
+        {/* 🗺️ 우측 지도 컨트롤 버튼 레이어 */}
         <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 10 }}>
+          {/* 🚀 추가 버튼: 기사 정보 열기용 미니 버스 버튼 */}
+          <button
+            onClick={() => setIsSheetOpen(true)}
+            style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}
+          >
+            기사 정보 🚍
+          </button>
+
           {['내 위치', '전체 경로', '새로고침'].map((label) => (
             <button key={label} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>
               {label}
@@ -143,7 +168,7 @@ export default function Map() {
       </div>
 
       {/* 하단 정보 패널 */}
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, zIndex: 5 }}>
         <div style={{ padding: '14px 16px', background: 'white', borderRadius: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
           <p style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>현재 이동 경로</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -173,6 +198,76 @@ export default function Map() {
           ))}
         </div>
       </div>
+
+      {/* 🚀 추가 컴포넌트: 하단에서 위로 스르륵 나타나는 차량/기사 정보 바텀 시트 */}
+      <div style={{
+        position: 'absolute',
+        bottom: isSheetOpen ? '0' : '-100%',
+        left: '0',
+        width: '100%',
+        background: 'white',
+        borderTopLeftRadius: '24px',
+        borderTopRightRadius: '24px',
+        boxShadow: '0 -4px 16px rgba(0,0,0,0.15)',
+        transition: 'bottom 0.3s ease-in-out',
+        zIndex: 100, // 최상단 배치
+        padding: '24px'
+      }}>
+        {/* 헤더 제어 라인 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#111' }}>🚍 안심 통학 차량 정보</h3>
+          <button
+            onClick={() => setIsSheetOpen(false)}
+            style={{ background: 'none', border: 'none', fontSize: '20px', color: '#9CA3AF', cursor: 'pointer', padding: '4px' }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* 상세 바인딩 프로필 프로필 라인 */}
+        {driverInfo && (
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
+            <img
+              src={driverInfo.photo}
+              alt="기사님"
+              style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #E5E7EB' }}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', color: '#2563EB', fontWeight: '700', marginBottom: '2px' }}>
+                {driverInfo.vehicleNumber}
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: '800', color: '#111', marginBottom: '2px' }}>
+                {driverInfo.driverName} 기사님
+              </div>
+              <div style={{ fontSize: '13px', color: '#6B7280' }}>
+                {driverInfo.agency}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 모바일 텔레포니 연동 실무형 액션 버튼 */}
+        <a
+          href={`tel:${driverInfo?.contact}`}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: '14px',
+            background: '#10B981',
+            color: 'white',
+            textAlign: 'center',
+            borderRadius: '12px',
+            fontSize: '16px',
+            fontWeight: '700',
+            textDecoration: 'none',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+            transition: 'opacity 0.15s'
+          }}
+        >
+          📞 기사님께 바로 전화걸기
+        </a>
+      </div>
+
     </div>
   )
 }
