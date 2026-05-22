@@ -11,12 +11,16 @@ import Notice from '@/pages/Notice'
 import Profile from '@/pages/Profile'
 import DriverBoardingList from '@/pages/DriverBoardingList'
 import AdminLearning from '@/pages/AdminLearning'
+import Board from '@/pages/Board'
+import BoardDetail from '@/pages/BoardDetail'
+import BoardWrite from '@/pages/BoardWrite'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
   { path: '/login', element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/driver/boarding', element: <DriverBoardingList /> },
+
   // 로그인 필요 페이지
   {
     path: '/',
@@ -31,8 +35,11 @@ export const router = createBrowserRouter([
       { path: 'map', element: <Map /> },
       { path: 'learning', element: <Learning /> },
       { path: 'notice', element: <Notice /> },
+      { path: 'board', element: <Board /> },
+      { path: 'board/write', element: <BoardWrite /> },
+      { path: 'board/:postId', element: <BoardDetail /> },
       { path: 'profile', element: <Profile /> },
-      { path: 'admin/learning',  element: <AdminLearning /> },
+      { path: 'admin/learning', element: <AdminLearning /> },
     ],
   },
 
