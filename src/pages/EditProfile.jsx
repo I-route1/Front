@@ -6,12 +6,24 @@ export default function EditProfile() {
   const navigate = useNavigate()
   const { user, updateUser } = useAuth()
 
+  const makeDefaultChild = () => ({
+    id: `child-${Date.now()}`,
+    name: '',
+    grade: '',
+  })
+
   const [form, setForm] = useState({
     name: user?.name ?? '',
     email: user?.email ?? '',
     phone: user?.phone ?? '',
-    childName: user?.children?.[0]?.name ?? '',
-    childGrade: user?.children?.[0]?.grade ?? '',
+    children:
+      user?.children && user.children.length > 0
+        ? user.children.map((child, index) => ({
+            id: child.id ?? `child-${Date.now()}-${index}`,
+            name: child.name ?? '',
+            grade: child.grade ?? '',
+          }))
+        : [makeDefaultChild()],
     academyName: user?.academyName ?? '',
     academyAddress: user?.academyAddress ?? '',
   })
@@ -24,21 +36,104 @@ export default function EditProfile() {
     setErrors((prev) => ({ ...prev, [key]: '' }))
   }
 
+  const updateChild = (childId, key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      children: prev.children.map((child) =>
+        child.id === childId
+          ? {
+              ...child,
+              [key]: value,
+            }
+          : child
+      ),
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      children: '',
+      [`${childId}-${key}`]: '',
+    }))
+  }
+
+  const addChild = () => {
+    setForm((prev) => ({
+      ...prev,
+      children: [
+        ...prev.children,
+        {
+          id: `child-${Date.now()}-${prev.children.length}`,
+          name: '',
+          grade: '',
+        },
+      ],
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      children: '',
+    }))
+  }
+
+  const removeChild = (childId) => {
+    if (form.children.length <= 1) {
+      setErrors((prev) => ({
+        ...prev,
+        children: '자녀 정보는 최소 1명 이상 필요합니다',
+      }))
+      return
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      children: prev.children.filter((child) => child.id !== childId),
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      children: '',
+    }))
+  }
+
   const validate = () => {
     const nextErrors = {}
 
-    if (!form.name.trim()) nextErrors.name = '이름을 입력해 주세요'
-    if (!form.email.includes('@')) nextErrors.email = '올바른 이메일을 입력해 주세요'
-    if (form.phone.replace(/\D/g, '').length < 10) nextErrors.phone = '올바른 전화번호를 입력해 주세요'
+    if (!form.name.trim()) {
+      nextErrors.name = '이름을 입력해 주세요'
+    }
+
+    if (!form.email.includes('@')) {
+      nextErrors.email = '올바른 이메일을 입력해 주세요'
+    }
+
+    if (form.phone.replace(/\D/g, '').length < 10) {
+      nextErrors.phone = '올바른 전화번호를 입력해 주세요'
+    }
 
     if (user?.role === USER_ROLES.PARENT) {
-      if (!form.childName.trim()) nextErrors.childName = '자녀 이름을 입력해 주세요'
-      if (!form.childGrade.trim()) nextErrors.childGrade = '자녀 학년을 입력해 주세요'
+      if (!form.children || form.children.length < 1) {
+        nextErrors.children = '자녀 정보는 최소 1명 이상 필요합니다'
+      }
+
+      form.children.forEach((child) => {
+        if (!child.name.trim()) {
+          nextErrors[`${child.id}-name`] = '자녀 이름을 입력해 주세요'
+        }
+
+        if (!child.grade.trim()) {
+          nextErrors[`${child.id}-grade`] = '자녀 학년을 입력해 주세요'
+        }
+      })
     }
 
     if (user?.role === USER_ROLES.ACADEMY) {
-      if (!form.academyName.trim()) nextErrors.academyName = '학원명을 입력해 주세요'
-      if (!form.academyAddress.trim()) nextErrors.academyAddress = '학원 주소를 입력해 주세요'
+      if (!form.academyName.trim()) {
+        nextErrors.academyName = '학원명을 입력해 주세요'
+      }
+
+      if (!form.academyAddress.trim()) {
+        nextErrors.academyAddress = '학원 주소를 입력해 주세요'
+      }
     }
 
     return nextErrors
@@ -62,13 +157,11 @@ export default function EditProfile() {
       }
 
       if (user?.role === USER_ROLES.PARENT) {
-        updated.children = [
-          {
-            id: user?.children?.[0]?.id ?? `child-${Date.now()}`,
-            name: form.childName.trim(),
-            grade: form.childGrade.trim(),
-          },
-        ]
+        updated.children = form.children.map((child) => ({
+          id: child.id,
+          name: child.name.trim(),
+          grade: child.grade.trim(),
+        }))
       }
 
       if (user?.role === USER_ROLES.ACADEMY) {
@@ -88,10 +181,20 @@ export default function EditProfile() {
 
   return (
     <div>
-      <section style={{ padding: '16px 20px', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+      <section
+        style={{
+          padding: '16px 20px',
+          background: 'var(--color-surface)',
+          borderBottom: '1px solid var(--color-border)',
+        }}
+      >
         <button
           onClick={() => navigate(-1)}
-          style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-primary)' }}
+          style={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: 'var(--color-primary)',
+          }}
         >
           ← 뒤로가기
         </button>
@@ -145,27 +248,100 @@ export default function EditProfile() {
                 border: '1px solid var(--color-border)',
               }}
             >
-              <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-primary)' }}>
-                자녀 정보
-              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-primary)' }}>
+                  자녀 정보
+                </p>
 
-              <Field label="자녀 이름" error={errors.childName}>
-                <input
-                  className="input-field"
-                  value={form.childName}
-                  onChange={(e) => update('childName', e.target.value)}
-                  placeholder="자녀 이름"
-                />
-              </Field>
+                <button
+                  type="button"
+                  onClick={addChild}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    background: 'var(--color-primary)',
+                    color: '#fff',
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
+                  + 추가
+                </button>
+              </div>
 
-              <Field label="자녀 학년" error={errors.childGrade}>
-                <input
-                  className="input-field"
-                  value={form.childGrade}
-                  onChange={(e) => update('childGrade', e.target.value)}
-                  placeholder="예: 초6"
-                />
-              </Field>
+              {errors.children && (
+                <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+                  {errors.children}
+                </p>
+              )}
+
+              {form.children.map((child, index) => (
+                <div
+                  key={child.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                    padding: 14,
+                    borderRadius: 12,
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    <p style={{ fontSize: 13, fontWeight: 800 }}>
+                      자녀 {index + 1}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => removeChild(child.id)}
+                      style={{
+                        padding: '7px 10px',
+                        borderRadius: 8,
+                        background: '#FFE9E9',
+                        color: 'var(--color-danger)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      삭제
+                    </button>
+                  </div>
+
+                  <Field label="자녀 이름" error={errors[`${child.id}-name`]}>
+                    <input
+                      className="input-field"
+                      value={child.name}
+                      onChange={(e) => updateChild(child.id, 'name', e.target.value)}
+                      placeholder="자녀 이름"
+                    />
+                  </Field>
+
+                  <Field label="자녀 학년" error={errors[`${child.id}-grade`]}>
+                    <input
+                      className="input-field"
+                      value={child.grade}
+                      onChange={(e) => updateChild(child.id, 'grade', e.target.value)}
+                      placeholder="예: 초6"
+                    />
+                  </Field>
+                </div>
+              ))}
             </div>
           )}
 
@@ -206,7 +382,14 @@ export default function EditProfile() {
           )}
 
           {errors.submit && (
-            <div style={{ background: '#FFE9E9', border: '1px solid #FFBCBC', borderRadius: 10, padding: '12px 14px' }}>
+            <div
+              style={{
+                background: '#FFE9E9',
+                border: '1px solid #FFBCBC',
+                borderRadius: 10,
+                padding: '12px 14px',
+              }}
+            >
               <p style={{ fontSize: 13, color: 'var(--color-danger)', fontWeight: 600 }}>
                 {errors.submit}
               </p>
