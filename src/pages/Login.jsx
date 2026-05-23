@@ -14,17 +14,23 @@ export default function Login() {
   }, [isLoggedIn, role, navigate])
 
   const update = (key, val) => {
-    setForm(prev => ({ ...prev, [key]: val }))
-    setErrors(prev => ({ ...prev, [key]: '' }))
+    setForm((prev) => ({ ...prev, [key]: val }))
+    setErrors((prev) => ({ ...prev, [key]: '' }))
   }
 
   const handleLogin = async () => {
     const e = {}
+
     if (!form.username.trim()) e.username = '아이디를 입력해 주세요'
     if (!form.password) e.password = '비밀번호를 입력해 주세요'
-    if (Object.keys(e).length > 0) { setErrors(e); return }
+
+    if (Object.keys(e).length > 0) {
+      setErrors(e)
+      return
+    }
 
     setLoading(true)
+
     try {
       await loginWithCredentials(form.username, form.password)
     } catch (err) {
@@ -41,21 +47,28 @@ export default function Login() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
       {/* 상단 헤더 */}
-      <div style={{
-        background: 'linear-gradient(160deg, #0A1628 0%, #1A3A6B 60%, #1A56DB 100%)',
-        padding: '56px 32px 40px',
-        color: 'white',
-        textAlign: 'center',
-      }}>
-        <div style={{
-          width: 72, height: 72,
-          background: 'rgba(255,255,255,0.15)',
-          borderRadius: 20,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 20px',
-          fontSize: 36,
-          border: '1px solid rgba(255,255,255,0.2)',
-        }}>
+      <div
+        style={{
+          background: 'linear-gradient(160deg, #0A1628 0%, #1A3A6B 60%, #1A56DB 100%)',
+          padding: '56px 32px 40px',
+          color: 'white',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: 72,
+            height: 72,
+            background: 'rgba(255,255,255,0.15)',
+            borderRadius: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px',
+            fontSize: 36,
+            border: '1px solid rgba(255,255,255,0.2)',
+          }}
+        >
           🛡️
         </div>
         <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px' }}>아이루트</h1>
@@ -63,20 +76,34 @@ export default function Login() {
       </div>
 
       {/* 로그인 폼 */}
-      <div style={{ flex: 1, padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480, margin: '0 auto', width: '100%' }}>
-
+      <div
+        style={{
+          flex: 1,
+          padding: '32px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          maxWidth: 480,
+          margin: '0 auto',
+          width: '100%',
+        }}
+      >
         <div className="input-group">
           <label className="input-label">아이디</label>
           <input
             className="input-field"
             placeholder="아이디를 입력해 주세요"
             value={form.username}
-            onChange={e => update('username', e.target.value)}
+            onChange={(e) => update('username', e.target.value)}
             onKeyDown={handleKeyDown}
             autoComplete="username"
             style={{ borderColor: errors.username ? 'var(--color-danger)' : '' }}
           />
-          {errors.username && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.username}</p>}
+          {errors.username && (
+            <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+              {errors.username}
+            </p>
+          )}
         </div>
 
         <div className="input-group">
@@ -86,27 +113,44 @@ export default function Login() {
             type="password"
             placeholder="비밀번호를 입력해 주세요"
             value={form.password}
-            onChange={e => update('password', e.target.value)}
+            onChange={(e) => update('password', e.target.value)}
             onKeyDown={handleKeyDown}
             autoComplete="current-password"
             style={{ borderColor: errors.password ? 'var(--color-danger)' : '' }}
           />
-          {errors.password && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.password}</p>}
+          {errors.password && (
+            <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+              {errors.password}
+            </p>
+          )}
         </div>
 
         {errors.submit && (
           <div style={{ background: '#FFE9E9', border: '1px solid #FFBCBC', borderRadius: 10, padding: '12px 14px' }}>
-            <p style={{ fontSize: 13, color: 'var(--color-danger)', fontWeight: 600 }}>{errors.submit}</p>
+            <p style={{ fontSize: 13, color: 'var(--color-danger)', fontWeight: 600 }}>
+              {errors.submit}
+            </p>
           </div>
         )}
 
-        <button onClick={handleLogin} disabled={loading} style={{
-          width: '100%', padding: '15px', borderRadius: 14, border: 'none',
-          background: loading ? 'var(--color-text-muted)' : 'var(--color-primary)',
-          color: 'white', fontSize: 16, fontWeight: 700, fontFamily: 'inherit', cursor: loading ? 'not-allowed' : 'pointer',
-          boxShadow: loading ? 'none' : '0 4px 16px rgba(26,86,219,0.35)',
-          transition: 'all 0.15s',
-        }}>
+        <button
+          onClick={handleLogin}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '15px',
+            borderRadius: 14,
+            border: 'none',
+            background: loading ? 'var(--color-text-muted)' : 'var(--color-primary)',
+            color: 'white',
+            fontSize: 16,
+            fontWeight: 700,
+            fontFamily: 'inherit',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            boxShadow: loading ? 'none' : '0 4px 16px rgba(26,86,219,0.35)',
+            transition: 'all 0.15s',
+          }}
+        >
           {loading ? '로그인 중...' : '로그인'}
         </button>
 
@@ -118,30 +162,44 @@ export default function Login() {
         </div>
 
         {/* 카카오 로그인 */}
-        <button onClick={loginWithKakao} style={{
-          width: '100%', padding: '15px', borderRadius: 14, border: 'none',
-          background: '#FEE500', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          fontSize: 15, fontWeight: 700, color: '#1A1A1A', fontFamily: 'inherit',
-          boxShadow: '0 2px 8px rgba(254,229,0,0.4)', transition: 'all 0.15s',
-        }}>
+        <button
+          onClick={loginWithKakao}
+          style={{
+            width: '100%',
+            padding: '15px',
+            borderRadius: 14,
+            border: 'none',
+            background: '#FEE500',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            fontSize: 15,
+            fontWeight: 700,
+            color: '#1A1A1A',
+            fontFamily: 'inherit',
+            boxShadow: '0 2px 8px rgba(254,229,0,0.4)',
+            transition: 'all 0.15s',
+          }}
+        >
           <KakaoIcon />
           카카오로 시작하기
         </button>
 
         {/* 하단 링크 */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginTop: 8, flexWrap: 'wrap' }}>
           <Link to="/register" style={{ fontSize: 13, color: 'var(--color-primary)', fontWeight: 600 }}>
             회원가입
           </Link>
           <span style={{ color: 'var(--color-border)' }}>|</span>
-          <button style={{ fontSize: 13, color: 'var(--color-text-muted)', fontFamily: 'inherit', background: 'none', border: 'none', cursor: 'pointer' }}>
+          <Link to="/find-id" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
             아이디 찾기
-          </button>
+          </Link>
           <span style={{ color: 'var(--color-border)' }}>|</span>
-          <button style={{ fontSize: 13, color: 'var(--color-text-muted)', fontFamily: 'inherit', background: 'none', border: 'none', cursor: 'pointer' }}>
+          <Link to="/find-password" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
             비밀번호 찾기
-          </button>
+          </Link>
         </div>
 
         {/*[테스트용] 기사님 화면 바로가기 링크*/}
@@ -152,13 +210,12 @@ export default function Login() {
               fontSize: '13px',
               color: '#9CA3AF',
               textDecoration: 'underline',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             [테스트] 기사님 화면
           </Link>
         </div>
-
       </div>
     </div>
   )
