@@ -9,6 +9,9 @@ const PAGE_TITLES = {
   '/board': '게시판',
   '/board/write': '게시글 작성',
   '/profile': '마이페이지',
+  '/profile/edit': '프로필 수정',
+  '/profile/password': '비밀번호 변경',
+  '/profile/delete': '계정 탈퇴',
 }
 
 export default function TopBar() {
@@ -27,6 +30,7 @@ export default function TopBar() {
       )}
 
       <div className="topbar__actions">
+        {/* 알림 버튼 */}
         <button
           aria-label="알림"
           style={{
@@ -55,6 +59,7 @@ export default function TopBar() {
           />
         </button>
 
+        {/* 아바타 */}
         <button
           aria-label="프로필"
           style={{
@@ -100,8 +105,8 @@ function getPageTitle(pathname) {
 function BellIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   )
 }
