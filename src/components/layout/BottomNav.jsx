@@ -5,19 +5,19 @@ const PARENT_NAV = [
   { to: '/home', label: '홈', icon: HomeIcon },
   { to: '/map', label: '지도', icon: MapIcon, badge: 0 },
   { to: '/learning', label: '학습', icon: BookIcon },
-  { to: '/board', label: '게시판', icon: NoticeIcon, badge: 2 },
+  { to: '/board', label: '게시판', icon: NoticeIcon },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
 const ACADEMY_NAV = [
   { to: '/home', label: '홈', icon: HomeIcon },
-  { to: '/board', label: '게시판', icon: NoticeIcon, badge: 2 },
+  { to: '/board', label: '게시판', icon: NoticeIcon },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
 const ADMIN_NAV = [
   { to: '/admin/learning', label: '관리', icon: BookIcon },
-  { to: '/board', label: '게시판', icon: NoticeIcon, badge: 2 },
+  { to: '/board', label: '게시판', icon: NoticeIcon },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 

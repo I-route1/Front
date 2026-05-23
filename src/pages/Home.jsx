@@ -5,8 +5,22 @@ export default function Home() {
   const { user, role } = useAuth()
   const navigate = useNavigate()
 
+  const handleDriverContact = () => {
+    const driverName = '김기사'
+    const driverPhone = '010-1111-2222'
+    const phoneNumber = driverPhone.replace(/\D/g, '')
+
+    const shouldCall = window.confirm(
+      `담당 기사님\n\n${driverName}\n${driverPhone}\n\n전화 앱으로 연결할까요?`
+    )
+
+    if (shouldCall) {
+      window.location.href = `tel:${phoneNumber}`
+    }
+  }
+
   if (role === USER_ROLES.ACADEMY) {
-    return <AcademyHome user={user} navigate={navigate} />
+    return <AcademyHome user={user}/>
   }
 
   if (role === USER_ROLES.ADMIN) {
@@ -83,9 +97,18 @@ export default function Home() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {QUICK_ACTIONS.map(({ icon, label, color, to }) => (
-            <button
-              key={label}
-              onClick={() => to && navigate(to)}
+  <button
+    key={label}
+    onClick={() => {
+      if (label === '기사\n연락') {
+        handleDriverContact()
+        return
+      }
+
+      if (to) {
+        navigate(to)
+      }
+    }}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -142,11 +165,10 @@ export default function Home() {
       <div className="divider" />
 
       {/* 오늘의 일정 */}
-      <section className="section">
-        <div className="section__header">
-          <h3 className="section__title">오늘의 일정</h3>
-          <span className="section__link">전체 보기</span>
-        </div>
+<section className="section">
+  <div className="section__header">
+    <h3 className="section__title">오늘의 일정</h3>
+  </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {SCHEDULES.map((s) => (
             <div
@@ -196,12 +218,26 @@ export default function Home() {
 
       <div className="divider" />
 
-      {/* 최근 알림 */}
+            {/* 최근 알림 */}
       <section className="section">
         <div className="section__header">
           <h3 className="section__title">최근 알림</h3>
-          <span className="section__link">더 보기</span>
+          <button
+            type="button"
+            className="section__link"
+            onClick={() => navigate('/notice')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            더 보기
+          </button>
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {NOTIFICATIONS.map((n) => (
             <div
@@ -234,9 +270,15 @@ export default function Home() {
   )
 }
 
-function AcademyHome({ user, navigate }) {
+function AcademyHome({ user }) {
   return (
-    <div>
+    <div
+      style={{
+        minHeight: 'calc(100vh - 120px)',
+        paddingBottom: 96,
+        background: 'var(--color-bg)',
+      }}
+    >
       <div
         style={{
           background: 'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)',
@@ -267,61 +309,6 @@ function AcademyHome({ user, navigate }) {
           </p>
         </div>
       </div>
-
-      <section className="section">
-        <div className="section__header">
-          <h3 className="section__title">빠른 실행</h3>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          {ACADEMY_ACTIONS.map(({ icon, label, color, to }) => (
-            <button
-              key={label}
-              onClick={() => to && navigate(to)}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 8,
-                padding: '14px 8px',
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-lg)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              <span
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 12,
-                  background: color + '20',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 22,
-                }}
-              >
-                {icon}
-              </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                  textAlign: 'center',
-                  lineHeight: 1.3,
-                }}
-              >
-                {label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <div className="divider" />
 
       <section className="section">
         <div className="section__header">
@@ -433,14 +420,8 @@ function AdminHome({ user, navigate }) {
 const QUICK_ACTIONS = [
   { icon: '📍', label: '위치\n확인', color: '#1A56DB', to: '/map' },
   { icon: '📞', label: '기사\n연락', color: '#00C49A', to: null },
-  { icon: '📋', label: '학원\n공지', color: '#FF6B35', to: '/notice' },
+  { icon: '📋', label: '공지사항', color: '#FF6B35', to: '/notice' },
   { icon: '📊', label: '학습\n리포트', color: '#9B59B6', to: '/learning' },
-]
-
-const ACADEMY_ACTIONS = [
-  { icon: '🏫', label: '학원\n정보', color: '#1A56DB', to: '/profile' },
-  { icon: '📋', label: '게시판', color: '#FF6B35', to: '/board' },
-  { icon: '👤', label: '마이\n페이지', color: '#9B59B6', to: '/profile' },
 ]
 
 const ACADEMY_STATUS = [

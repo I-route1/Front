@@ -1,13 +1,129 @@
 import { useState } from 'react'
 
-const TABS = ['전체', '공지사항', '메시지', '알림']
+const TABS = ['전체', '공지사항', '알림']
 
 export default function Notice() {
   const [activeTab, setActiveTab] = useState('전체')
+  const [selectedItem, setSelectedItem] = useState(null)
 
-  const items = activeTab === '전체'
-    ? NOTICE_ITEMS
-    : NOTICE_ITEMS.filter((item) => item.type === activeTab)
+  const items =
+    activeTab === '전체'
+      ? NOTICE_ITEMS
+      : NOTICE_ITEMS.filter((item) => item.type === activeTab)
+
+  const handleTabClick = (tab) => {
+    setActiveTab(tab)
+    setSelectedItem(null)
+  }
+
+  if (selectedItem) {
+    return (
+      <div
+        style={{
+          minHeight: 'calc(100vh - 120px)',
+          background: 'var(--color-bg)',
+        }}
+      >
+        <section
+          style={{
+            padding: '16px 20px',
+            background: 'var(--color-surface)',
+            borderBottom: '1px solid var(--color-border)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedItem(null)}
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: 'var(--color-primary)',
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            ← 목록으로
+          </button>
+        </section>
+
+        <section className="section">
+          <div
+            className="card"
+            style={{
+              padding: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
+                  background: TYPE_COLOR[selectedItem.type] + '15',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 20,
+                  flexShrink: 0,
+                }}
+              >
+                {TYPE_ICON[selectedItem.type]}
+              </div>
+
+              <div>
+                <span
+                  className={`badge badge--${TYPE_BADGE[selectedItem.type]}`}
+                  style={{ fontSize: 10 }}
+                >
+                  {selectedItem.type}
+                </span>
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--color-text-muted)',
+                    marginTop: 5,
+                  }}
+                >
+                  {selectedItem.from} · {selectedItem.time}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h2
+                style={{
+                  fontSize: 19,
+                  fontWeight: 800,
+                  color: 'var(--color-text-primary)',
+                  lineHeight: 1.4,
+                }}
+              >
+                {selectedItem.title}
+              </h2>
+
+              <p
+                style={{
+                  fontSize: 14,
+                  color: 'var(--color-text-secondary)',
+                  lineHeight: 1.7,
+                  marginTop: 14,
+                  whiteSpace: 'pre-line',
+                }}
+              >
+                {selectedItem.content}
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -28,7 +144,8 @@ export default function Notice() {
         {TABS.map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            type="button"
+            onClick={() => handleTabClick(tab)}
             style={{
               flex: 1,
               padding: '14px 4px',
@@ -36,8 +153,13 @@ export default function Notice() {
               background: 'transparent',
               fontSize: 13,
               fontWeight: activeTab === tab ? 700 : 500,
-              color: activeTab === tab ? 'var(--color-primary)' : 'var(--color-text-muted)',
-              borderBottom: `2px solid ${activeTab === tab ? 'var(--color-primary)' : 'transparent'}`,
+              color:
+                activeTab === tab
+                  ? 'var(--color-primary)'
+                  : 'var(--color-text-muted)',
+              borderBottom: `2px solid ${
+                activeTab === tab ? 'var(--color-primary)' : 'transparent'
+              }`,
               cursor: 'pointer',
               fontFamily: 'inherit',
               transition: 'all 0.15s',
@@ -71,7 +193,21 @@ export default function Notice() {
           </div>
         ) : (
           items.map((item) => (
-            <div key={item.id} className="list-item">
+            <button
+              key={item.id}
+              type="button"
+              className="list-item"
+              onClick={() => setSelectedItem(item)}
+              style={{
+                width: '100%',
+                background: 'var(--color-surface)',
+                border: 'none',
+                borderBottom: '1px solid var(--color-border)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                textAlign: 'left',
+              }}
+            >
               <div
                 style={{
                   width: 40,
@@ -97,9 +233,13 @@ export default function Notice() {
                     marginBottom: 3,
                   }}
                 >
-                  <span className={`badge badge--${TYPE_BADGE[item.type]}`} style={{ fontSize: 10 }}>
+                  <span
+                    className={`badge badge--${TYPE_BADGE[item.type]}`}
+                    style={{ fontSize: 10 }}
+                  >
                     {item.type}
                   </span>
+
                   {!item.read && (
                     <span
                       style={{
@@ -146,10 +286,11 @@ export default function Notice() {
                 fill="none"
                 stroke="var(--color-text-muted)"
                 strokeWidth="2"
+                style={{ flexShrink: 0 }}
               >
                 <polyline points="9 18 15 12 9 6" />
               </svg>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -159,19 +300,16 @@ export default function Notice() {
 
 const TYPE_ICON = {
   공지사항: '📢',
-  메시지: '💬',
   알림: '🔔',
 }
 
 const TYPE_COLOR = {
   공지사항: '#FF6B35',
-  메시지: '#1A56DB',
   알림: '#00C49A',
 }
 
 const TYPE_BADGE = {
   공지사항: 'orange',
-  메시지: 'blue',
   알림: 'green',
 }
 
@@ -183,45 +321,37 @@ const NOTICE_ITEMS = [
     from: '수학학원',
     time: '오늘 11:20',
     read: false,
+    content:
+      '5월 중간고사를 대비하여 수학 특강을 진행합니다.\n\n대상: 중등부 전체 학생\n일정: 이번 주 토요일 오후 2시\n장소: 수학학원 2강의실\n\n특강 참여를 희망하는 경우 학원으로 문의해 주세요.',
   },
   {
     id: 2,
-    type: '메시지',
-    title: '선생님: 오늘 민준이 수업 태도가 매우 좋았어요!',
-    from: '영어학원',
-    time: '오늘 10:05',
-    read: false,
-  },
-  {
-    id: 3,
     type: '알림',
     title: '홍민준이 수학학원에 도착했습니다',
     from: '아이루트',
     time: '오늘 09:55',
     read: true,
+    content:
+      '홍민준 학생이 수학학원에 정상적으로 도착했습니다.\n\n도착 시간: 오늘 09:55\n위치: 수학학원\n상태: 도착 완료',
   },
   {
-    id: 4,
+    id: 3,
     type: '공지사항',
     title: '이번 주 토요일 수업 일정 변경 안내',
     from: '수학학원',
     time: '어제 16:00',
     read: true,
+    content:
+      '이번 주 토요일 수업 일정이 일부 변경되었습니다.\n\n기존: 오전 10시\n변경: 오후 1시\n\n수업 시간 변경으로 불편을 드려 죄송합니다. 변경된 시간을 확인해 주세요.',
   },
   {
-    id: 5,
+    id: 4,
     type: '알림',
     title: '이번 주 학습 리포트가 준비됐습니다',
     from: '아이루트 AI',
     time: '어제 09:00',
     read: true,
-  },
-  {
-    id: 6,
-    type: '메시지',
-    title: '6월 수강료 납부 안내드립니다',
-    from: '미술학원',
-    time: '3일 전',
-    read: true,
+    content:
+      '이번 주 학습 리포트가 준비되었습니다.\n\n학습 리포트에서는 최근 학습 현황과 약점 분석 내용을 확인할 수 있습니다.\n자세한 내용은 학습 리포트 화면에서 확인해 주세요.',
   },
 ]
