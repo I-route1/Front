@@ -6,6 +6,7 @@ import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import FindId from '@/pages/FindId'
 import FindPassword from '@/pages/FindPassword'
+import ResetPassword from '@/pages/ResetPassword'
 import Home from '@/pages/Home'
 import Map from '@/pages/Map'
 import Learning from '@/pages/Learning'
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
   { path: '/register', element: <Register /> },
   { path: '/find-id', element: <FindId /> },
   { path: '/find-password', element: <FindPassword /> },
+  { path: '/reset-password', element: <ResetPassword /> },
   { path: '/driver/boarding', element: <DriverBoardingList /> },
 
   // 로그인 필요 페이지

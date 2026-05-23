@@ -1,30 +1,41 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
-const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
-
 export default function FindPassword() {
-  const [step, setStep] = useState('verify')
   const [form, setForm] = useState({
-    username: '',
-    email: '',
-    authCode: '',
-    newPassword: '',
-    newPasswordConfirm: '',
+    loginIdOrEmail: '',
   })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)
 
   const update = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-    setErrors((prev) => ({ ...prev, [key]: '' }))
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      [key]: '',
+      submit: '',
+    }))
   }
 
-  const handleVerify = async () => {
+  const validate = () => {
     const nextErrors = {}
 
-    if (!form.username.trim()) nextErrors.username = '아이디를 입력해 주세요'
-    if (!form.email.includes('@')) nextErrors.email = '올바른 이메일을 입력해 주세요'
+    if (!form.loginIdOrEmail.trim()) {
+      nextErrors.loginIdOrEmail = '이메일 또는 아이디를 입력해 주세요'
+    } else if (form.loginIdOrEmail.trim().length < 4) {
+      nextErrors.loginIdOrEmail = '이메일 또는 아이디는 4자 이상 입력해 주세요'
+    }
+
+    return nextErrors
+  }
+
+  const handleSendResetLink = async () => {
+    const nextErrors = validate()
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
@@ -34,40 +45,18 @@ export default function FindPassword() {
     setLoading(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 700))
-      setStep('reset')
-    } finally {
-      setLoading(false)
-    }
-  }
+      // TODO: POST /api/auth/password/reset-link
+      // request body 예시:
+      // {
+      //   loginIdOrEmail: form.loginIdOrEmail
+      // }
+      await new Promise((resolve) => setTimeout(resolve, 800))
 
-  const handleReset = async () => {
-    const nextErrors = {}
-
-    if (!form.authCode.trim()) {
-      nextErrors.authCode = '인증번호를 입력해 주세요'
-    }
-
-    if (!form.newPassword) {
-      nextErrors.newPassword = '새 비밀번호를 입력해 주세요'
-    } else if (!PASSWORD_RULES.test(form.newPassword)) {
-      nextErrors.newPassword = '영문·숫자·특수문자 포함 8자 이상'
-    }
-
-    if (form.newPassword !== form.newPasswordConfirm) {
-      nextErrors.newPasswordConfirm = '비밀번호가 일치하지 않습니다'
-    }
-
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors)
-      return
-    }
-
-    setLoading(true)
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 700))
-      setStep('complete')
+      setSent(true)
+    } catch {
+      setErrors({
+        submit: '비밀번호 재설정 링크 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      })
     } finally {
       setLoading(false)
     }
@@ -84,124 +73,147 @@ export default function FindPassword() {
           position: 'relative',
         }}
       >
-        <Link to="/login" style={{ position: 'absolute', left: 20, top: 16, color: 'rgba(255,255,255,0.75)', fontSize: 24 }}>
+        <Link
+          to="/login"
+          style={{
+            position: 'absolute',
+            left: 20,
+            top: 16,
+            color: 'rgba(255,255,255,0.75)',
+            fontSize: 24,
+          }}
+        >
           ←
         </Link>
+
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>비밀번호 찾기</h1>
         <p style={{ fontSize: 13, opacity: 0.75, marginTop: 6 }}>
-          본인 확인 후 새로운 비밀번호를 설정합니다.
+          가입한 이메일 또는 아이디로 비밀번호 재설정 링크를 발송합니다.
         </p>
       </div>
 
-      <div style={{ padding: '28px 20px', maxWidth: 480, width: '100%', margin: '0 auto' }}>
-        {step === 'verify' && (
+      <div
+        style={{
+          padding: '28px 20px',
+          maxWidth: 480,
+          width: '100%',
+          margin: '0 auto',
+        }}
+      >
+        {!sent ? (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="input-group">
-              <label className="input-label">아이디</label>
-              <input
-                className="input-field"
-                value={form.username}
-                onChange={(e) => update('username', e.target.value)}
-                placeholder="아이디를 입력해 주세요"
-                style={{ borderColor: errors.username ? 'var(--color-danger)' : '' }}
-              />
-              {errors.username && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.username}</p>}
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">이메일</label>
-              <input
-                className="input-field"
-                value={form.email}
-                onChange={(e) => update('email', e.target.value)}
-                placeholder="example@email.com"
-                style={{ borderColor: errors.email ? 'var(--color-danger)' : '' }}
-              />
-              {errors.email && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.email}</p>}
-            </div>
-
-            <button
-              onClick={handleVerify}
-              disabled={loading}
-              className="btn btn--primary btn--full"
-              style={{ padding: 15, opacity: loading ? 0.65 : 1 }}
+            <div
+              style={{
+                background: 'var(--color-primary-light)',
+                borderRadius: 12,
+                padding: 14,
+              }}
             >
-              {loading ? '확인 중...' : '인증번호 받기'}
-            </button>
-          </div>
-        )}
-
-        {step === 'reset' && (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ background: 'var(--color-primary-light)', borderRadius: 12, padding: 14 }}>
               <p style={{ fontSize: 13, color: 'var(--color-primary)', fontWeight: 700 }}>
-                인증번호가 이메일로 발송되었습니다.
+                비밀번호 재설정 안내
               </p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                테스트용 인증번호는 123456으로 입력하면 됩니다.
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.6 }}>
+                입력한 정보가 가입 정보와 일치하면 비밀번호 재설정 링크가 이메일로 발송됩니다.
               </p>
             </div>
 
             <div className="input-group">
-              <label className="input-label">인증번호</label>
+              <label className="input-label">이메일 또는 아이디</label>
               <input
                 className="input-field"
-                value={form.authCode}
-                onChange={(e) => update('authCode', e.target.value)}
-                placeholder="인증번호 6자리"
-                style={{ borderColor: errors.authCode ? 'var(--color-danger)' : '' }}
+                value={form.loginIdOrEmail}
+                onChange={(event) => update('loginIdOrEmail', event.target.value)}
+                placeholder="이메일 또는 아이디를 입력해 주세요"
+                style={{ borderColor: errors.loginIdOrEmail ? 'var(--color-danger)' : '' }}
               />
-              {errors.authCode && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.authCode}</p>}
+              {errors.loginIdOrEmail && (
+                <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+                  {errors.loginIdOrEmail}
+                </p>
+              )}
             </div>
 
-            <div className="input-group">
-              <label className="input-label">새 비밀번호</label>
-              <input
-                className="input-field"
-                type="password"
-                value={form.newPassword}
-                onChange={(e) => update('newPassword', e.target.value)}
-                placeholder="영문·숫자·특수문자 포함 8자 이상"
-                style={{ borderColor: errors.newPassword ? 'var(--color-danger)' : '' }}
-              />
-              {errors.newPassword && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.newPassword}</p>}
-            </div>
+            {errors.submit && (
+              <div
+                style={{
+                  background: '#FFE9E9',
+                  border: '1px solid #FFBCBC',
+                  borderRadius: 10,
+                  padding: '12px 14px',
+                }}
+              >
+                <p style={{ fontSize: 13, color: 'var(--color-danger)', fontWeight: 600 }}>
+                  {errors.submit}
+                </p>
+              </div>
+            )}
 
-            <div className="input-group">
-              <label className="input-label">새 비밀번호 확인</label>
-              <input
-                className="input-field"
-                type="password"
-                value={form.newPasswordConfirm}
-                onChange={(e) => update('newPasswordConfirm', e.target.value)}
-                placeholder="새 비밀번호를 다시 입력해 주세요"
-                style={{ borderColor: errors.newPasswordConfirm ? 'var(--color-danger)' : '' }}
-              />
-              {errors.newPasswordConfirm && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.newPasswordConfirm}</p>}
+            <button
+              onClick={handleSendResetLink}
+              disabled={loading}
+              className="btn btn--primary btn--full"
+              style={{
+                padding: 15,
+                opacity: loading ? 0.65 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {loading ? '발송 중...' : '재설정 링크 발송'}
+            </button>
+
+            <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>
+              아이디가 기억나지 않나요?{' '}
+              <Link to="/find-id" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>
+                아이디 찾기
+              </Link>
+            </p>
+          </div>
+        ) : (
+          <div className="card" style={{ textAlign: 'center', padding: 28 }}>
+            <div style={{ fontSize: 54 }}>📩</div>
+
+            <h2 style={{ fontSize: 20, fontWeight: 800, marginTop: 12 }}>
+              재설정 링크가 발송되었습니다
+            </h2>
+
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8, lineHeight: 1.6 }}>
+              입력한 정보가 가입 정보와 일치하면 이메일로 비밀번호 재설정 링크가 발송됩니다.
+              <br />
+              메일함을 확인해 주세요.
+            </p>
+
+            <div
+              style={{
+                marginTop: 18,
+                padding: 14,
+                borderRadius: 12,
+                background: 'var(--color-primary-light)',
+                textAlign: 'left',
+              }}
+            >
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-primary)' }}>
+                이메일을 확인해 주세요
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.6 }}>
+                비밀번호 재설정 링크는 일정 시간 동안만 유효합니다.
+                메일이 보이지 않는 경우 스팸함을 확인하거나 다시 요청해 주세요.
+              </p>
             </div>
 
             <button
-              onClick={handleReset}
-              disabled={loading}
-              className="btn btn--primary btn--full"
-              style={{ padding: 15, opacity: loading ? 0.65 : 1 }}
+              onClick={() => setSent(false)}
+              className="btn btn--secondary btn--full"
+              style={{ marginTop: 10 }}
             >
-              {loading ? '변경 중...' : '비밀번호 재설정'}
+              다시 입력하기
             </button>
-          </div>
-        )}
 
-        {step === 'complete' && (
-          <div className="card" style={{ textAlign: 'center', padding: 28 }}>
-            <div style={{ fontSize: 54 }}>✅</div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, marginTop: 12 }}>
-              비밀번호가 재설정되었습니다
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8 }}>
-              새 비밀번호로 다시 로그인해 주세요.
-            </p>
-            <Link to="/login" className="btn btn--primary btn--full" style={{ marginTop: 20 }}>
-              로그인하러 가기
+            <Link
+              to="/login"
+              className="btn btn--primary btn--full"
+              style={{ marginTop: 10 }}
+            >
+              로그인 화면으로 돌아가기
             </Link>
           </div>
         )}
