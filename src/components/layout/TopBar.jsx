@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 
 const PAGE_TITLES = {
@@ -12,10 +12,12 @@ const PAGE_TITLES = {
   '/profile/edit': '프로필 수정',
   '/profile/password': '비밀번호 변경',
   '/profile/delete': '계정 탈퇴',
+  '/admin/learning': '관리자 학습 관리',
 }
 
 export default function TopBar() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const title = getPageTitle(pathname)
 
@@ -32,7 +34,9 @@ export default function TopBar() {
       <div className="topbar__actions">
         {/* 알림 버튼 */}
         <button
+          type="button"
           aria-label="알림"
+          onClick={() => navigate('/notice')}
           style={{
             position: 'relative',
             width: 40,
@@ -41,8 +45,8 @@ export default function TopBar() {
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: '50%',
+            cursor: 'pointer',
           }}
-          onClick={() => {}}
         >
           <BellIcon />
           <span
@@ -61,7 +65,9 @@ export default function TopBar() {
 
         {/* 아바타 */}
         <button
+          type="button"
           aria-label="프로필"
+          onClick={() => navigate('/profile')}
           style={{
             width: 32,
             height: 32,
@@ -71,6 +77,7 @@ export default function TopBar() {
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'hidden',
+            cursor: 'pointer',
           }}
         >
           {user?.avatar ? (
@@ -108,7 +115,16 @@ function getPageTitle(pathname) {
 
 function BellIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--color-text-secondary)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
