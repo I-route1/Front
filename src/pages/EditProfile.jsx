@@ -12,6 +12,46 @@ export default function EditProfile() {
     grade: '',
   })
 
+  const normalizeGrade = (grade) => {
+  const trimmedGrade = grade.trim().replace(/\s/g, '')
+
+  if (
+    trimmedGrade === '미취학' ||
+    trimmedGrade === '미취학아동' ||
+    trimmedGrade === '유치원' ||
+    trimmedGrade === '유치원생' ||
+    trimmedGrade === '어린이집' ||
+    trimmedGrade === '어린이집생'
+  ) {
+    return '미취학'
+  }
+
+  return trimmedGrade
+    .replace(/초등학교/g, '초')
+    .replace(/초등/g, '초')
+    .replace(/중학교/g, '중')
+    .replace(/중등/g, '중')
+    .replace(/고등학교/g, '고')
+    .replace(/고등/g, '고')
+    .replace(/학년/g, '')
+}
+
+const isValidGrade = (grade) => {
+  const normalizedGrade = normalizeGrade(grade)
+
+  const preschoolPattern = /^미취학$/
+  const elementaryPattern = /^초[1-6]$/
+  const middleSchoolPattern = /^중[1-3]$/
+  const highSchoolPattern = /^고[1-3]$/
+
+  return (
+    preschoolPattern.test(normalizedGrade) ||
+    elementaryPattern.test(normalizedGrade) ||
+    middleSchoolPattern.test(normalizedGrade) ||
+    highSchoolPattern.test(normalizedGrade)
+  )
+}
+
   const [form, setForm] = useState({
     name: user?.name ?? '',
     email: user?.email ?? '',
@@ -121,8 +161,10 @@ export default function EditProfile() {
         }
 
         if (!child.grade.trim()) {
-          nextErrors[`${child.id}-grade`] = '자녀 학년을 입력해 주세요'
-        }
+  nextErrors[`${child.id}-grade`] = '자녀 학년을 입력해 주세요'
+} else if (!isValidGrade(child.grade)) {
+  nextErrors[`${child.id}-grade`] = '학년은 미취학, 초1~초6, 중1~중3, 고1~고3 형식으로 입력해 주세요'
+}
       })
     }
 
@@ -158,10 +200,10 @@ export default function EditProfile() {
 
       if (user?.role === USER_ROLES.PARENT) {
         updated.children = form.children.map((child) => ({
-          id: child.id,
-          name: child.name.trim(),
-          grade: child.grade.trim(),
-        }))
+  id: child.id,
+  name: child.name.trim(),
+  grade: normalizeGrade(child.grade),
+}))
       }
 
       if (user?.role === USER_ROLES.ACADEMY) {
@@ -249,31 +291,43 @@ export default function EditProfile() {
               }}
             >
               <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-primary)' }}>
-                  자녀 정보
-                </p>
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  }}
+>
+                <div>
+  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-primary)' }}>
+    자녀 정보
+  </p>
+  <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
+    학년은 미취학, 초1~초6, 중1~중3, 고1~고3 형식으로 입력해 주세요
+  </p>
+</div>
 
                 <button
-                  type="button"
-                  onClick={addChild}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 10,
-                    background: 'var(--color-primary)',
-                    color: '#fff',
-                    fontSize: 13,
-                    fontWeight: 700,
-                  }}
-                >
-                  + 추가
-                </button>
+  type="button"
+  onClick={addChild}
+  style={{
+    minWidth: 72,
+    height: 40,
+    padding: '0 12px',
+    borderRadius: 12,
+    background: 'var(--color-primary)',
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 700,
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  }}
+>
+  + 추가
+</button>
               </div>
 
               {errors.children && (
@@ -296,13 +350,13 @@ export default function EditProfile() {
                   }}
                 >
                   <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: 12,
-                    }}
-                  >
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  }}
+>
                     <p style={{ fontSize: 13, fontWeight: 800 }}>
                       자녀 {index + 1}
                     </p>
@@ -337,7 +391,7 @@ export default function EditProfile() {
                       className="input-field"
                       value={child.grade}
                       onChange={(e) => updateChild(child.id, 'grade', e.target.value)}
-                      placeholder="예: 초6"
+                      placeholder="예: 미취학 또는 초6"
                     />
                   </Field>
                 </div>
