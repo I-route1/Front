@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import AppLayout from '@/components/layout/AppLayout'
 import ProtectedRoute from '@/components/common/ProtectedRoute'
 import RoleHomeRedirect from '@/components/common/RoleHomeRedirect'
+import { USER_ROLES } from '@/context/AuthContext'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import FindId from '@/pages/FindId'
@@ -53,7 +54,14 @@ export const router = createBrowserRouter([
       { path: 'profile/edit', element: <EditProfile /> },
       { path: 'profile/password', element: <ChangePassword /> },
       { path: 'profile/delete', element: <DeleteAccount /> },
-      { path: 'admin/learning', element: <AdminLearning /> },
+      {
+        path: 'admin/learning',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+            <AdminLearning />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 

@@ -2,20 +2,90 @@ import { createContext, useContext, useState, useEffect } from 'react'
 
 export const USER_ROLES = {
   PARENT: 'parent',
-  DRIVER: 'driver',
   ACADEMY: 'academy',
+  ADMIN: 'admin',
+
+  // 기존 코드 호환을 위해 일단 유지
+  DRIVER: 'driver',
   STUDENT: 'student',
 }
 
 /** 역할별 로그인·루트(/) 진입 시 기본 화면 */
 export function getDefaultRoute(role) {
-  if (role === USER_ROLES.ACADEMY) return '/admin/learning'
+  if (role === USER_ROLES.ADMIN) return '/admin/learning'
   return '/home'
 }
 
 const AuthContext = createContext(null)
 
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
+
+const MOCK_PASSWORD = '1234'
+
+const MOCK_USERS = {
+  parent: {
+    id: 'parent-001',
+    name: '홍길동',
+    role: USER_ROLES.PARENT,
+    username: 'parent',
+    email: 'parent@iroute.com',
+    phone: '010-1234-5678',
+    avatar: null,
+    children: [{ id: 'child-001', name: '홍민준', grade: '초6' }],
+  },
+  학부모: {
+    id: 'parent-001',
+    name: '홍길동',
+    role: USER_ROLES.PARENT,
+    username: '학부모',
+    email: 'parent@iroute.com',
+    phone: '010-1234-5678',
+    avatar: null,
+    children: [{ id: 'child-001', name: '홍민준', grade: '초6' }],
+  },
+  academy: {
+    id: 'academy-001',
+    name: '아이루트 학원',
+    role: USER_ROLES.ACADEMY,
+    username: 'academy',
+    email: 'academy@iroute.com',
+    phone: '053-000-0000',
+    avatar: null,
+    academyName: '아이루트 학원',
+    academyAddress: '대구광역시 달성군 현풍읍',
+  },
+  학원: {
+    id: 'academy-001',
+    name: '아이루트 학원',
+    role: USER_ROLES.ACADEMY,
+    username: '학원',
+    email: 'academy@iroute.com',
+    phone: '053-000-0000',
+    avatar: null,
+    academyName: '아이루트 학원',
+    academyAddress: '대구광역시 달성군 현풍읍',
+  },
+  admin: {
+    id: 'admin-001',
+    name: '관리자',
+    role: USER_ROLES.ADMIN,
+    username: 'admin',
+    email: 'admin@iroute.com',
+    phone: '010-0000-0000',
+    avatar: null,
+    adminLevel: '서비스 관리자',
+  },
+  관리자: {
+    id: 'admin-001',
+    name: '관리자',
+    role: USER_ROLES.ADMIN,
+    username: '관리자',
+    email: 'admin@iroute.com',
+    phone: '010-0000-0000',
+    avatar: null,
+    adminLevel: '서비스 관리자',
+  },
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -41,44 +111,26 @@ export function AuthProvider({ children }) {
   const loginWithCredentials = async (username, password) => {
     await new Promise((resolve) => setTimeout(resolve, 800))
 
-    if (!username || !password) {
+    const normalizedUsername = username.trim()
+
+    if (!normalizedUsername || !password) {
       throw new Error('아이디 또는 비밀번호가 올바르지 않습니다')
     }
 
-    if (username === 'academy' || username === '학원') {
-      saveUser({
-        id: 'academy-001',
-        name: '아이루트 학원',
-        role: USER_ROLES.ACADEMY,
-        username,
-        email: 'academy@iroute.com',
-        phone: '053-000-0000',
-        avatar: null,
-        academyName: '아이루트 학원',
-        academyAddress: '대구광역시 달성군 현풍읍',
-      })
-    } else if (username === 'driver' || username === '기사') {
-      saveUser({
-        id: 'driver-001',
-        name: '김기사',
-        role: USER_ROLES.DRIVER,
-        username,
-        email: 'driver@iroute.com',
-        phone: '010-1111-2222',
-        avatar: null,
-      })
-    } else {
-      saveUser({
-        id: 'user-001',
-        name: '홍길동',
-        role: USER_ROLES.PARENT,
-        username,
-        email: 'parent@iroute.com',
-        phone: '010-1234-5678',
-        avatar: null,
-        children: [{ id: 'child-001', name: '홍민준', grade: '초6' }],
-      })
+    const mockUser = MOCK_USERS[normalizedUsername]
+
+    if (!mockUser) {
+      throw new Error('아이디 또는 비밀번호가 올바르지 않습니다')
     }
+
+    if (password !== MOCK_PASSWORD) {
+      throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.')
+    }
+
+    saveUser({
+      ...mockUser,
+      username: normalizedUsername,
+    })
   }
 
   /** 카카오 OAuth 로그인 */

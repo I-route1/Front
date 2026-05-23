@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 
 const ROLE_LABEL = {
   [USER_ROLES.PARENT]: '학부모',
+  [USER_ROLES.ACADEMY]: '학원',
+  [USER_ROLES.ADMIN]: '관리자',
+
   [USER_ROLES.DRIVER]: '기사',
-  [USER_ROLES.ACADEMY]: '학원 관리자',
   [USER_ROLES.STUDENT]: '학생',
 }
 
@@ -268,6 +270,45 @@ export default function Profile() {
               style={{ marginTop: 12 }}
             >
               학원 정보 수정
+            </button>
+          </div>
+        </div>
+      )}
+
+            {/* 관리자 정보 카드 */}
+      {user?.role === USER_ROLES.ADMIN && (
+        <div
+          style={{
+            padding: '0 16px',
+            marginTop: -44,
+            marginBottom: 8,
+            position: 'relative',
+            zIndex: 10,
+          }}
+        >
+          <div className="card" style={{ padding: '16px' }}>
+            <p
+              style={{
+                fontSize: 12,
+                color: 'var(--color-text-muted)',
+                marginBottom: 10,
+                fontWeight: 600,
+              }}
+            >
+              🛠 관리자 정보
+            </p>
+            <p style={{ fontSize: 15, fontWeight: 800 }}>
+              {user?.name ?? '관리자'}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+              {user?.adminLevel ?? '서비스 관리자'}
+            </p>
+            <button
+              onClick={() => navigate('/admin/learning')}
+              className="btn btn--secondary btn--full"
+              style={{ marginTop: 12 }}
+            >
+              관리자 페이지로 이동
             </button>
           </div>
         </div>
