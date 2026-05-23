@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 const BOARD_STORAGE_KEY = 'i-route-board-posts'
@@ -35,12 +35,19 @@ export default function BoardDetail() {
   const navigate = useNavigate()
 
   const [liked, setLiked] = useState(false)
+  const [favorite, setFavorite] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [comments, setComments] = useState(DEFAULT_COMMENTS)
 
   const post = useMemo(() => {
     return getPosts().find((item) => item.id === postId)
   }, [postId])
+
+  useEffect(() => {
+    if (post) {
+      setFavorite(!!post.favorite)
+    }
+  }, [post])
 
   const handleAddComment = () => {
     if (!commentText.trim()) return
@@ -54,6 +61,22 @@ export default function BoardDetail() {
 
     setComments((prev) => [newComment, ...prev])
     setCommentText('')
+  }
+
+  const handleToggleFavorite = () => {
+    const nextFavorite = !favorite
+
+    const nextPosts = getPosts().map((item) => {
+      if (item.id !== postId) return item
+
+      return {
+        ...item,
+        favorite: nextFavorite,
+      }
+    })
+
+    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(nextPosts))
+    setFavorite(nextFavorite)
   }
 
   const handleDeletePost = () => {
@@ -80,7 +103,13 @@ export default function BoardDetail() {
 
   return (
     <div>
-      <section style={{ padding: '16px 20px', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+      <section
+        style={{
+          padding: '16px 20px',
+          background: 'var(--color-surface)',
+          borderBottom: '1px solid var(--color-border)',
+        }}
+      >
         <button
           onClick={() => navigate(-1)}
           style={{
@@ -95,20 +124,40 @@ export default function BoardDetail() {
 
       <article className="section" style={{ background: 'var(--color-surface)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          {post.pinned && <span className="badge badge--orange">고정</span>}
+
+          {favorite && <span className="badge badge--yellow">★ 즐겨찾기</span>}
+
           <span className={`badge ${getCategoryBadgeClass(post.category)}`}>
             {post.category}
           </span>
-          {post.pinned && <span className="badge badge--orange">고정</span>}
         </div>
 
-        <h1 style={{ fontSize: 21, fontWeight: 800, lineHeight: 1.35, color: 'var(--color-text-primary)' }}>
+        <h1
+          style={{
+            fontSize: 21,
+            fontWeight: 800,
+            lineHeight: 1.35,
+            color: 'var(--color-text-primary)',
+          }}
+        >
           {post.title}
         </h1>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginTop: 12,
+            fontSize: 12,
+            color: 'var(--color-text-muted)',
+            flexWrap: 'wrap',
+          }}
+        >
           <span>{post.author}</span>
           <span>·</span>
-          <span>{post.createdAt}</span>
+          <span>{post.updatedAt ?? post.createdAt}</span>
           <span>·</span>
           <span>조회 {post.views}</span>
         </div>
@@ -128,19 +177,38 @@ export default function BoardDetail() {
           {post.content}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 8,
+            marginTop: 16,
+          }}
+        >
           <button
             onClick={() => setLiked((prev) => !prev)}
             className={liked ? 'btn btn--primary' : 'btn btn--secondary'}
-            style={{ flex: 1 }}
           >
             {liked ? '💙 공감 완료' : '🤍 공감'} {post.likes + (liked ? 1 : 0)}
           </button>
 
           <button
+            onClick={handleToggleFavorite}
+            className={favorite ? 'btn btn--primary' : 'btn btn--secondary'}
+          >
+            {favorite ? '★ 즐겨찾기 완료' : '☆ 즐겨찾기'}
+          </button>
+
+          <button
+            onClick={() => navigate(`/board/${postId}/edit`)}
+            className="btn btn--secondary"
+          >
+            수정
+          </button>
+
+          <button
             onClick={handleDeletePost}
             className="btn btn--danger"
-            style={{ flex: 1 }}
           >
             삭제
           </button>
@@ -175,13 +243,26 @@ export default function BoardDetail() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {comments.map((comment) => (
             <div key={comment.id} className="card" style={{ padding: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  marginBottom: 6,
+                }}
+              >
                 <strong style={{ fontSize: 13 }}>{comment.author}</strong>
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                   {comment.createdAt}
                 </span>
               </div>
-              <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: 'var(--color-text-secondary)',
+                  lineHeight: 1.5,
+                }}
+              >
                 {comment.content}
               </p>
             </div>

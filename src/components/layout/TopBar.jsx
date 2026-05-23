@@ -95,6 +95,10 @@ function getPageTitle(pathname) {
     return PAGE_TITLES[pathname]
   }
 
+  if (pathname.startsWith('/board/') && pathname.endsWith('/edit')) {
+    return '게시글 수정'
+  }
+
   if (pathname.startsWith('/board/')) {
     return '게시글 상세'
   }

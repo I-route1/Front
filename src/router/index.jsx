@@ -19,6 +19,7 @@ import AdminLearning from '@/pages/AdminLearning'
 import Board from '@/pages/Board'
 import BoardDetail from '@/pages/BoardDetail'
 import BoardWrite from '@/pages/BoardWrite'
+import BoardEdit from '@/pages/BoardEdit'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: 'notice', element: <Notice /> },
       { path: 'board', element: <Board /> },
       { path: 'board/write', element: <BoardWrite /> },
+      { path: 'board/:postId/edit', element: <BoardEdit /> },
       { path: 'board/:postId', element: <BoardDetail /> },
       { path: 'profile', element: <Profile /> },
       { path: 'profile/edit', element: <EditProfile /> },

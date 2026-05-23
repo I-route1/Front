@@ -15,6 +15,7 @@ const DEFAULT_POSTS = [
     likes: 4,
     comments: 2,
     pinned: true,
+    favorite: true,
   },
   {
     id: 'post-002',
@@ -27,6 +28,7 @@ const DEFAULT_POSTS = [
     likes: 1,
     comments: 3,
     pinned: false,
+    favorite: false,
   },
   {
     id: 'post-003',
@@ -39,6 +41,7 @@ const DEFAULT_POSTS = [
     likes: 2,
     comments: 1,
     pinned: false,
+    favorite: false,
   },
   {
     id: 'post-004',
@@ -51,10 +54,18 @@ const DEFAULT_POSTS = [
     likes: 7,
     comments: 4,
     pinned: false,
+    favorite: false,
   },
 ]
 
-const TABS = ['전체', '공지', '자유', '질문', '건의']
+const TABS = ['전체', '즐겨찾기', '공지', '자유', '질문', '건의']
+
+function normalizePosts(posts) {
+  return posts.map((post) => ({
+    ...post,
+    favorite: !!post.favorite,
+  }))
+}
 
 function getStoredPosts() {
   const saved = localStorage.getItem(BOARD_STORAGE_KEY)
@@ -66,8 +77,18 @@ function getStoredPosts() {
 
   try {
     const parsed = JSON.parse(saved)
-    return Array.isArray(parsed) ? parsed : DEFAULT_POSTS
+
+    if (!Array.isArray(parsed)) {
+      localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(DEFAULT_POSTS))
+      return DEFAULT_POSTS
+    }
+
+    const normalizedPosts = normalizePosts(parsed)
+    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(normalizedPosts))
+
+    return normalizedPosts
   } catch {
+    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(DEFAULT_POSTS))
     return DEFAULT_POSTS
   }
 }
@@ -80,7 +101,11 @@ export default function Board() {
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
-      const matchedTab = activeTab === '전체' || post.category === activeTab
+      const matchedTab =
+        activeTab === '전체' ||
+        (activeTab === '즐겨찾기' && post.favorite) ||
+        post.category === activeTab
+
       const matchedKeyword =
         post.title.toLowerCase().includes(keyword.toLowerCase()) ||
         post.content.toLowerCase().includes(keyword.toLowerCase()) ||
@@ -161,17 +186,21 @@ export default function Board() {
       </div>
 
       <section
-  className="section"
-  style={{
-    minHeight: 'calc(100vh - 360px)',
-    paddingBottom: 96,
-  }}
->
+        className="section"
+        style={{
+          minHeight: 'calc(100vh - 360px)',
+          paddingBottom: 96,
+        }}
+      >
         {filteredPosts.length === 0 ? (
           <div className="empty-state">
             <span className="empty-state__icon">📭</span>
             <p className="empty-state__title">게시글이 없습니다</p>
-            <p className="empty-state__desc">검색어를 변경하거나 새 글을 작성해 보세요.</p>
+            <p className="empty-state__desc">
+              {activeTab === '즐겨찾기'
+                ? '즐겨찾기한 게시글이 없습니다.'
+                : '검색어를 변경하거나 새 글을 작성해 보세요.'}
+            </p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -188,11 +217,19 @@ export default function Board() {
                       고정
                     </span>
                   )}
+
+                  {post.favorite && (
+                    <span className="badge badge--yellow" style={{ fontSize: 10 }}>
+                      ★ 즐겨찾기
+                    </span>
+                  )}
+
                   <span className={`badge ${getCategoryBadgeClass(post.category)}`} style={{ fontSize: 10 }}>
                     {post.category}
                   </span>
+
                   <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    {post.createdAt}
+                    {post.updatedAt ?? post.createdAt}
                   </span>
                 </div>
 
@@ -230,6 +267,7 @@ export default function Board() {
                     marginTop: 12,
                     fontSize: 12,
                     color: 'var(--color-text-muted)',
+                    flexWrap: 'wrap',
                   }}
                 >
                   <span>작성자 {post.author}</span>
