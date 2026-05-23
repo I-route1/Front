@@ -12,6 +12,8 @@ export default function Profile() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
+  const children = user?.children ?? []
+
   const handleLogout = () => {
     logout()
     navigate('/login', { replace: true })
@@ -55,16 +57,26 @@ export default function Profile() {
             }}
           >
             {user?.avatar ? (
-              <img src={user.avatar} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img
+                src={user.avatar}
+                alt={user.name}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
             ) : (
               user?.name?.[0] ?? '?'
             )}
           </div>
+
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 800 }}>{user?.name ?? '사용자'}</h2>
             <p style={{ fontSize: 13, opacity: 0.75, marginTop: 3 }}>
               {ROLE_LABEL[user?.role] ?? '사용자'} · {user?.username ?? '계정'}
             </p>
+
             {user?.email && (
               <p style={{ fontSize: 12, opacity: 0.65, marginTop: 2 }}>
                 {user.email}
@@ -76,57 +88,137 @@ export default function Profile() {
 
       {/* 자녀 정보 카드 */}
       {user?.role === USER_ROLES.PARENT && (
-        <div style={{ padding: '0 16px', marginTop: -44, marginBottom: 8, position: 'relative', zIndex: 10 }}>
+        <div
+          style={{
+            padding: '0 16px',
+            marginTop: -44,
+            marginBottom: 8,
+            position: 'relative',
+            zIndex: 10,
+          }}
+        >
           <div className="card" style={{ padding: '16px' }}>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, fontWeight: 600 }}>
-              🧒 자녀 정보
-            </p>
-            {(user?.children ?? []).map((child) => (
-              <div key={child.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    background: 'var(--color-primary-light)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 18,
-                  }}
-                >
-                  👦
-                </div>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 700 }}>{child.name}</p>
-                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{child.grade}</p>
-                </div>
-                <button
-                  onClick={() => navigate('/profile/edit')}
-                  style={{
-                    marginLeft: 'auto',
-                    padding: '6px 12px',
-                    background: 'var(--color-primary-light)',
-                    border: 'none',
-                    borderRadius: 8,
-                    color: 'var(--color-primary)',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  수정
-                </button>
+            <div style={{ marginBottom: 12 }}>
+  <p
+    style={{
+      fontSize: 12,
+      color: 'var(--color-text-muted)',
+      fontWeight: 600,
+    }}
+  >
+    🧒 자녀 정보
+  </p>
+  <p
+    style={{
+      fontSize: 11,
+      color: 'var(--color-text-muted)',
+      marginTop: 3,
+    }}
+  >
+    등록된 자녀 {children.length}명
+  </p>
+</div>
+
+            {children.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {children.map((child, index) => (
+                  <div
+                    key={child.id ?? `child-${index}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '12px',
+                      borderRadius: 12,
+                      background: 'var(--color-surface-2)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '50%',
+                        background: 'var(--color-primary-light)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 18,
+                        flexShrink: 0,
+                      }}
+                    >
+                      👦
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 14, fontWeight: 700 }}>
+                        {child.name || `자녀 ${index + 1}`}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--color-text-muted)',
+                          marginTop: 2,
+                        }}
+                      >
+                        {child.grade || '학년 정보 없음'}
+                      </p>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: 'var(--color-primary)',
+                        background: 'var(--color-primary-light)',
+                        padding: '5px 8px',
+                        borderRadius: 999,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div
+                style={{
+                  padding: '18px 12px',
+                  borderRadius: 12,
+                  background: 'var(--color-surface-2)',
+                  border: '1px dashed var(--color-border)',
+                  textAlign: 'center',
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  등록된 자녀 정보가 없습니다.
+                </p>
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--color-text-muted)',
+                    marginTop: 4,
+                  }}
+                >
+                  프로필 수정에서 자녀 정보를 등록해 주세요.
+                </p>
+              </div>
+            )}
+
             <button
               onClick={() => navigate('/profile/edit')}
               style={{
                 width: '100%',
                 marginTop: 12,
                 padding: '10px',
-                background: 'var(--color-surface-2)',
+                background: 'var(--color-surface)',
                 border: '1.5px dashed var(--color-border)',
                 borderRadius: 10,
                 fontSize: 13,
@@ -136,7 +228,7 @@ export default function Profile() {
                 fontFamily: 'inherit',
               }}
             >
-              + 자녀 추가
+              + 자녀 추가 / 수정
             </button>
           </div>
         </div>
@@ -144,9 +236,24 @@ export default function Profile() {
 
       {/* 학원 정보 카드 */}
       {user?.role === USER_ROLES.ACADEMY && (
-        <div style={{ padding: '0 16px', marginTop: -44, marginBottom: 8, position: 'relative', zIndex: 10 }}>
+        <div
+          style={{
+            padding: '0 16px',
+            marginTop: -44,
+            marginBottom: 8,
+            position: 'relative',
+            zIndex: 10,
+          }}
+        >
           <div className="card" style={{ padding: '16px' }}>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10, fontWeight: 600 }}>
+            <p
+              style={{
+                fontSize: 12,
+                color: 'var(--color-text-muted)',
+                marginBottom: 10,
+                fontWeight: 600,
+              }}
+            >
               🏫 학원 정보
             </p>
             <p style={{ fontSize: 15, fontWeight: 800 }}>
@@ -201,7 +308,8 @@ export default function Profile() {
                     padding: '14px 20px',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: i < group.items.length - 1 ? '1px solid var(--color-border)' : 'none',
+                    borderBottom:
+                      i < group.items.length - 1 ? '1px solid var(--color-border)' : 'none',
                     cursor: 'pointer',
                     fontFamily: 'inherit',
                     textAlign: 'left',
@@ -237,12 +345,21 @@ export default function Profile() {
                       flex: 1,
                       fontSize: 14,
                       fontWeight: 500,
-                      color: item.danger ? 'var(--color-danger)' : 'var(--color-text-primary)',
+                      color: item.danger
+                        ? 'var(--color-danger)'
+                        : 'var(--color-text-primary)',
                     }}
                   >
                     {item.label}
                   </span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--color-text-muted)"
+                    strokeWidth="2"
+                  >
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
@@ -272,7 +389,14 @@ export default function Profile() {
         >
           로그아웃
         </button>
-        <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--color-text-muted)', marginTop: 12 }}>
+        <p
+          style={{
+            textAlign: 'center',
+            fontSize: 11,
+            color: 'var(--color-text-muted)',
+            marginTop: 12,
+          }}
+        >
           아이루트 v0.1.0
         </p>
       </div>
