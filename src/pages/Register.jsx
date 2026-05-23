@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 
 const ROLES = [
   { value: 'parent', label: '학부모' },
-  { value: 'academy', label: '학원 관리자' },
+  { value: 'academy', label: '학원' },
 ]
 
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
