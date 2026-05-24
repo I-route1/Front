@@ -303,13 +303,7 @@ export default function Profile() {
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
               {user?.adminLevel ?? '서비스 관리자'}
             </p>
-            <button
-              onClick={() => navigate('/admin/learning')}
-              className="btn btn--secondary btn--full"
-              style={{ marginTop: 12 }}
-            >
-              관리자 페이지로 이동
-            </button>
+            
           </div>
         </div>
       )}

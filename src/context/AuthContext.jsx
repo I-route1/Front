@@ -12,7 +12,6 @@ export const USER_ROLES = {
 
 /** 역할별 로그인·루트(/) 진입 시 기본 화면 */
 export function getDefaultRoute(role) {
-  if (role === USER_ROLES.ADMIN) return '/admin/learning'
   return '/home'
 }
 
