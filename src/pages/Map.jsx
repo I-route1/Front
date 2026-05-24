@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
 
-// 정류장 데이터 (임시 설정)
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
   { id: 2, name: '푸르지오', lat: 35.8725, lng: 128.6025 },
-  { id: 3, name: '계양네거리', lat: 35.8738, lng: 128.6035 }, // 이 구간에서 자동 지연 발생
-  { id: 4, name: '영남대역', lat: 35.8750, lng: 128.6045 },    // 내 아이 하차 정류장
-  { id: 5, name: '압량우미린', lat: 35.8765, lng: 128.6060 },   // 종점
+  { id: 3, name: '계양네거리', lat: 35.8738, lng: 128.6035 },
+  { id: 4, name: '영남대역', lat: 35.8750, lng: 128.6045 },
+  { id: 5, name: '압량우미린', lat: 35.8765, lng: 128.6060 },
 ]
 
-// 내 아이가 하차할 목표 정류장 ID (영남대역)
 const MY_CHILD_STOP_ID = 4;
 
 const mockVehicleInfo = {
@@ -29,23 +27,18 @@ export default function Map() {
   const [currentStopIndex, setCurrentStopIndex] = useState(0)
   const [driverInfo, setDriverInfo] = useState(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [isRouteSheetOpen, setIsRouteSheetOpen] = useState(false)
 
-  // 교통 체증/지연 상태
   const [isDelayed, setIsDelayed] = useState(false)
 
-  // 동적 ETA 계산
   const globalEta = Math.max(12 - currentStopIndex * 3, 0) + (isDelayed ? 5 : 0);
 
   useEffect(() => {
     setDriverInfo(mockVehicleInfo)
   }, [])
 
-  // FCM 연동 로직
   useEffect(() => {
-    // 1. 알림 권한을 요청하고 기기 고유 토큰을 콘솔에 출력
     requestAndGetFCMToken();
-
-    // 2. 앱이 켜져 있을 때 실시간 푸시를 받기 위한 리스너를 가동
     initForegroundMessageListener();
   }, []);
 
@@ -127,7 +120,6 @@ export default function Map() {
 
           setCurrentStopIndex(localIndex);
 
-          // 자동 지연 감지 로직 (계양네거리)
           if (localIndex === 2) {
             setIsDelayed(true);
             setSpeed(Math.floor(Math.random() * 5 + 5));
@@ -136,17 +128,15 @@ export default function Map() {
             setSpeed(Math.floor(Math.random() * 20 + 20));
           }
 
-          //정류장별 상태 세분화 (내 아이 정류장 도착 vs 종점 운행 종료 vs 일반 이동)
           if (MOCK_ROUTE[localIndex].id === MY_CHILD_STOP_ID) {
-            setStatus('child_arrived'); // 내 아이 정류장 도착 상태
+            setStatus('child_arrived');
           } else if (localIndex === MOCK_ROUTE.length - 1) {
-            setStatus('ended'); // 종점 도착 및 운행 종료 상태
+            setStatus('ended');
             setSpeed(0);
           } else {
-            setStatus('moving'); // 일반 이동 중 상태
+            setStatus('moving');
           }
 
-          // 실시간 선 색상 갱신
           const passedRoute = MOCK_ROUTE.slice(0, localIndex + 1);
           const passedPath = passedRoute.map(pos => new window.kakao.maps.LatLng(pos.lat, pos.lng));
           passedPolyline.setPath(passedPath);
@@ -186,7 +176,6 @@ export default function Map() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
 
-      {/*실시간 상황별 최상단 배너 자동 렌더링 시스템 */}
       {isDelayed && (
         <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
           <span>⚠️</span> 교통 혼잡으로 인해 예상 도착 시간이 5분 지연되고 있습니다.
@@ -205,7 +194,6 @@ export default function Map() {
         </div>
       )}
 
-      {/* 상태 바 */}
       <div style={{ background: isDelayed ? '#EF4444' : STATUS_CONFIG[status].bg, color: 'white', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 5, transition: 'background 0.3s ease' }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', animation: status === 'moving' ? 'pulse 1.5s ease-in-out infinite' : 'none' }} />
         <span style={{ fontSize: 14, fontWeight: 600 }}>
@@ -216,27 +204,21 @@ export default function Map() {
         </span>
       </div>
 
-      {/* 지도 영역 */}
       <div style={{ flex: 1, minHeight: 400, background: '#E8F0FE', position: 'relative' }}>
         <div ref={mapRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
 
-        {/* 우측 컨트롤 버튼 */}
         <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 10 }}>
-          <button onClick={() => setIsSheetOpen(true)} style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}>
+          <button onClick={() => { setIsSheetOpen(true); setIsRouteSheetOpen(false); }} style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}>
             기사 정보 🚍
           </button>
-          {['전체 경로'].map((label) => (
-            <button key={label} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>
-              {label}
-            </button>
-          ))}
+          <button onClick={() => { setIsRouteSheetOpen(true); setIsSheetOpen(false); }} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>
+            전체 경로 🗺️
+          </button>
         </div>
       </div>
 
-      {/* 하단 정보 패널 */}
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, zIndex: 5 }}>
 
-        {/* 실시간 노선 진행 상태 UI */}
         <div style={{ padding: '16px', background: 'white', borderRadius: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <p style={{ fontSize: 13, color: '#666', margin: 0, fontWeight: 600 }}>실시간 노선 진행 상태</p>
@@ -255,7 +237,6 @@ export default function Map() {
 
               const dotColor = isPassed ? '#10B981' : isCurrent ? '#3B82F6' : '#D1D5DB';
 
-              // 정류장별 실시간 ETA 텍스트 계산
               let etaText = '';
               let etaColor = '#9CA3AF';
 
@@ -322,7 +303,7 @@ export default function Map() {
         background: 'white',
         borderTopLeftRadius: '24px',
         borderTopRightRadius: '24px',
-        boxShadow: '0 -4px 16 rgba(0,0,0,0.15)',
+        boxShadow: '0 -4px 16px rgba(0,0,0,0.15)',
         transition: 'bottom 0.3s ease-in-out',
         zIndex: 100,
         padding: '24px'
@@ -347,11 +328,82 @@ export default function Map() {
           📞 기사님께 바로 전화걸기
         </a>
       </div>
+
+      {/* 전체 경로 노선도 바텀 시트 */}
+      <div style={{
+        position: 'absolute',
+        bottom: isRouteSheetOpen ? '0' : '-100%',
+        left: '0',
+        width: '100%',
+        background: 'white',
+        borderTopLeftRadius: '24px',
+        borderTopRightRadius: '24px',
+        boxShadow: '0 -4px 16px rgba(0,0,0,0.15)',
+        transition: 'bottom 0.3s ease-in-out',
+        zIndex: 100,
+        padding: '24px',
+        maxHeight: '60%',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#111' }}>전체 운행 노선</h3>
+          <button onClick={() => setIsRouteSheetOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#9CA3AF', cursor: 'pointer', padding: '4px' }}>✕</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', paddingLeft: '8px', position: 'relative', paddingBottom: '20px' }}>
+          <div style={{ position: 'absolute', top: '12px', bottom: '32px', left: '19px', width: '4px', background: '#E5E7EB', zIndex: 0 }} />
+
+          {MOCK_ROUTE.map((stop, index) => {
+            const isPassed = index < currentStopIndex;
+            const isCurrent = index === currentStopIndex;
+            const isMyChildStop = stop.id === MY_CHILD_STOP_ID;
+
+            return (
+              <div key={stop.id} style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', position: 'relative', zIndex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', marginRight: '16px' }}>
+                  {isCurrent ? (
+                    <span style={{ fontSize: '18px' }}>🚌</span>
+                  ) : (
+                    <div style={{
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      background: isPassed ? '#9CA3AF' : '#2563EB',
+                      border: isMyChildStop ? '2px solid #F59E0B' : 'none',
+                      boxShadow: isMyChildStop ? '0 0 0 2px #FEF08A' : 'none'
+                    }} />
+                  )}
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <span style={{
+                    fontSize: '15px',
+                    fontWeight: isCurrent || isMyChildStop ? '800' : '500',
+                    color: isPassed ? '#9CA3AF' : '#111'
+                  }}>
+                    {stop.name}
+                  </span>
+                  {isMyChildStop && (
+                    <span style={{ marginLeft: '8px', background: '#FEF08A', color: '#A16207', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
+                      우리 아이 하차 정류장
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ fontSize: '12px', fontWeight: '700', color: isCurrent ? '#FF3B3B' : (isPassed ? '#9CA3AF' : '#2563EB') }}>
+                  {isCurrent ? '운행중' : (isPassed ? '통과' : '대기')}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
     </div>
   )
 }
 
-//상태 바 세분화 구성
 const STATUS_CONFIG = {
   moving: { bg: 'linear-gradient(90deg, #1A56DB, #2563EB)', label: '이동 중', sub: '' },
   child_arrived: { bg: 'linear-gradient(90deg, #10B981, #059669)', label: '영남대역 도착 완료', sub: '자녀 하차 완료' },
