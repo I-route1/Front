@@ -144,22 +144,7 @@ export default function Login() {
           </button>
         </div>
 
-        {/*[테스트용] 기사님 화면 바로가기 링크*/}
-        <div style={{ textAlign: 'center', marginTop: '32px' }}>
-          <Link
-            to="/driver/boarding"
-            style={{
-              fontSize: '13px',
-              color: '#9CA3AF',
-              textDecoration: 'underline',
-              cursor: 'pointer'
-            }}
-          >
-            [테스트] 기사님 화면
-          </Link>
-        </div>
-
-        {/* 🚀 [개발자 전용 임시 이동 버튼 복구] */}
+        {/* 임시 이동 버튼 복구 */}
         <div style={{ marginTop: '20px', borderTop: '1px dashed var(--color-border)', paddingTop: '20px', textAlign: 'center' }}>
           <Link
             to="/driver/boarding"
