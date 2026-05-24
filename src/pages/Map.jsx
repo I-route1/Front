@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
 
 // 정류장 데이터 (임시 설정)
 const MOCK_ROUTE = [
@@ -38,6 +39,15 @@ export default function Map() {
   useEffect(() => {
     setDriverInfo(mockVehicleInfo)
   }, [])
+
+  // FCM 연동 로직
+  useEffect(() => {
+    // 1. 알림 권한을 요청하고 기기 고유 토큰을 콘솔에 출력
+    requestAndGetFCMToken();
+
+    // 2. 앱이 켜져 있을 때 실시간 푸시를 받기 위한 리스너를 가동
+    initForegroundMessageListener();
+  }, []);
 
   useEffect(() => {
     let mapInterval = null;
