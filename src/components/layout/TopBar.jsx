@@ -12,7 +12,7 @@ const PAGE_TITLES = {
   '/profile/edit': '프로필 수정',
   '/profile/password': '비밀번호 변경',
   '/profile/delete': '계정 탈퇴',
-  '/admin/learning': '관리자 학습 관리',
+  '/admin/learning': '학습 관리',
 }
 
 export default function TopBar() {

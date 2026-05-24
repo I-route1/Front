@@ -11,12 +11,13 @@ const PARENT_NAV = [
 
 const ACADEMY_NAV = [
   { to: '/home', label: '홈', icon: HomeIcon },
+  { to: '/admin/learning', label: '학습', icon: BookIcon },
   { to: '/board', label: '게시판', icon: NoticeIcon },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
 const ADMIN_NAV = [
-  { to: '/admin/learning', label: '관리', icon: BookIcon },
+  { to: '/home', label: '홈', icon: HomeIcon },
   { to: '/board', label: '게시판', icon: NoticeIcon },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]

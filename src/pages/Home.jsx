@@ -361,7 +361,13 @@ function AcademyHome({ user }) {
 
 function AdminHome({ user, navigate }) {
   return (
-    <div>
+    <div
+      style={{
+        minHeight: 'calc(100vh - 120px)',
+        paddingBottom: 96,
+        background: 'var(--color-bg)',
+      }}
+    >
       <div
         style={{
           background: 'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)',
@@ -383,20 +389,7 @@ function AdminHome({ user, navigate }) {
           <h3 className="section__title">관리자 빠른 실행</h3>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-          <button
-            onClick={() => navigate('/admin/learning')}
-            className="card"
-            style={{
-              padding: '18px 12px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            <p style={{ fontSize: 24 }}>📘</p>
-            <p style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>학습 관리</p>
-          </button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: 10 }}>
 
           <button
             onClick={() => navigate('/board')}
