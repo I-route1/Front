@@ -159,6 +159,29 @@ export default function Login() {
           </Link>
         </div>
 
+        {/* 🚀 [개발자 전용 임시 이동 버튼 복구] */}
+        <div style={{ marginTop: '20px', borderTop: '1px dashed var(--color-border)', paddingTop: '20px', textAlign: 'center' }}>
+          <Link
+            to="/driver/boarding"
+            style={{
+              display: 'inline-block',
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '14px',
+              background: '#4B5563',
+              color: 'white',
+              borderRadius: '12px',
+              textDecoration: 'none',
+              fontWeight: '800',
+              fontSize: '14px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+              transition: 'background 0.2s'
+            }}
+          >
+            (임시)기사 탑승 명단 페이지 이동
+          </Link>
+        </div>
+
       </div>
     </div>
   )
