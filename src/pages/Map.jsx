@@ -225,7 +225,7 @@ export default function Map() {
           <button onClick={() => setIsSheetOpen(true)} style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}>
             기사 정보 🚍
           </button>
-          {['내 위치', '전체 경로', '새로고침'].map((label) => (
+          {['전체 경로'].map((label) => (
             <button key={label} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>
               {label}
             </button>
@@ -311,18 +311,6 @@ export default function Map() {
             ))}
           </div>
         </div>
-
-        {/* 이동 이력 */}
-        <div style={{ fontSize: 13, color: '#666' }}>
-          <p style={{ fontWeight: 600, color: '#333', marginBottom: 8 }}>오늘의 운행 알림</p>
-          {HISTORY.map((h) => (
-            <div key={h.id} style={{ id: h.id, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #eee' }}>
-              <span>{h.icon}</span>
-              <span style={{ flex: 1 }}>{h.event}</span>
-              <span style={{ color: '#999' }}>{h.time}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* 기사 정보 바텀 시트 */}
@@ -369,9 +357,3 @@ const STATUS_CONFIG = {
   child_arrived: { bg: 'linear-gradient(90deg, #10B981, #059669)', label: '영남대역 도착 완료', sub: '자녀 하차 완료' },
   ended: { bg: 'linear-gradient(90deg, #4B5563, #374151)', label: '운행 종료', sub: '운행 완료' },
 }
-
-const HISTORY = [
-  { id: 1, icon: '🏠', event: '유치원에서 출발', time: '13:55' },
-  { id: 2, icon: '📍', event: '사동 푸르지오 통과', time: '13:58' },
-  { id: 3, icon: '🚦', event: '정차 대기', time: '14:02' },
-]
