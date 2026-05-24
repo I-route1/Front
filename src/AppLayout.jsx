@@ -3,10 +3,14 @@ import { useAuth } from '@/context/AuthContext'
 import TopBar from './TopBar'
 import BottomNav from './BottomNav'
 
-const NAV_ITEMS = [
-  { to: '/home',     label: '홈',      icon: HomeIcon },
+const getNavItems = (role) => [
+  { to: '/home',     label: '홈',        icon: HomeIcon },
   { to: '/map',      label: '실시간 위치', icon: MapIcon,    badge: 0 },
-  { to: '/learning', label: '학습 리포트', icon: BookIcon },
+  {
+    to: role === 'academy' ? '/admin/learning' : '/learning',
+    label: '학습 리포트',
+    icon: BookIcon,
+  },
   { to: '/notice',   label: '공지사항',   icon: NoticeIcon, badge: 2 },
   { to: '/profile',  label: '마이페이지', icon: ProfileIcon },
 ]
@@ -17,6 +21,7 @@ const ROLE_LABEL = {
 
 export default function AppLayout() {
   const { user } = useAuth()
+  const navItems = getNavItems(user?.role)
 
   return (
     <div style={{
@@ -26,10 +31,8 @@ export default function AppLayout() {
       overflow: 'hidden',
       background: 'var(--color-bg)',
     }}>
-      {/* ── 사이드바 (태블릿/데스크탑 768px+) ── */}
-      <SidebarNav user={user} />
+      <SidebarNav user={user} navItems={navItems} />
 
-      {/* ── 오른쪽 메인 영역 ── */}
       <div style={{
         flex: 1,
         display: 'flex',
@@ -40,7 +43,6 @@ export default function AppLayout() {
       }}>
         <TopBar />
 
-        {/* ── 페이지 콘텐츠 ── */}
         <main style={{
           flex: 1,
           overflowY: 'auto',
@@ -50,22 +52,20 @@ export default function AppLayout() {
           <Outlet />
         </main>
 
-        {/* ── 하단 탭 (모바일 전용, CSS로 숨김) ── */}
-        <BottomNav />
+        <BottomNav navItems={navItems} />
       </div>
     </div>
   )
 }
 
-/* ── 사이드바 컴포넌트 ── */
-function SidebarNav({ user }) {
+function SidebarNav({ user, navItems }) {
   return (
     <aside className="sidebar">
       <div className="sidebar__logo">아이<span>루트</span></div>
 
       <nav className="sidebar__nav">
         <p className="sidebar__section-label">메뉴</p>
-        {NAV_ITEMS.map(({ to, label, icon: Icon, badge }) => (
+        {navItems.map(({ to, label, icon: Icon, badge }) => (
           <NavLink
             key={to}
             to={to}
