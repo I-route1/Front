@@ -199,7 +199,8 @@ export default function Login() {
           <span style={{ color: 'var(--color-border)' }}>|</span>
           <Link to="/find-password" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
             비밀번호 찾기
-</div>
+          </Link>
+        </div>
 
         <div style={{ marginTop: '20px', borderTop: '1px dashed var(--color-border)', paddingTop: '20px', textAlign: 'center' }}>
           <Link
