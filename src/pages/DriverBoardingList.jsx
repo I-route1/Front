@@ -23,7 +23,15 @@ export default function DriverBoardingList() {
         .sort((a, b) => a.stop.localeCompare(b.stop));
 
     return (
-        <div style={{ background: '#F3F4F6', minHeight: '100vh', padding: '20px', paddingBottom: '80px' }}>
+    <div
+        style={{
+            background: '#F3F4F6',
+            minHeight: '100%',
+            padding: '20px',
+            paddingBottom: '140px',
+            boxSizing: 'border-box'
+        }}
+    >
 
             {/* 상단 헤더 */}
             <div style={{ marginBottom: '24px' }}>

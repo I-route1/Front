@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
+import DriverBoardingList from '@/pages/DriverBoardingList'
 
 export default function Home() {
   const { user, role } = useAuth()
@@ -19,13 +20,17 @@ export default function Home() {
     }
   }
 
-  if (role === USER_ROLES.ACADEMY) {
-    return <AcademyHome user={user}/>
-  }
+  if (role === USER_ROLES.DRIVER) {
+  return <DriverHome user={user} />
+}
 
-  if (role === USER_ROLES.ADMIN) {
-    return <AdminHome user={user} navigate={navigate} />
-  }
+if (role === USER_ROLES.ACADEMY) {
+  return <AcademyHome user={user} />
+}
+
+if (role === USER_ROLES.ADMIN) {
+  return <AdminHome user={user} navigate={navigate} />
+}
 
   return (
     <div>
@@ -406,6 +411,53 @@ function AdminHome({ user, navigate }) {
           </button>
         </div>
       </section>
+    </div>
+  )
+}
+function DriverHome({ user }) {
+  return (
+    <div
+      style={{
+        minHeight: '100dvh',
+        paddingBottom: 96,
+        background: '#F3F4F6',
+      }}
+    >
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)',
+          padding: '24px 20px 28px',
+          color: 'white',
+        }}
+      >
+        <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 4 }}>기사님 홈</p>
+        <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px' }}>
+          {user?.name ?? '기사님'}님
+        </h2>
+        <p style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
+          오늘의 운행 및 탑승 명단을 확인해 보세요
+        </p>
+
+        <div
+          style={{
+            marginTop: 20,
+            background: 'rgba(255,255,255,0.12)',
+            borderRadius: 14,
+            padding: '14px 16px',
+            border: '1px solid rgba(255,255,255,0.18)',
+          }}
+        >
+          <p style={{ fontSize: 13, fontWeight: 700 }}>배정 차량</p>
+          <p style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+            {user?.vehicleNumber ?? '차량 정보가 등록되지 않았습니다.'}
+          </p>
+          <p style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+            {user?.academyName ?? '배정 학원 정보가 등록되지 않았습니다.'}
+          </p>
+        </div>
+      </div>
+
+      <DriverBoardingList />
     </div>
   )
 }

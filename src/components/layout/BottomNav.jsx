@@ -22,14 +22,21 @@ const ADMIN_NAV = [
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
+const DRIVER_NAV = [
+  { to: '/home', label: '홈', icon: HomeIcon },
+  { to: '/map', label: '지도', icon: MapIcon },
+  { to: '/profile', label: '마이', icon: ProfileIcon },
+]
+
 export default function BottomNav() {
   const { user } = useAuth()
 
   const getNavItems = () => {
-    if (user?.role === USER_ROLES.ADMIN) return ADMIN_NAV
-    if (user?.role === USER_ROLES.ACADEMY) return ACADEMY_NAV
-    return PARENT_NAV
-  }
+  if (user?.role === USER_ROLES.ADMIN) return ADMIN_NAV
+  if (user?.role === USER_ROLES.ACADEMY) return ACADEMY_NAV
+  if (user?.role === USER_ROLES.DRIVER) return DRIVER_NAV
+  return PARENT_NAV
+}
 
   const NAV_ITEMS = getNavItems()
 
