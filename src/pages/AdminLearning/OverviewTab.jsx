@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { analysisAPI } from '@/api'
+import { useAuth } from '@/context/AuthContext'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -6,9 +8,19 @@ import {
 import { STUDENTS, SUBJECT_COLORS, SUBJECTS } from './data/mockData'
 
 export default function OverviewTab() {
-
+  const { user } = useAuth()
   const [filterGrade, setFilterGrade] = useState('전체')
   const [filterClass, setFilterClass] = useState('전체')
+  const [apiRiskStudents, setApiRiskStudents] = useState([])
+
+  useEffect(() => {
+    if (!user?.id) return
+    analysisAPI.getRiskAnalysis('14')
+      .then(data => {
+        if (data?.atRisk) setApiRiskStudents([data])
+      })
+      .catch(e => console.error('위험 학생 조회 실패:', e))
+  }, [user?.id])
 
   const grades  = ['전체', ...new Set(STUDENTS.map(s => s.grade))].sort()
   const classes = ['전체', 'A반', 'B반', 'C반']

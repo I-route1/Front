@@ -1,20 +1,48 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { analysisAPI, counselingAPI } from '@/api'
+import { useAuth } from '@/context/AuthContext'
 import { STUDENTS, SUBJECTS, SUBJECT_COLORS, AI_REPORTS } from './data/mockData'
 
 export default function StudentsTab() {
+    const { user } = useAuth()
     const [search, setSearch]         = useState('')
-    const [filterGrade, setFilterGrade] = useState('전체')  // ← 학년 추가
+    const [filterGrade, setFilterGrade] = useState('전체')
     const [filterClass, setFilterClass] = useState('전체')
     const [sortBy, setSortBy]         = useState('name')
     const [selectedId, setSelectedId] = useState(null)
     const [loadingReport, setLoadingReport] = useState(false)
     const [showReport, setShowReport] = useState(null)
-  
-    // 학년/반 목록 동적 생성
+    
+    // 🆕 API 위험도 맵: { [studentId]: riskData }
+    const [riskMap, setRiskMap] = useState({})
+    
+    // 🆕 전체 학생 위험도 일괄 조회
+    useEffect(() => {
+      if (!user?.id) return
+      
+      Promise.all(
+        STUDENTS.map(s =>
+          analysisAPI.getRiskAnalysis(String(s.id))
+            .then(data => [s.id, data])
+            .catch(() => [s.id, null])
+        )
+      ).then(entries => {
+        const map = {}
+        entries.forEach(([id, data]) => { if (data) map[id] = data })
+        setRiskMap(map)
+      })
+    }, [user?.id])
+    
     const grades  = ['전체', ...new Set(STUDENTS.map(s => s.grade))].sort()
     const classes = ['전체', 'A반', 'B반', 'C반']
-  
-    const filtered = STUDENTS
+    
+    // 🆕 mock + API 위험도 병합 (API 우선)
+    const enrichedStudents = STUDENTS.map(s => ({
+      ...s,
+      risk: riskMap[s.id]?.atRisk ? 'high' : s.risk,
+    }))
+    
+    const filtered = enrichedStudents
       .filter(s => filterGrade === '전체' || s.grade === filterGrade)
       .filter(s => filterClass === '전체' || s.class === filterClass)
       .filter(s => s.name.includes(search))
@@ -23,15 +51,39 @@ export default function StudentsTab() {
         if (sortBy === 'risk')  return (b.risk === 'high' ? 1 : 0) - (a.risk === 'high' ? 1 : 0)
         return a.name.localeCompare(b.name, 'ko')
       })
-  
+    
+    // 🆕 실제 프리미엄 리포트 API 호출
     const handleAIReport = async (studentId) => {
       setLoadingReport(true)
       setShowReport(null)
-      await new Promise(r => setTimeout(r, 1800))
-      setShowReport(AI_REPORTS[studentId] || null)
-      setLoadingReport(false)
+      
+      try {
+        // 응답: { studentId, title, careerAnalysis, learningGuide }
+        const data = await counselingAPI.getPremiumReport(String(studentId))
+        
+        setShowReport({
+          title:     data.title          || 'AI 종합 분석 리포트',
+          summary:   data.careerAnalysis || '진로 분석 결과를 불러왔습니다.',
+          strong:    riskMap[studentId]?.strengths  || AI_REPORTS[studentId]?.strong || '-',
+          weak:      riskMap[studentId]?.weaknesses || AI_REPORTS[studentId]?.weak   || '-',
+          recommend: data.learningGuide  || '추천 조치를 불러왔습니다.',
+        })
+      } catch (e) {
+        console.error('AI 리포트 생성 실패:', e)
+        const fallback = AI_REPORTS[studentId]
+        if (fallback) {
+          setShowReport(fallback)
+        } else {
+          setShowReport({
+            summary: 'AI 서버 점검 중입니다. 잠시 후 다시 시도해주세요.',
+            strong: '-', weak: '-', recommend: '-',
+          })
+        }
+      } finally {
+        setLoadingReport(false)
+      }
     }
-  
+    
     return (
       <div>
         {/* 헤더 */}
@@ -39,7 +91,7 @@ export default function StudentsTab() {
           <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>총 {STUDENTS.length}명 등록</p>
           <h2 style={{ fontSize:20, fontWeight:800 }}>학생 관리</h2>
         </div>
-  
+        
         {/* 검색 */}
         <div style={{ margin:'16px 16px 0' }}>
           <input
@@ -53,14 +105,14 @@ export default function StudentsTab() {
             }}
           />
         </div>
-  
+        
         {/* 학년 필터 */}
         <div style={{ margin:'10px 16px 0' }}>
           <p style={{ fontSize:11, fontWeight:600, color:'var(--color-text-muted)', marginBottom:6 }}>학년</p>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             {grades.map(g => (
               <button key={g} onClick={() => { setFilterGrade(g); setSelectedId(null); setShowReport(null) }} style={{
-                padding:'6px 14px', borderRadius:20, border:'none', cursor:'pointer',
+                padding:'6px 14px', borderRadius:20, cursor:'pointer',
                 fontFamily:'inherit', fontSize:12, fontWeight:600,
                 background: filterGrade===g ? 'var(--color-primary)' : 'var(--color-surface)',
                 color: filterGrade===g ? 'white' : 'var(--color-text-muted)',
@@ -70,7 +122,7 @@ export default function StudentsTab() {
             ))}
           </div>
         </div>
-  
+        
         {/* 반 필터 + 정렬 */}
         <div style={{ margin:'10px 16px 0', display:'flex', gap:8, alignItems:'center' }}>
           <div style={{ display:'flex', gap:6, flex:1 }}>
@@ -98,7 +150,7 @@ export default function StudentsTab() {
             <option value="risk">주의순</option>
           </select>
         </div>
-  
+        
         {/* 필터 결과 카운트 */}
         <div style={{ margin:'8px 16px 0' }}>
           <p style={{ fontSize:12, color:'var(--color-text-muted)' }}>
@@ -108,7 +160,7 @@ export default function StudentsTab() {
             {filtered.length}명
           </p>
         </div>
-  
+        
         {/* 학생 리스트 */}
         <div style={{ margin:'8px 16px 0', display:'flex', flexDirection:'column', gap:8 }}>
           {filtered.length === 0 && (
@@ -131,7 +183,6 @@ export default function StudentsTab() {
                 }}
               >
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  {/* 아바타 */}
                   <div style={{
                     width:40, height:40, borderRadius:12, flexShrink:0,
                     background: s.risk==='high' ? '#FF3B3B15' : 'var(--color-primary-light)',
@@ -144,7 +195,6 @@ export default function StudentsTab() {
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                       <span style={{ fontSize:14, fontWeight:700 }}>{s.name}</span>
-                      {/* 학년 뱃지 추가 */}
                       <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:20, background:'#F0F4FF', color:'var(--color-primary)' }}>{s.grade}</span>
                       <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:20, background:'var(--color-surface-2)', color:'var(--color-text-muted)' }}>{s.class}</span>
                       {s.risk === 'high' && (
@@ -162,11 +212,11 @@ export default function StudentsTab() {
                   </div>
                 </div>
               </div>
-  
+              
               {/* 상세 펼침 */}
               {selectedId === s.id && (
                 <div style={{ background:'var(--color-surface-2)', borderRadius:'0 0 14px 14px', border:'1.5px solid var(--color-primary)', borderTop:'none', padding:16, marginTop:-4 }}>
-  
+                  
                   {/* 과목별 점수 */}
                   <p style={{ fontSize:12, fontWeight:700, color:'var(--color-text-secondary)', marginBottom:10 }}>과목별 점수</p>
                   <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16 }}>
@@ -180,7 +230,7 @@ export default function StudentsTab() {
                       </div>
                     ))}
                   </div>
-  
+                  
                   {/* AI 분석 리포트 버튼 */}
                   {!showReport && (
                     <button
@@ -196,12 +246,14 @@ export default function StudentsTab() {
                       {loadingReport ? '🤖 AI 분석 중...' : '🤖 AI 분석 리포트 생성'}
                     </button>
                   )}
-  
+                  
                   {/* AI 리포트 결과 */}
                   {showReport && (
                     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                       <div style={{ padding:'12px 14px', borderRadius:10, background:'var(--color-primary-light)', border:'1px solid #1A56DB30' }}>
-                        <p style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)', marginBottom:6 }}>🤖 AI 종합 분석</p>
+                        <p style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)', marginBottom:6 }}>
+                          🤖 {showReport.title || 'AI 종합 분석'}
+                        </p>
                         <p style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.6 }}>{showReport.summary}</p>
                       </div>
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
@@ -238,4 +290,4 @@ export default function StudentsTab() {
         <div style={{ height:24 }} />
       </div>
     )
-  }
+}
