@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { reviewAPI, studyPlanAPI } from '@/api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -7,8 +8,10 @@ import {
   SUBJECTS, SUBJECT_COLORS,
   INIT_TREND, INIT_DAILY_PLAN,
 } from './data/mockData'
+import { useAuth } from '@/context/AuthContext'
 
 export default function PredictTab() {
+  const { user } = useAuth()
   const [goal, setGoal]               = useState('')
   const [targetScore, setTargetScore] = useState('')
   const [plan, setPlan]               = useState(INIT_DAILY_PLAN)
@@ -16,6 +19,25 @@ export default function PredictTab() {
   const [showAdd, setShowAdd]         = useState(false)
   const [generating, setGenerating]   = useState(false)
   const [roadmap, setRoadmap]         = useState(null)
+  const [reviewData, setReviewData]   = useState(null)
+  const [reviewLoading, setReviewLoading] = useState(false)
+
+  useEffect(() => {
+    const fetchReview = async () => {
+      setReviewLoading(true)
+      try {
+        const res = await reviewAPI.getToday(user.id)  // ← 실제 연동
+        setReviewData(res)
+      } catch (e) {
+        console.error('복습 알림 조회 실패:', e)
+        // 실패 시 빈 상태
+        setReviewData({ hasReview: false, reviews: [] })
+      } finally {
+        setReviewLoading(false)
+      }
+    }
+    if (user?.id) fetchReview()
+  }, [user?.id])
 
   const handleGenerateRoadmap = async () => {
     if (!goal.trim() || !targetScore) {
@@ -23,18 +45,26 @@ export default function PredictTab() {
       return
     }
     setGenerating(true)
-    // TODO: 백엔드 연결 시 AI 로드맵 API 호출
-    await new Promise(r => setTimeout(r, 2000))
-    setRoadmap({
-      weeks: [
-        { week:'1~2주차', focus:'수학 분수 영역 집중 보완', target:'정답률 70%' },
-        { week:'3~4주차', focus:'영어 문법 패턴 학습', target:'관계대명사 마스터' },
-        { week:'5~6주차', focus:'전 과목 모의고사 풀이', target:'평균 85점' },
-        { week:'7~8주차', focus:'약점 단원 재점검', target:'목표 점수 도달' },
-      ],
-      tip: `${goal} 달성을 위해 평일 2시간, 주말 4시간 학습을 추천합니다.`,
-    })
-    setGenerating(false)
+    try {
+      const res = await studyPlanAPI.generateRoadmap(user.id, {  // ← 실제 연동
+        targetKeyword: goal,
+        targetDate: '2026-11-15',
+        dailyStudyHours: 2,
+      })
+      setRoadmap({
+        weeks: res.weeklyMilestones.map((m, i) => ({
+          week: m.split(':')[0],
+          focus: m.split(':')[1]?.trim() || m,
+          target: '',
+        })),
+        tip: res.overallStrategy,
+      })
+    } catch (e) {
+      console.error('로드맵 생성 실패:', e)
+      alert('로드맵 생성에 실패했습니다')
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const toggleDone = (id) =>
@@ -63,6 +93,7 @@ export default function PredictTab() {
 
   return (
     <div>
+      {/* 헤더 */}
       <div style={{ background:'linear-gradient(135deg, #0A1628 0%, #1A56DB 80%, #00C49A 100%)', padding:'24px 20px', color:'white' }}>
         <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>머신러닝 기반 예측</p>
         <h2 style={{ fontSize:20, fontWeight:800 }}>성장 예측 · 목표 설계</h2>
@@ -79,6 +110,7 @@ export default function PredictTab() {
         </div>
       </div>
 
+      {/* 성적 예측 그래프 */}
       <div style={{ margin:'16px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📈 성적 예측 그래프</p>
@@ -98,6 +130,7 @@ export default function PredictTab() {
         </div>
       </div>
 
+      {/* 오늘의 학습 계획 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
@@ -156,6 +189,55 @@ export default function PredictTab() {
         </div>
       </div>
 
+      {/* 에빙하우스 복습 알림 */}
+      <div style={{ margin:'12px 16px 0' }}>
+        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+            <div>
+              <p style={{ fontSize:14, fontWeight:700 }}>🔔 오늘의 복습 알림</p>
+              <p style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:2 }}>에빙하우스 망각 곡선 기반 · 1/3/7/14/30일 주기</p>
+            </div>
+            {reviewData?.hasReview && (
+              <span style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:20, background:'#FF3B3B15', color:'var(--color-danger)' }}>
+                {reviewData.reviews.length}건
+              </span>
+            )}
+          </div>
+
+          {reviewLoading && (
+            <p style={{ fontSize:13, color:'var(--color-text-muted)', textAlign:'center', padding:'16px 0' }}>
+              🔄 복습 항목 확인 중...
+            </p>
+          )}
+
+          {!reviewLoading && reviewData && !reviewData.hasReview && (
+            <div style={{ textAlign:'center', padding:'20px 0' }}>
+              <p style={{ fontSize:24 }}>🎉</p>
+              <p style={{ fontSize:13, fontWeight:700, marginTop:8 }}>오늘 복습할 항목이 없어요!</p>
+              <p style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:4 }}>꾸준히 학습 중이에요 👍</p>
+            </div>
+          )}
+
+          {!reviewLoading && reviewData?.hasReview && (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {reviewData.reviews.map((r, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
+                  <div style={{ width:40, height:40, borderRadius:10, flexShrink:0, background:'var(--color-primary-light)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>📖</div>
+                  <div style={{ flex:1 }}>
+                    <p style={{ fontSize:13, fontWeight:700 }}>{r.title}</p>
+                    <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:2 }}>{r.message}</p>
+                  </div>
+                  <span style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:20, background:'var(--color-primary-light)', color:'var(--color-primary)', flexShrink:0 }}>
+                    {r.dayLabel}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 목표 기반 로드맵 */}
       <div style={{ margin:'12px 16px 16px' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🎯 목표 기반 로드맵</p>
@@ -204,24 +286,15 @@ export default function PredictTab() {
                         fontSize:13, fontWeight:800,
                       }}>{i+1}</div>
                       <div style={{ flex:1 }}>
-                        <p style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>
-                          {w.week}
-                        </p>
+                        <p style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>{w.week}</p>
                         <p style={{ fontSize:13, fontWeight:600, marginTop:3 }}>{w.focus}</p>
-                        <p style={{ fontSize:11, color:'var(--color-success)', marginTop:3, fontWeight:600 }}>
-                          🎯 {w.target}
-                        </p>
+                        <p style={{ fontSize:11, color:'var(--color-success)', marginTop:3, fontWeight:600 }}>🎯 {w.target}</p>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div style={{
-                  marginTop:12, padding:'12px 14px', borderRadius:10,
-                  background:'var(--color-primary-light)', border:'1px solid #1A56DB30',
-                }}>
-                  <p style={{ fontSize:12, color:'var(--color-primary)', lineHeight:1.6, fontWeight:600 }}>
-                    💡 {roadmap.tip}
-                  </p>
+                <div style={{ marginTop:12, padding:'12px 14px', borderRadius:10, background:'var(--color-primary-light)', border:'1px solid #1A56DB30' }}>
+                  <p style={{ fontSize:12, color:'var(--color-primary)', lineHeight:1.6, fontWeight:600 }}>💡 {roadmap.tip}</p>
                 </div>
               </div>
             )}

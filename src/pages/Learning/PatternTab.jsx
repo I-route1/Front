@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
@@ -7,15 +7,72 @@ import {
   GOLDEN_TIME_DATA, STUDY_TIME_DATA,
   STRENGTH_AREAS, WEAK_AREAS,
 } from './data/mockData'
+import { activitiesAPI, analysisAPI } from '@/api'
+import { useAuth } from '@/context/AuthContext'
 
 export default function PatternTab() {
-  const [selfEval, setSelfEval] = useState({ 이해도:0, 집중도:0 })
-  const [feedback, setFeedback] = useState('')
-  const [saved, setSaved]       = useState(false)
+  const { user } = useAuth()
+  const [selfEval, setSelfEval]         = useState({ 이해도:0, 집중도:0 })
+  const [feedback, setFeedback]         = useState('')
+  const [saved, setSaved]               = useState(false)
+  const [metaResult, setMetaResult]     = useState(null)
+  const [metaLoading, setMetaLoading]   = useState(false)
+
   const goldenHour = GOLDEN_TIME_DATA.reduce((a,b) => a.focus>b.focus ? a : b)
+
+  const handleMetaAnalysis = async () => {
+    setMetaLoading(true)
+    try {
+      const res = await analysisAPI.getMetaCognition(user.id, '수학')
+      setMetaResult(res)
+    } catch (e) {
+      console.error('메타인지 분석 실패:', e)
+      // 실패 시 mock으로 대체
+      setMetaResult({
+        gapScore: selfEval.이해도 >= 4 ? 15.5 : 3.2,
+        gapLevel: selfEval.이해도 >= 4 ? 'HIGH' : 'LOW',
+        gapSummary: selfEval.이해도 >= 4
+          ? '자기평가가 실제 점수보다 15.5점 높습니다'
+          : '자기평가와 실제 점수가 비슷합니다',
+        advice: selfEval.이해도 >= 4
+          ? '개념 이해도를 재점검하고 실전 문제 풀이 비중을 높이세요'
+          : '현재 학습 방향을 유지하세요',
+      })
+    } finally {
+      setMetaLoading(false)
+    }
+  }
+
+  const handleFeedbackSave = async () => {
+    if (!feedback.trim()) {
+      alert('피드백 내용을 입력해주세요')
+      return
+    }
+    try {
+      // 1. 학습 기록 먼저 생성
+      const today = new Date().toISOString().split('T')[0]
+      const activity = await activitiesAPI.postActivity({
+        studentId: user.id,
+        subject: '수학',
+        studyDate: today,
+        studyStartTime: new Date().toTimeString().slice(0,8),
+        studyDurationMinutes: 60,
+        understandingScore: selfEval.이해도 || 3,
+        concentrationScore: selfEval.집중도 || 3,
+      })
+      // 2. 생성된 기록에 피드백 저장
+      await activitiesAPI.patchFeedback(activity.id, feedback)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      console.error('피드백 저장 실패:', e)
+      alert('저장에 실패했습니다')
+    }
+  }
 
   return (
     <div>
+      {/* 헤더 */}
       <div style={{ background:'linear-gradient(135deg, #1A1A2E 0%, #0F3460 100%)', padding:'24px 20px', color:'white' }}>
         <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>이번 주 분석 결과</p>
         <h2 style={{ fontSize:20, fontWeight:800 }}>학습 패턴 분석</h2>
@@ -29,6 +86,7 @@ export default function PatternTab() {
         </div>
       </div>
 
+      {/* 시간대별 집중도 */}
       <div style={{ margin:'16px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🕐 시간대별 집중도</p>
@@ -49,6 +107,7 @@ export default function PatternTab() {
         </div>
       </div>
 
+      {/* 과목별 학습 시간 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>⏱️ 과목별 학습 시간 (이번 주)</p>
@@ -71,6 +130,7 @@ export default function PatternTab() {
         </div>
       </div>
 
+      {/* 자기평가 + AI 메타인지 분석 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🌟 오늘의 자기평가 (메타인지)</p>
@@ -95,6 +155,7 @@ export default function PatternTab() {
               </div>
             ))}
           </div>
+
           {selfEval.이해도>0 && (
             <div style={{ marginTop:14, padding:'12px 14px', borderRadius:12, background: selfEval.이해도>=4 ? '#FFF8E0' : 'var(--color-primary-light)', border:`1px solid ${selfEval.이해도>=4 ? '#FFB800' : 'var(--color-primary)'}` }}>
               <p style={{ fontSize:12, fontWeight:700, color: selfEval.이해도>=4 ? '#8A6500' : 'var(--color-primary)' }}>
@@ -102,38 +163,94 @@ export default function PatternTab() {
               </p>
             </div>
           )}
-        </div>
-      </div>
 
-      <div style={{ margin:'12px 16px 0' }}>
-        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📝 강사 피드백</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>담당 강사가 직접 기록하는 정성적 평가</p>
-          <div style={{ marginBottom:12, display:'flex', flexDirection:'column', gap:8 }}>
-            {[
-              { teacher:'김수학 선생님', date:'5.8', text:'오늘 분수 단원 집중도 매우 좋았음. 계산 실수가 줄어드는 추세.' },
-              { teacher:'이영어 선생님', date:'5.7', text:'발표력이 향상됨. 독해 속도는 아직 개선 필요.' },
-            ].map((f,i) => (
-              <div key={i} style={{ padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>{f.teacher}</span>
-                  <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{f.date}</span>
+          {/* AI 메타인지 분석 버튼 - 이해도·집중도 둘 다 입력했을 때 표시 */}
+          {selfEval.이해도 > 0 && selfEval.집중도 > 0 && (
+            <button
+              onClick={handleMetaAnalysis}
+              disabled={metaLoading}
+              style={{
+                width:'100%', marginTop:14, padding:'11px', borderRadius:10,
+                border:'none', fontFamily:'inherit', fontSize:13, fontWeight:700,
+                background: metaLoading ? 'var(--color-text-muted)' : 'var(--color-primary)',
+                color:'white', cursor: metaLoading ? 'not-allowed' : 'pointer',
+                transition:'all 0.2s',
+              }}
+            >
+              {metaLoading ? '🧠 메타인지 분석 중...' : '🧠 AI 메타인지 분석'}
+            </button>
+          )}
+
+          {/* 메타인지 분석 결과 */}
+          {metaResult && (
+            <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{
+                padding:'12px 14px', borderRadius:10,
+                background: metaResult.gapLevel === 'HIGH' ? '#FFF8E0' : '#D1FAF015',
+                border: `1px solid ${metaResult.gapLevel === 'HIGH' ? '#FFB80040' : '#00C49A30'}`,
+              }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                  <p style={{ fontSize:12, fontWeight:700, color: metaResult.gapLevel === 'HIGH' ? '#8A6500' : 'var(--color-success)' }}>
+                    {metaResult.gapLevel === 'HIGH' ? '⚠️ 메타인지 과대평가' : '✅ 메타인지 적정'}
+                  </p>
+                  <span style={{
+                    fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:20,
+                    background: metaResult.gapLevel === 'HIGH' ? '#FFB80020' : '#00C49A20',
+                    color: metaResult.gapLevel === 'HIGH' ? '#8A6500' : 'var(--color-success)',
+                  }}>
+                    갭 {metaResult.gapScore}점
+                  </span>
                 </div>
-                <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>{f.text}</p>
+                <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>
+                  {metaResult.gapSummary}
+                </p>
               </div>
-            ))}
-          </div>
-          <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
-            placeholder="오늘 학생의 태도 및 특이사항을 기록해 주세요..." rows={3}
-            style={{ width:'100%', borderRadius:10, border:'1.5px solid var(--color-border)', background:'var(--color-surface-2)', padding:'10px 12px', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)', outline:'none', resize:'none', boxSizing:'border-box' }} />
-          <button onClick={() => { setSaved(true); setTimeout(()=>setSaved(false),2000) }} style={{
-            width:'100%', marginTop:10, padding:'12px', borderRadius:10, border:'none',
-            background: saved ? 'var(--color-success)' : 'var(--color-primary)',
-            color:'white', fontSize:14, fontWeight:700, fontFamily:'inherit', cursor:'pointer', transition:'background 0.2s',
-          }}>{saved ? '✓ 저장됨' : '피드백 저장'}</button>
+              <div style={{ padding:'10px 12px', borderRadius:10, background:'var(--color-primary-light)', border:'1px solid #1A56DB20' }}>
+                <p style={{ fontSize:11, fontWeight:700, color:'var(--color-primary)', marginBottom:4 }}>💡 AI 조언</p>
+                <p style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.5 }}>{metaResult.advice}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* 강사 피드백 */}
+        <div style={{ margin:'12px 16px 0' }}>
+          <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
+            <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📝 강사 피드백</p>
+            <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>담당 강사가 직접 기록하는 정성적 평가</p>
+            <div style={{ marginBottom:12, display:'flex', flexDirection:'column', gap:8 }}>
+              {[
+                { teacher:'김수학 선생님', date:'5.8', text:'오늘 분수 단원 집중도 매우 좋았음. 계산 실수가 줄어드는 추세.' },
+                { teacher:'이영어 선생님', date:'5.7', text:'발표력이 향상됨. 독해 속도는 아직 개선 필요.' },
+              ].map((f,i) => (
+                <div key={i} style={{ padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>{f.teacher}</span>
+                    <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{f.date}</span>
+                  </div>
+                  <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>{f.text}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* 학원 계정만 입력창 + 저장버튼 보임 */}
+            {user?.role === 'academy' && (
+              <>
+                <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
+                  placeholder="오늘 학생의 태도 및 특이사항을 기록해 주세요..." rows={3}
+                  style={{ width:'100%', borderRadius:10, border:'1.5px solid var(--color-border)', background:'var(--color-surface-2)', padding:'10px 12px', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)', outline:'none', resize:'none', boxSizing:'border-box' }} />
+                <button onClick={handleFeedbackSave} style={{
+                  width:'100%', marginTop:10, padding:'12px', borderRadius:10, border:'none',
+                  background: saved ? 'var(--color-success)' : 'var(--color-primary)',
+                  color:'white', fontSize:14, fontWeight:700, fontFamily:'inherit', cursor:'pointer', transition:'background 0.2s',
+                }}>{saved ? '✓ 저장됨' : '피드백 저장'}</button>
+              </>
+            )}
+          </div>
+        </div>
+
+      {/* 강점/약점 영역 */}
       <div style={{ margin:'12px 16px 16px', display:'flex', flexDirection:'column', gap:12 }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>💪 안정적인 강점 영역</p>

@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { gradesAPI } from '@/api'
+import { useAuth } from '@/context/AuthContext'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, RadarChart,
@@ -12,6 +14,28 @@ import {
 import { calcMockExamScores } from './utils/mockExamScoring'
 
 export default function GradeTab() {
+  const { user } = useAuth()
+  useEffect(() => {
+    if (!user?.id) return
+    gradesAPI.getGrades(user.id)
+      .then(data => {
+        if (!data || data.length === 0) return
+        // 날짜별로 그룹핑해서 trendData 형식으로 변환
+        const grouped = {}
+        data.forEach(g => {
+          const d = new Date(g.examDate)
+          const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`
+          if (!grouped[label]) {
+            grouped[label] = { date: label, 국어:0, 수학:0, 영어:0, 사회:0, 과학:0 }
+          }
+          grouped[label][g.subject] = g.score
+        })
+        const trend = Object.values(grouped).sort((a,b) => a.date.localeCompare(b.date))
+        if (trend.length > 0) setTrendData(trend)
+      })
+      .catch(e => console.error('성적 조회 실패:', e))
+  }, [user?.id])
+
   const [trendData, setTrendData] = useState(INIT_TREND)
   const [showForm, setShowForm]   = useState(false)
   const [examType, setExamType]   = useState('중간고사')
@@ -81,53 +105,74 @@ export default function GradeTab() {
         !worst || m.percentile < worst.percentile ? { sub, ...m } : worst, null)
     : null
 
-  const handleSave = () => {
-    const filled = SUBJECTS.filter(s => scores[s] !== '' && !isNaN(Number(scores[s])))
-    if (!examDate || filled.length === 0) {
-      setSaveMsg('날짜와 점수를 하나 이상 입력해 주세요')
-      return
-    }
-
-    const d = new Date(examDate)
-    const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`
-
-    const newEntry = { ...latest, date: label, examType }
-
-    if (examType === EXAM_TYPE_MOCK) {
-      const rawInput = Object.fromEntries(filled.map(s => [s, scores[s]]))
-      const mockMeta = calcMockExamScores(rawInput)
-      if (Object.keys(mockMeta).length === 0) {
-        setSaveMsg('모의고사 원점수를 확인해 주세요')
+    const handleSave = async () => {
+      const filled = SUBJECTS.filter(s => scores[s] !== '' && !isNaN(Number(scores[s])))
+      if (!examDate || filled.length === 0) {
+        setSaveMsg('날짜와 점수를 하나 이상 입력해 주세요')
         return
       }
-      filled.forEach(s => { newEntry[s] = mockMeta[s].raw })
-      newEntry.mockMeta = mockMeta
-    } else {
-      delete newEntry.mockMeta
-      filled.forEach(s => { newEntry[s] = Number(scores[s]) })
-    }
-
-    setTrendData(prev => {
-      const idx = prev.findIndex(d => d.date === label)
-      if (idx !== -1) {
-        const updated = [...prev]
-        updated[idx] = newEntry
-        return updated
+    
+      const d = new Date(examDate)
+      const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`
+      const newEntry = { ...latest, date: label, examType }
+    
+      if (examType === EXAM_TYPE_MOCK) {
+        const rawInput = Object.fromEntries(filled.map(s => [s, scores[s]]))
+        const mockMeta = calcMockExamScores(rawInput)
+        if (Object.keys(mockMeta).length === 0) {
+          setSaveMsg('모의고사 원점수를 확인해 주세요')
+          return
+        }
+        filled.forEach(s => { newEntry[s] = mockMeta[s].raw })
+        newEntry.mockMeta = mockMeta
+      } else {
+        delete newEntry.mockMeta
+        filled.forEach(s => { newEntry[s] = Number(scores[s]) })
       }
-      return [...prev, newEntry]
-    })
-
-    // TODO: 백엔드 연결 시 API 호출 추가
-    setSaveMsg(
-      examType === EXAM_TYPE_MOCK
-        ? '✓ 모의고사 성적이 산출·반영되었습니다 (표준점수·백분위·9등급)'
-        : '✓ 성적이 반영되었습니다!',
-    )
-    setTimeout(() => setSaveMsg(''), 2500)
-    setShowForm(false)
-    setScores({ 국어:'', 수학:'', 영어:'', 사회:'', 과학:'' })
-    setExamDate('')
-  }
+    
+      // ── 실제 API 저장 ──────────────────────────
+      try {
+        for (const s of filled) {
+          await gradesAPI.postGrade({
+            studentId: user.id,
+            subject: s,
+            score: examType === EXAM_TYPE_MOCK
+              ? Number(scores[s])
+              : Number(scores[s]),
+            gradeLevel: 6,
+            examType: examType === '중간고사' ? '중간'
+              : examType === '기말고사' ? '기말'
+              : '모의고사',
+            examDate: examDate,
+          })
+        }
+      } catch (e) {
+        console.error('성적 저장 실패:', e)
+        setSaveMsg('❌ 저장 실패: ' + e.message)
+        return
+      }
+      // ──────────────────────────────────────────
+    
+      setTrendData(prev => {
+        const idx = prev.findIndex(d => d.date === label)
+        if (idx !== -1) {
+          const updated = [...prev]
+          updated[idx] = newEntry
+          return updated
+        }
+        return [...prev, newEntry]
+      })
+    
+      setSaveMsg(
+        examType === EXAM_TYPE_MOCK
+          ? '✓ 모의고사 성적이 산출·반영되었습니다 (표준점수·백분위·9등급)'
+          : '✓ 성적이 반영되었습니다!',
+      )
+      setTimeout(() => setSaveMsg(''), 2500)
+      setShowForm(false)
+      setScores({ 국어:'', 수학:'', 영어:'', 사회:'', 과학:'' })
+      setExamDate('')
+    }
 
   const toggleSub = (s) =>
     setActiveSubs(p => p.includes(s) ? p.filter(x=>x!==s) : [...p,s])
