@@ -1,44 +1,56 @@
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
+import { notificationsAPI } from '@/api'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
 
 const PARENT_NAV = [
-  { to: '/home', label: '홈', icon: HomeIcon },
-  { to: '/map', label: '지도', icon: MapIcon, badge: 0 },
+  { to: '/home',     label: '홈',   icon: HomeIcon },
+  { to: '/map',      label: '지도', icon: MapIcon },
   { to: '/learning', label: '학습', icon: BookIcon },
-  { to: '/board', label: '게시판', icon: NoticeIcon },
-  { to: '/profile', label: '마이', icon: ProfileIcon },
+  { to: '/board',    label: '게시판', icon: NoticeIcon },
+  { to: '/profile',  label: '마이', icon: ProfileIcon },
 ]
 
 const ACADEMY_NAV = [
-  { to: '/home', label: '홈', icon: HomeIcon },
+  { to: '/home',           label: '홈',   icon: HomeIcon },
   { to: '/admin/learning', label: '학습', icon: BookIcon },
-  { to: '/board', label: '게시판', icon: NoticeIcon },
-  { to: '/profile', label: '마이', icon: ProfileIcon },
+  { to: '/board',          label: '게시판', icon: NoticeIcon },
+  { to: '/profile',        label: '마이', icon: ProfileIcon },
 ]
 
 const ADMIN_NAV = [
-  { to: '/home', label: '홈', icon: HomeIcon },
-  { to: '/board', label: '게시판', icon: NoticeIcon },
+  { to: '/home',    label: '홈',   icon: HomeIcon },
+  { to: '/board',   label: '게시판', icon: NoticeIcon },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
 const DRIVER_NAV = [
-  { to: '/home', label: '홈', icon: HomeIcon },
-  { to: '/map', label: '지도', icon: MapIcon },
+  { to: '/home',    label: '홈',   icon: HomeIcon },
+  { to: '/map',     label: '지도', icon: MapIcon },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
 export default function BottomNav() {
   const { user } = useAuth()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!user?.id) return
+    notificationsAPI.getUnread(user.id)
+      .then(data => setUnreadCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => setUnreadCount(0))
+  }, [user?.id])
 
   const getNavItems = () => {
-  if (user?.role === USER_ROLES.ADMIN) return ADMIN_NAV
-  if (user?.role === USER_ROLES.ACADEMY) return ACADEMY_NAV
-  if (user?.role === USER_ROLES.DRIVER) return DRIVER_NAV
-  return PARENT_NAV
-}
+    if (user?.role === USER_ROLES.ADMIN)   return ADMIN_NAV
+    if (user?.role === USER_ROLES.ACADEMY) return ACADEMY_NAV
+    if (user?.role === USER_ROLES.DRIVER)  return DRIVER_NAV
+    return PARENT_NAV
+  }
 
-  const NAV_ITEMS = getNavItems()
+  const NAV_ITEMS = getNavItems().map(item =>
+    item.label === '게시판' ? { ...item, badge: unreadCount } : item
+  )
 
   return (
     <nav className="bottom-nav" aria-label="주요 메뉴">
@@ -52,9 +64,7 @@ export default function BottomNav() {
             }
             aria-label={label}
           >
-            <div className="bottom-nav__icon">
-              <Icon />
-            </div>
+            <div className="bottom-nav__icon"><Icon /></div>
             <span>{label}</span>
             {badge > 0 && (
               <span className="bottom-nav__badge">{badge > 9 ? '9+' : badge}</span>
@@ -66,7 +76,6 @@ export default function BottomNav() {
   )
 }
 
-/* ── SVG Icons ── */
 function HomeIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -75,7 +84,6 @@ function HomeIcon() {
     </svg>
   )
 }
-
 function MapIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -84,7 +92,6 @@ function MapIcon() {
     </svg>
   )
 }
-
 function BookIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -93,7 +100,6 @@ function BookIcon() {
     </svg>
   )
 }
-
 function NoticeIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -101,7 +107,6 @@ function NoticeIcon() {
     </svg>
   )
 }
-
 function ProfileIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
