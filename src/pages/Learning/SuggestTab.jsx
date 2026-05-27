@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { gradesAPI, recommendationsAPI, analysisAPI } from '@/api'
+import { gradesAPI, recommendationsAPI, analysisAPI, wrongAnswerAPI } from '@/api'
 import { useAuth } from '@/context/AuthContext'
 import { SUBJECT_COLORS, RECOMMEND_BOOKS } from './data/mockData'
 
@@ -13,6 +13,23 @@ const SUBJECT_TIPS = {
   '과학탐구': { tip: '실험 시각화 — 그림과 다이어그램으로 원리 이해', emoji: '🔬' },
 }
 
+// 자료 유형별 이모지/표시명
+const MATERIAL_TYPE_ICON = {
+  'BOOK': { emoji: '📘', label: '문제집' },
+  'WORKBOOK': { emoji: '📝', label: '문제집' },
+  'VIDEO': { emoji: '🎬', label: '강의' },
+  'LECTURE': { emoji: '🎬', label: '강의' },
+  'DOCUMENT': { emoji: '📄', label: '문서' },
+  'NOTE': { emoji: '📒', label: '노트' },
+  'EXAM': { emoji: '📋', label: '기출문제' },
+  'PRACTICE': { emoji: '✍️', label: '연습문제' },
+  'DEFAULT': { emoji: '📚', label: '학습자료' },
+}
+
+function getMaterialIcon(type) {
+  return MATERIAL_TYPE_ICON[type?.toUpperCase()] || MATERIAL_TYPE_ICON.DEFAULT
+}
+
 export default function SuggestTab() {
   const { user } = useAuth()
   const [solving, setSolving]                 = useState(false)
@@ -22,6 +39,11 @@ export default function SuggestTab() {
   const [ancestorDone, setAncestorDone]       = useState(false)
   const [studyPattern, setStudyPattern]       = useState(null)
   const [patternLoading, setPatternLoading]   = useState(true)
+  const [materials, setMaterials] = useState([])
+  const [materialsLoading, setMaterialsLoading] = useState(true)  
+  const [peerPaths, setPeerPaths] = useState([])
+  const [peerPathsLoading, setPeerPathsLoading] = useState(true)
+  const PEER_PATH_SUBJECTS = ['수학', '영어']
 
   // 학습 패턴 v2 조회
   useEffect(() => {
@@ -37,14 +59,66 @@ export default function SuggestTab() {
       .finally(() => setPatternLoading(false))
   }, [user?.id])
 
+  // 학습 자료 추천 조회
+  useEffect(() => {
+  if (!user?.id) return
+  
+  setMaterialsLoading(true)
+  recommendationsAPI.getMaterials(user.id)
+    .then(data => {
+      // 응답이 배열인지 객체 안에 배열인지 대비
+      const list = Array.isArray(data) ? data : (data?.materials || [])
+      setMaterials(list)
+    })
+    .catch(e => {
+      console.error('학습 자료 추천 조회 실패:', e)
+      setMaterials([])
+    })
+    .finally(() => setMaterialsLoading(false))
+}, [user?.id])
+
+  // 선배 학습 경로 조회 (과목별)
+  useEffect(() => {
+    if (!user?.id) return
+    
+    const subjects = ['수학', '영어']  // 우선 2개 과목, 필요시 더 추가
+    
+    setPeerPathsLoading(true)
+    Promise.all(
+      subjects.map(subject =>
+        recommendationsAPI.getPeerPath(user.id, subject)
+          .then(data => ({ subject, ...data }))
+          .catch(() => null)  // 개별 실패 무시
+      )
+    )
+      .then(results => {
+        const valid = results.filter(r => r !== null)
+        setPeerPaths(valid)
+      })
+      .finally(() => setPeerPathsLoading(false))
+  }, [user?.id])
+
   const handleSolve = async () => {
     if (!answer.trim()) {
       alert('답을 입력해 주세요')
       return
     }
+    
     setSolving(true)
-    // TODO: 백엔드 연결 시 정답 채점 API 호출
-    await new Promise(r => setTimeout(r, 1200))
+    
+    try {
+      // 오답 기록 API 호출 (어떤 답을 입력했든 시도 기록)
+      await wrongAnswerAPI.record({
+        studentId: user.id,
+        subject: '수학',
+        questionId: 'Q-FRAC-001',     
+        conceptTag: '분수 나눗셈',
+        errorType: 'CONCEPT_GAP',           
+      })
+    } catch (e) {
+      console.error('오답 기록 실패:', e)
+    }
+    
     setSolving(false)
     setShowAnswer(true)
   }
@@ -76,29 +150,70 @@ export default function SuggestTab() {
         <p style={{ fontSize:13, opacity:0.7, marginTop:6, lineHeight:1.5 }}>약점을 보완하고 강점을 극대화하는 개인 맞춤형 추천</p>
       </div>
 
-      {/* 맞춤 학습 자료 추천 */}
+      {/* 맞춤 학습 자료 추천 - 실제 API 연동 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📚 맞춤 학습 자료 추천</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>유사 성적대 학생들이 가장 선호하는 고효율 콘텐츠</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {RECOMMEND_BOOKS.map((b,i) => (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:14, padding:'13px 14px', borderRadius:12, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
-                <span style={{ fontSize:28, flexShrink:0 }}>{b.emoji}</span>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ fontSize:13, fontWeight:700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.title}</p>
-                  <div style={{ display:'flex', gap:6, marginTop:4 }}>
-                    <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:20, background:SUBJECT_COLORS[b.subject]+'18', color:SUBJECT_COLORS[b.subject] }}>{b.subject}</span>
-                    <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:20, background:'var(--color-surface)', color:'var(--color-text-muted)', border:'1px solid var(--color-border)' }}>{b.type}</span>
+          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>
+            AI가 분석한 개인 맞춤 학습 자료
+          </p>
+          
+          {materialsLoading ? (
+            <div style={{ padding:'40px 0', textAlign:'center', color:'var(--color-text-muted)', fontSize:13 }}>
+              추천 자료 분석 중...
+            </div>
+          ) : materials.length > 0 ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {materials.map((m, i) => {
+                const icon = getMaterialIcon(m.materialType)
+                return (
+                  <div key={m.materialId || i} style={{ display:'flex', alignItems:'center', gap:14, padding:'13px 14px', borderRadius:12, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
+                    <span style={{ fontSize:28, flexShrink:0 }}>{icon.emoji}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <p style={{ fontSize:13, fontWeight:700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                        {m.title}
+                      </p>
+                      <div style={{ display:'flex', gap:6, marginTop:4, flexWrap:'wrap' }}>
+                        <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:20, background:'var(--color-primary-light)', color:'var(--color-primary)' }}>
+                          {icon.label}
+                        </span>
+                      </div>
+                      {m.matchReason && (
+                        <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:6, lineHeight:1.5 }}>
+                          💡 {m.matchReason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            // 폴백: mock 데이터 (백엔드에 추천 데이터 없을 때)
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <div style={{ padding:'8px 12px', borderRadius:8, background:'#FFF8E0', border:'1px solid #FFB80030', marginBottom:8 }}>
+                <p style={{ fontSize:11, color:'#8A6500' }}>
+                  💡 학습 데이터가 더 쌓이면 정확한 추천을 받을 수 있어요
+                </p>
+              </div>
+              {RECOMMEND_BOOKS.map((b,i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:14, padding:'13px 14px', borderRadius:12, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
+                  <span style={{ fontSize:28, flexShrink:0 }}>{b.emoji}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:13, fontWeight:700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.title}</p>
+                    <div style={{ display:'flex', gap:6, marginTop:4 }}>
+                      <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:20, background:SUBJECT_COLORS[b.subject]+'18', color:SUBJECT_COLORS[b.subject] }}>{b.subject}</span>
+                      <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:20, background:'var(--color-surface)', color:'var(--color-text-muted)', border:'1px solid var(--color-border)' }}>{b.type}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'center', flexShrink:0 }}>
+                    <p style={{ fontSize:16, fontWeight:800, color:'var(--color-primary)' }}>{b.match}%</p>
+                    <p style={{ fontSize:10, color:'var(--color-text-muted)' }}>매칭률</p>
                   </div>
                 </div>
-                <div style={{ textAlign:'center', flexShrink:0 }}>
-                  <p style={{ fontSize:16, fontWeight:800, color:'var(--color-primary)' }}>{b.match}%</p>
-                  <p style={{ fontSize:10, color:'var(--color-text-muted)' }}>매칭률</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -206,39 +321,79 @@ export default function SuggestTab() {
         </div>
       </div>
 
-      {/* 선배 성공 학습 경로 */}
+      {/* 선배 성공 학습 경로 - 실제 API 연동 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🏅 선배 성공 학습 경로</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>비슷한 성적대에서 시작해 성공한 선배들의 패턴</p>
-          {/* TODO: 실제 연동 시 recommendationsAPI.getPeerPath(user.id, subject) */}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {[
-              { subject:'수학', count:15, initial:62, final:88, strategy:'기출 중심 반복 학습 + 오답 노트', color:'#FF6B35' },
-              { subject:'영어', count:23, initial:70, final:91, strategy:'독해 매일 1지문 + 단어 암기', color:'#00C49A' },
-            ].map(p => (
-              <div key={p.subject} style={{ padding:'12px 14px', borderRadius:12, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                  <span style={{ fontSize:13, fontWeight:700, color:p.color }}>{p.subject}</span>
-                  <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{p.count}명 분석</span>
-                </div>
-                <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-                  <div style={{ flex:1, textAlign:'center', padding:'6px', borderRadius:8, background:'#FFE9E915', border:'1px solid #FF3B3B20' }}>
-                    <p style={{ fontSize:10, color:'var(--color-text-muted)' }}>시작 평균</p>
-                    <p style={{ fontSize:14, fontWeight:800, color:'var(--color-danger)' }}>{p.initial}점</p>
+          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>
+            비슷한 성적대에서 시작해 성공한 선배들의 패턴
+          </p>
+          
+          {peerPathsLoading ? (
+            <div style={{ padding:'40px 0', textAlign:'center', color:'var(--color-text-muted)', fontSize:13 }}>
+              선배 학습 경로 분석 중...
+            </div>
+          ) : peerPaths.length > 0 ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {peerPaths.map(p => {
+                const color = SUBJECT_COLORS[p.subject] || 'var(--color-primary)'
+                return (
+                  <div key={p.subject} style={{ padding:'12px 14px', borderRadius:12, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
+                    {/* 헤더: 과목 + 분석 인원 */}
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                      <span style={{ fontSize:13, fontWeight:700, color }}>{p.subject}</span>
+                      {p.similarStudentsCount != null && (
+                        <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>
+                          {p.similarStudentsCount}명 분석
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* 평균 향상도 */}
+                    {p.avgImprovement != null && (
+                      <div style={{ padding:'10px 12px', borderRadius:8, background:'#D1FAF015', border:'1px solid #00C49A30', marginBottom:8, textAlign:'center' }}>
+                        <p style={{ fontSize:10, color:'var(--color-text-muted)', marginBottom:2 }}>평균 향상</p>
+                        <p style={{ fontSize:18, fontWeight:800, color:'var(--color-success)' }}>
+                          ▲ {p.avgImprovement}{typeof p.avgImprovement === 'number' ? '점' : ''}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* 학습 전략 패턴 */}
+                    {p.studyStrategyPattern && (
+                      <div style={{ padding:'8px 10px', borderRadius:8, background:'var(--color-primary-light)', border:'1px solid #1A56DB20', marginBottom:6 }}>
+                        <p style={{ fontSize:10, fontWeight:700, color:'var(--color-primary)', marginBottom:2 }}>📌 학습 전략</p>
+                        <p style={{ fontSize:11, color:'var(--color-text-primary)', lineHeight:1.5 }}>
+                          {p.studyStrategyPattern}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* 핵심 인사이트 */}
+                    {p.keyInsights && (
+                      <div style={{ padding:'8px 10px', borderRadius:8, background:'#FFF8E0', border:'1px solid #FFB80030' }}>
+                        <p style={{ fontSize:10, fontWeight:700, color:'#8A6500', marginBottom:2 }}>💡 핵심 인사이트</p>
+                        <p style={{ fontSize:11, color:'var(--color-text-primary)', lineHeight:1.5 }}>
+                          {p.keyInsights}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ display:'flex', alignItems:'center', fontSize:16, color:'var(--color-text-muted)' }}>→</div>
-                  <div style={{ flex:1, textAlign:'center', padding:'6px', borderRadius:8, background:'#D1FAF015', border:'1px solid #00C49A20' }}>
-                    <p style={{ fontSize:10, color:'var(--color-text-muted)' }}>달성 평균</p>
-                    <p style={{ fontSize:14, fontWeight:800, color:'var(--color-success)' }}>{p.final}점</p>
-                  </div>
-                </div>
-                <div style={{ padding:'8px 10px', borderRadius:8, background:'var(--color-primary-light)', border:'1px solid #1A56DB20' }}>
-                  <p style={{ fontSize:11, color:'var(--color-primary)', fontWeight:600 }}>📌 {p.strategy}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            // 폴백
+            <div style={{ padding:'32px 16px', textAlign:'center', background:'var(--color-surface-2)', borderRadius:12, border:'1px dashed var(--color-border)' }}>
+              <p style={{ fontSize:32, marginBottom:8 }}>📊</p>
+              <p style={{ fontSize:13, color:'var(--color-text-muted)', marginBottom:4 }}>
+                아직 분석할 데이터가 부족해요
+              </p>
+              <p style={{ fontSize:11, color:'var(--color-text-muted)' }}>
+                학습 기록이 쌓이면 비슷한 선배들의 성공 경로를 보여드릴게요
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
