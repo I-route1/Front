@@ -55,13 +55,13 @@ export const router = createBrowserRouter([
       { path: 'profile/password', element: <ChangePassword /> },
       { path: 'profile/delete', element: <DeleteAccount /> },
       {
-  path: 'admin/learning',
-  element: (
-    <ProtectedRoute allowedRoles={[USER_ROLES.ACADEMY]}>
-      <AdminLearning />
-    </ProtectedRoute>
-  ),
-},
+        path: 'admin/learning',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.ACADEMY, USER_ROLES.TEACHER, USER_ROLES.ADMIN]}>
+            <AdminLearning />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 

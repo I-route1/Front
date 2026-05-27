@@ -8,7 +8,7 @@ import {
   STRENGTH_AREAS, WEAK_AREAS,
 } from './data/mockData'
 import { activitiesAPI, analysisAPI } from '@/api'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth, isAcademy } from '@/context/AuthContext'
 
 // subjectId → 과목명 매핑 (백엔드 확인 후 보정 필요)
 const SUBJECT_NAME_BY_ID = {
@@ -271,9 +271,8 @@ export default function PatternTab() {
             ))}
           </div>
 
-          {/* 학원 계정만 입력창 + 저장버튼 보임 */}
-          {user?.role === 'academy' && (
-            <>
+          {isAcademy(user?.role) && (
+            <>    
               <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
                 placeholder="오늘 학생의 태도 및 특이사항을 기록해 주세요..." rows={3}
                 style={{ width:'100%', borderRadius:10, border:'1.5px solid var(--color-border)', background:'var(--color-surface-2)', padding:'10px 12px', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)', outline:'none', resize:'none', boxSizing:'border-box' }} />

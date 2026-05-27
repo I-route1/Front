@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { notificationsAPI } from '@/api'
 import { Outlet, NavLink } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth, USER_ROLES, isAcademy } from '@/context/AuthContext'
 import TopBar from './TopBar'
 import BottomNav from './BottomNav'
 
@@ -9,7 +9,7 @@ const getNavItems = (role) => [
   { to: '/home',     label: '홈',        icon: HomeIcon },
   { to: '/map',      label: '실시간 위치', icon: MapIcon,    badge: 0 },
   {
-    to: role === 'academy' ? '/admin/learning' : '/learning',
+    to: isAcademy(role) ? '/admin/learning' : '/learning',
     label: '학습 리포트',
     icon: BookIcon,
   },
@@ -18,7 +18,12 @@ const getNavItems = (role) => [
 ]
 
 const ROLE_LABEL = {
-  parent: '학부모', driver: '기사', academy: '학원 관리자', student: '학생',
+  [USER_ROLES.PARENT]: '학부모',
+  [USER_ROLES.ACADEMY]: '학원 관리자',
+  [USER_ROLES.TEACHER]: '학원 강사',
+  [USER_ROLES.DRIVER]: '기사',
+  [USER_ROLES.ADMIN]: '관리자',
+  [USER_ROLES.STUDENT]: '학생',
 }
 
 export default function AppLayout() {

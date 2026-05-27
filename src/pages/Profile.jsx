@@ -5,7 +5,7 @@ const ROLE_LABEL = {
   [USER_ROLES.PARENT]: '학부모',
   [USER_ROLES.ACADEMY]: '학원',
   [USER_ROLES.ADMIN]: '관리자',
-
+  [USER_ROLES.TEACHER]: '학원 강사',
   [USER_ROLES.DRIVER]: '기사',
   [USER_ROLES.STUDENT]: '학생',
 }
