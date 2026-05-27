@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { notificationsAPI } from '@/api'
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import TopBar from './TopBar'
@@ -21,6 +23,14 @@ const ROLE_LABEL = {
 
 export default function AppLayout() {
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (!user?.id) return
+    
+    notificationsAPI.trigger(user.id)
+      .catch(e => console.error('알림 트리거 실패:', e))
+  }, [user?.id])
+  
   const navItems = getNavItems(user?.role)
 
   return (

@@ -10,6 +10,26 @@ import {
 import { activitiesAPI, analysisAPI } from '@/api'
 import { useAuth } from '@/context/AuthContext'
 
+// subjectId → 과목명 매핑 (백엔드 확인 후 보정 필요)
+const SUBJECT_NAME_BY_ID = {
+  1: '국어',
+  2: '수학',
+  3: '영어',
+  4: '한국사',
+  5: '사회탐구',
+  6: '과학탐구',
+}
+
+// 과목별 색상
+const SUBJECT_BADGE_COLOR = {
+  '국어': '#FF6B6B',
+  '수학': '#1A56DB',
+  '영어': '#00C49A',
+  '한국사': '#FFB800',
+  '사회탐구': '#9C88FF',
+  '과학탐구': '#4ECDC4',
+}
+
 export default function PatternTab() {
   const { user } = useAuth()
   const [selfEval, setSelfEval]         = useState({ 이해도:0, 집중도:0 })
@@ -17,6 +37,23 @@ export default function PatternTab() {
   const [saved, setSaved]               = useState(false)
   const [metaResult, setMetaResult]     = useState(null)
   const [metaLoading, setMetaLoading]   = useState(false)
+
+  // 🆕 강점 분석
+  const [strengths, setStrengths] = useState(null)
+  const [strengthsLoading, setStrengthsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user?.id) return
+    
+    setStrengthsLoading(true)
+    analysisAPI.getStrengths(user.id)
+      .then(data => setStrengths(data))
+      .catch(e => {
+        console.error('강점 분석 조회 실패:', e)
+        setStrengths(null)
+      })
+      .finally(() => setStrengthsLoading(false))
+  }, [user?.id])
 
   const goldenHour = GOLDEN_TIME_DATA.reduce((a,b) => a.focus>b.focus ? a : b)
 
@@ -215,58 +252,111 @@ export default function PatternTab() {
       </div>
 
       {/* 강사 피드백 */}
-        <div style={{ margin:'12px 16px 0' }}>
-          <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-            <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📝 강사 피드백</p>
-            <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>담당 강사가 직접 기록하는 정성적 평가</p>
-            <div style={{ marginBottom:12, display:'flex', flexDirection:'column', gap:8 }}>
-              {[
-                { teacher:'김수학 선생님', date:'5.8', text:'오늘 분수 단원 집중도 매우 좋았음. 계산 실수가 줄어드는 추세.' },
-                { teacher:'이영어 선생님', date:'5.7', text:'발표력이 향상됨. 독해 속도는 아직 개선 필요.' },
-              ].map((f,i) => (
-                <div key={i} style={{ padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                    <span style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>{f.teacher}</span>
-                    <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{f.date}</span>
-                  </div>
-                  <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>{f.text}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* 학원 계정만 입력창 + 저장버튼 보임 */}
-            {user?.role === 'academy' && (
-              <>
-                <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
-                  placeholder="오늘 학생의 태도 및 특이사항을 기록해 주세요..." rows={3}
-                  style={{ width:'100%', borderRadius:10, border:'1.5px solid var(--color-border)', background:'var(--color-surface-2)', padding:'10px 12px', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)', outline:'none', resize:'none', boxSizing:'border-box' }} />
-                <button onClick={handleFeedbackSave} style={{
-                  width:'100%', marginTop:10, padding:'12px', borderRadius:10, border:'none',
-                  background: saved ? 'var(--color-success)' : 'var(--color-primary)',
-                  color:'white', fontSize:14, fontWeight:700, fontFamily:'inherit', cursor:'pointer', transition:'background 0.2s',
-                }}>{saved ? '✓ 저장됨' : '피드백 저장'}</button>
-              </>
-            )}
-          </div>
-        </div>
-
-      {/* 강점/약점 영역 */}
-      <div style={{ margin:'12px 16px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+      <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>💪 안정적인 강점 영역</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {STRENGTH_AREAS.map(s => (
-              <div key={s.unit} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'#D1FAF015', border:'1px solid #00C49A30', borderRadius:10 }}>
-                <span style={{ fontSize:18 }}>🏆</span>
-                <div style={{ flex:1 }}>
-                  <p style={{ fontSize:13, fontWeight:700 }}>{s.unit} <span style={{ fontSize:11, color:'var(--color-text-muted)', fontWeight:500 }}>{s.subject}</span></p>
-                  <p style={{ fontSize:11, color:'var(--color-success)', marginTop:2 }}>정답률 {s.accuracy}% {s.trend}</p>
+          <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📝 강사 피드백</p>
+          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>담당 강사가 직접 기록하는 정성적 평가</p>
+          <div style={{ marginBottom:12, display:'flex', flexDirection:'column', gap:8 }}>
+            {[
+              { teacher:'김수학 선생님', date:'5.8', text:'오늘 분수 단원 집중도 매우 좋았음. 계산 실수가 줄어드는 추세.' },
+              { teacher:'이영어 선생님', date:'5.7', text:'발표력이 향상됨. 독해 속도는 아직 개선 필요.' },
+            ].map((f,i) => (
+              <div key={i} style={{ padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>{f.teacher}</span>
+                  <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{f.date}</span>
                 </div>
-                <div style={{ width:42, height:42, borderRadius:10, background:'var(--color-success)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:12, fontWeight:800 }}>{s.accuracy}%</div>
+                <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>{f.text}</p>
               </div>
             ))}
           </div>
+
+          {/* 학원 계정만 입력창 + 저장버튼 보임 */}
+          {user?.role === 'academy' && (
+            <>
+              <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
+                placeholder="오늘 학생의 태도 및 특이사항을 기록해 주세요..." rows={3}
+                style={{ width:'100%', borderRadius:10, border:'1.5px solid var(--color-border)', background:'var(--color-surface-2)', padding:'10px 12px', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)', outline:'none', resize:'none', boxSizing:'border-box' }} />
+              <button onClick={handleFeedbackSave} style={{
+                width:'100%', marginTop:10, padding:'12px', borderRadius:10, border:'none',
+                background: saved ? 'var(--color-success)' : 'var(--color-primary)',
+                color:'white', fontSize:14, fontWeight:700, fontFamily:'inherit', cursor:'pointer', transition:'background 0.2s',
+              }}>{saved ? '✓ 저장됨' : '피드백 저장'}</button>
+            </>
+          )}
         </div>
+      </div>
+
+      {/* 강점/약점 영역 */}
+      <div style={{ margin:'12px 16px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+
+        {/* 🆕 안정적인 강점 영역 - API 연동 */}
+        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
+          <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>💪 안정적인 강점 영역</p>
+
+          {strengthsLoading ? (
+            <div style={{ padding:'24px 0', textAlign:'center', color:'var(--color-text-muted)', fontSize:13 }}>
+              강점 분석 중...
+            </div>
+          ) : strengths && strengths.strongSubjectIds && strengths.strongSubjectIds.length > 0 ? (
+            <>
+              {/* 강점 과목 카드 */}
+              <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:12 }}>
+                {strengths.strongSubjectIds.map(subjectId => {
+                  const subjectName = strengths.strongSubjectNames?.[subjectId]
+                    || SUBJECT_NAME_BY_ID[subjectId]
+                    || `과목 ${subjectId}`
+                  const color = SUBJECT_BADGE_COLOR[subjectName] || '#00C49A'
+
+                  return (
+                    <div key={subjectId} style={{
+                      display:'flex', alignItems:'center', gap:12,
+                      padding:'12px 14px', borderRadius:10,
+                      background:'#D1FAF015', border:'1px solid #00C49A30',
+                    }}>
+                      <span style={{ fontSize:24 }}>🏆</span>
+                      <div style={{ flex:1 }}>
+                        <p style={{ fontSize:14, fontWeight:700 }}>{subjectName}</p>
+                        <p style={{ fontSize:11, color:'var(--color-success)', marginTop:2 }}>
+                          강점 과목으로 분석되었어요
+                        </p>
+                      </div>
+                      <div style={{
+                        padding:'6px 12px', borderRadius:20,
+                        background:color, color:'white',
+                        fontSize:11, fontWeight:700,
+                      }}>강점</div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* AI 요약 */}
+              {strengths.strengthSummary && (
+                <div style={{ padding:'10px 12px', borderRadius:10, background:'var(--color-primary-light)', border:'1px solid #1A56DB20' }}>
+                  <p style={{ fontSize:11, fontWeight:700, color:'var(--color-primary)', marginBottom:4 }}>💡 AI 분석</p>
+                  <p style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.5 }}>
+                    {strengths.strengthSummary}
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <div style={{ padding:'20px 16px', textAlign:'center', background:'var(--color-surface-2)', borderRadius:10, border:'1px dashed var(--color-border)' }}>
+                <p style={{ fontSize:24, marginBottom:8 }}>🌱</p>
+                <p style={{ fontSize:13, color:'var(--color-text-secondary)', fontWeight:600, marginBottom:4 }}>
+                  아직 두드러진 강점 과목이 없어요
+                </p>
+                <p style={{ fontSize:11, color:'var(--color-text-muted)', lineHeight:1.5 }}>
+                  {strengths?.strengthSummary || '꾸준한 학습으로 강점 과목을 만들어보세요'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 집중 보완 필요 영역 - mock 그대로 유지 */}
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>🎯 집중 보완 필요 영역</p>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -282,6 +372,7 @@ export default function PatternTab() {
             ))}
           </div>
         </div>
+
       </div>
     </div>
   )
