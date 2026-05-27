@@ -21,6 +21,7 @@ export const STUDENTS = [
     scores:{ 국어:93, 수학:90, 영어:95, 사회:89, 과학:88 }, risk:'low' },
   { id:8, name:'윤서준', grade:'초6', class:'B반', avgScore:68, trend:'▼', trendVal:-6,
     scores:{ 국어:70, 수학:62, 영어:72, 사회:68, 과학:68 }, risk:'high' },
+    
 ]
 
 export const ACADEMY_STATS = {

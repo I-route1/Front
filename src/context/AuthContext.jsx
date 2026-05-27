@@ -1,23 +1,55 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 
 export const USER_ROLES = {
-  PARENT: 'parent',
-  ACADEMY: 'academy',
-  ADMIN: 'admin',
-  DRIVER: 'driver',
-  STUDENT: 'student',
+  PARENT:  'PARENT',
+  ACADEMY: 'ACADEMY',
+  TEACHER: 'TEACHER',
+  ADMIN:   'ADMIN',
+  DRIVER:  'DRIVER',
+  STUDENT: 'STUDENT',
 }
 
+// role 정규화: 소문자/한글/대문자 모두 통일
+export const normalizeRole = (role) => {
+  if (!role) return USER_ROLES.STUDENT
+  
+  const koreanMap = {
+    '학부모': USER_ROLES.PARENT,
+    '학원':   USER_ROLES.ACADEMY,
+    '기사':   USER_ROLES.DRIVER,
+    '기사님': USER_ROLES.DRIVER,
+    '관리자': USER_ROLES.ADMIN,
+    '학생':   USER_ROLES.STUDENT,
+  }
+  if (koreanMap[role]) return koreanMap[role]
+  
+  return String(role).toUpperCase()
+}
+
+// 학원/강사/관리자 권한 체크
+export const isAcademy = (role) => {
+  const r = normalizeRole(role)
+  return [USER_ROLES.ACADEMY, USER_ROLES.TEACHER, USER_ROLES.ADMIN].includes(r)
+}
+export const isParent  = (role) => normalizeRole(role) === USER_ROLES.PARENT
+export const isDriver  = (role) => normalizeRole(role) === USER_ROLES.DRIVER
+export const isStudent = (role) => normalizeRole(role) === USER_ROLES.STUDENT
+export const isAdmin   = (role) => normalizeRole(role) === USER_ROLES.ADMIN
+
+// role별 기본 페이지
 export function getDefaultRoute(role) {
+  const r = normalizeRole(role)
+  if ([USER_ROLES.ACADEMY, USER_ROLES.TEACHER, USER_ROLES.ADMIN].includes(r)) {
+    return '/admin/learning'
+  }
+  if (r === USER_ROLES.DRIVER) return '/map'
   return '/home'
 }
 
 const AuthContext = createContext(null)
-
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
 
-// 개발용 mock 유저 (로그인 API 연동 전까지 사용)
 const MOCK_PASSWORD = '1234'
 const MOCK_USERS = {
   parent: {
@@ -75,8 +107,9 @@ export function AuthProvider({ children }) {
   }, [])
 
   const saveUser = (u) => {
-    setUser(u)
-    sessionStorage.setItem('i-route-user', JSON.stringify(u))
+    const normalized = { ...u, role: normalizeRole(u.role) }
+    setUser(normalized)
+    sessionStorage.setItem('i-route-user', JSON.stringify(normalized))
   }
 
   const loginWithCredentials = async (username, password) => {
@@ -84,7 +117,14 @@ export function AuthProvider({ children }) {
     if (!normalizedUsername || !password) {
       throw new Error('아이디 또는 비밀번호가 올바르지 않습니다')
     }
-  
+
+    // mock 계정 우선 체크
+    if (MOCK_USERS[normalizedUsername] && password === MOCK_PASSWORD) {
+      saveUser(MOCK_USERS[normalizedUsername])
+      return
+    }
+
+    // 실제 백엔드 로그인
     try {
       const res = await fetch(`${BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -93,10 +133,11 @@ export function AuthProvider({ children }) {
       })
       if (!res.ok) throw new Error('아이디 또는 비밀번호가 올바르지 않습니다')
       const data = await res.json()
+      
       saveUser({
         id: data.userId,
         name: data.nickname,
-        role: USER_ROLES.PARENT,
+        role: data.role,
         token: data.accessToken,
         refreshToken: data.refreshToken,
         username: normalizedUsername,
@@ -106,8 +147,8 @@ export function AuthProvider({ children }) {
       throw new Error(e.message || '로그인에 실패했습니다')
     }
   }
+
   const loginWithKakao = async () => {
-    // TODO: Kakao OAuth flow
     await new Promise(resolve => setTimeout(resolve, 500))
     saveUser({
       id: 'kakao-001', name: '홍길동', role: USER_ROLES.PARENT,

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { notificationsAPI } from '@/api'
-import { useAuth, USER_ROLES } from '@/context/AuthContext'
+import { useAuth, USER_ROLES, isAcademy } from '@/context/AuthContext'
 
 const PARENT_NAV = [
   { to: '/home',     label: '홈',   icon: HomeIcon },
@@ -12,8 +12,7 @@ const PARENT_NAV = [
 ]
 
 const ACADEMY_NAV = [
-  { to: '/home',           label: '홈',   icon: HomeIcon },
-  { to: '/admin/learning', label: '학습', icon: BookIcon },
+  { to: '/admin/learning', label: '학습 관리', icon: BookIcon },
   { to: '/board',          label: '게시판', icon: NoticeIcon },
   { to: '/profile',        label: '마이', icon: ProfileIcon },
 ]
@@ -43,7 +42,7 @@ export default function BottomNav() {
 
   const getNavItems = () => {
     if (user?.role === USER_ROLES.ADMIN)   return ADMIN_NAV
-    if (user?.role === USER_ROLES.ACADEMY) return ACADEMY_NAV
+    if (user?.role === USER_ROLES.ACADEMY || user?.role === USER_ROLES.TEACHER) return ACADEMY_NAV
     if (user?.role === USER_ROLES.DRIVER)  return DRIVER_NAV
     return PARENT_NAV
   }

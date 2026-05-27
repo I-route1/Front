@@ -3,6 +3,38 @@ import { gradesAPI, recommendationsAPI, analysisAPI, wrongAnswerAPI } from '@/ap
 import { useAuth } from '@/context/AuthContext'
 import { SUBJECT_COLORS, RECOMMEND_BOOKS } from './data/mockData'
 
+// 학습 성향 표시 정보
+const TENDENCY_INFO = {
+  'VISUAL': { 
+    emoji: '👁️', 
+    label: '시각형', 
+    color: '#1A56DB',
+    description: '이미지, 도표, 마인드맵 활용에 강해요',
+  },
+  'AUDITORY': { 
+    emoji: '🎧', 
+    label: '청각형', 
+    color: '#9B59B6',
+    description: '소리내어 읽기, 토론, 강의 듣기에 강해요',
+  },
+  'KINESTHETIC': { 
+    emoji: '🤸', 
+    label: '행동형', 
+    color: '#FF6B35',
+    description: '직접 손으로 쓰고 움직이며 학습할 때 효과적이에요',
+  },
+}
+
+// subjectName → subjectId 매핑
+const SUBJECT_ID_BY_NAME = {
+  '국어': 1,
+  '수학': 2,
+  '영어': 3,
+  '한국사': 4,
+  '사회탐구': 5,
+  '과학탐구': 6,
+}
+
 // 과목별 학습 팁
 const SUBJECT_TIPS = {
   '수학': { tip: '개념 중심 — 도식화 및 색깔 펜으로 단계별 풀이 정리', emoji: '📐' },
@@ -37,13 +69,20 @@ export default function SuggestTab() {
   const [answer, setAnswer]                   = useState('')
   const [ancestorLoading, setAncestorLoading] = useState(false)
   const [ancestorDone, setAncestorDone]       = useState(false)
+  const [studyMethods, setStudyMethods] = useState({})  
+  const [studyMethodsLoading, setStudyMethodsLoading] = useState(false)
+  
+  // 🆕 학습 패턴 v2
   const [studyPattern, setStudyPattern]       = useState(null)
   const [patternLoading, setPatternLoading]   = useState(true)
-  const [materials, setMaterials] = useState([])
-  const [materialsLoading, setMaterialsLoading] = useState(true)  
-  const [peerPaths, setPeerPaths] = useState([])
+  
+  // 🆕 학습 자료 추천
+  const [materials, setMaterials]             = useState([])
+  const [materialsLoading, setMaterialsLoading] = useState(true)
+  
+  // 🆕 선배 학습 경로
+  const [peerPaths, setPeerPaths]             = useState([])
   const [peerPathsLoading, setPeerPathsLoading] = useState(true)
-  const PEER_PATH_SUBJECTS = ['수학', '영어']
 
   // 학습 패턴 v2 조회
   useEffect(() => {
@@ -59,36 +98,63 @@ export default function SuggestTab() {
       .finally(() => setPatternLoading(false))
   }, [user?.id])
 
+  // 🆕 학습 패턴 받은 후 → 각 과목별 학습 방법 조회
+  useEffect(() => {
+    if (!user?.id || !studyPattern?.subjectStudyMinutes) return
+    
+    const subjects = Object.keys(studyPattern.subjectStudyMinutes)
+    if (subjects.length === 0) return
+    
+    setStudyMethodsLoading(true)
+    
+    Promise.all(
+      subjects.map(subject => {
+        const subjectId = SUBJECT_ID_BY_NAME[subject]
+        if (!subjectId) return Promise.resolve([subject, null])
+        
+        return recommendationsAPI.getStudyMethod(user.id, subjectId)
+          .then(data => [subject, data])
+          .catch(() => [subject, null])
+      })
+    ).then(entries => {
+      const map = {}
+      entries.forEach(([subject, data]) => {
+        if (data) map[subject] = data
+      })
+      setStudyMethods(map)
+    })
+    .finally(() => setStudyMethodsLoading(false))
+  }, [user?.id, studyPattern])
+
   // 학습 자료 추천 조회
   useEffect(() => {
-  if (!user?.id) return
-  
-  setMaterialsLoading(true)
-  recommendationsAPI.getMaterials(user.id)
-    .then(data => {
-      // 응답이 배열인지 객체 안에 배열인지 대비
-      const list = Array.isArray(data) ? data : (data?.materials || [])
-      setMaterials(list)
-    })
-    .catch(e => {
-      console.error('학습 자료 추천 조회 실패:', e)
-      setMaterials([])
-    })
-    .finally(() => setMaterialsLoading(false))
-}, [user?.id])
+    if (!user?.id) return
+    
+    setMaterialsLoading(true)
+    recommendationsAPI.getMaterials(user.id)
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.materials || [])
+        setMaterials(list)
+      })
+      .catch(e => {
+        console.error('학습 자료 추천 조회 실패:', e)
+        setMaterials([])
+      })
+      .finally(() => setMaterialsLoading(false))
+  }, [user?.id])
 
   // 선배 학습 경로 조회 (과목별)
   useEffect(() => {
     if (!user?.id) return
     
-    const subjects = ['수학', '영어']  // 우선 2개 과목, 필요시 더 추가
+    const subjects = ['수학', '영어']
     
     setPeerPathsLoading(true)
     Promise.all(
       subjects.map(subject =>
         recommendationsAPI.getPeerPath(user.id, subject)
           .then(data => ({ subject, ...data }))
-          .catch(() => null)  // 개별 실패 무시
+          .catch(() => null)
       )
     )
       .then(results => {
@@ -107,16 +173,17 @@ export default function SuggestTab() {
     setSolving(true)
     
     try {
-      // 오답 기록 API 호출 (어떤 답을 입력했든 시도 기록)
+      // 🆕 오답 기록 API 호출
       await wrongAnswerAPI.record({
         studentId: user.id,
         subject: '수학',
-        questionId: 'Q-FRAC-001',     
+        questionId: 'Q-FRAC-001',
         conceptTag: '분수 나눗셈',
-        errorType: 'CONCEPT_GAP',           
+        errorType: 'CONCEPT_GAP',
       })
     } catch (e) {
       console.error('오답 기록 실패:', e)
+      // 실패해도 UX 진행
     }
     
     setSolving(false)
@@ -150,7 +217,7 @@ export default function SuggestTab() {
         <p style={{ fontSize:13, opacity:0.7, marginTop:6, lineHeight:1.5 }}>약점을 보완하고 강점을 극대화하는 개인 맞춤형 추천</p>
       </div>
 
-      {/* 맞춤 학습 자료 추천 - 실제 API 연동 */}
+      {/* 🆕 맞춤 학습 자료 추천 - API 연동 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📚 맞춤 학습 자료 추천</p>
@@ -189,7 +256,7 @@ export default function SuggestTab() {
               })}
             </div>
           ) : (
-            // 폴백: mock 데이터 (백엔드에 추천 데이터 없을 때)
+            // 폴백: mock 데이터
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               <div style={{ padding:'8px 12px', borderRadius:8, background:'#FFF8E0', border:'1px solid #FFB80030', marginBottom:8 }}>
                 <p style={{ fontSize:11, color:'#8A6500' }}>
@@ -321,7 +388,7 @@ export default function SuggestTab() {
         </div>
       </div>
 
-      {/* 선배 성공 학습 경로 - 실제 API 연동 */}
+      {/* 🆕 선배 성공 학습 경로 - API 연동 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🏅 선배 성공 학습 경로</p>
@@ -339,7 +406,6 @@ export default function SuggestTab() {
                 const color = SUBJECT_COLORS[p.subject] || 'var(--color-primary)'
                 return (
                   <div key={p.subject} style={{ padding:'12px 14px', borderRadius:12, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
-                    {/* 헤더: 과목 + 분석 인원 */}
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                       <span style={{ fontSize:13, fontWeight:700, color }}>{p.subject}</span>
                       {p.similarStudentsCount != null && (
@@ -349,7 +415,6 @@ export default function SuggestTab() {
                       )}
                     </div>
                     
-                    {/* 평균 향상도 */}
                     {p.avgImprovement != null && (
                       <div style={{ padding:'10px 12px', borderRadius:8, background:'#D1FAF015', border:'1px solid #00C49A30', marginBottom:8, textAlign:'center' }}>
                         <p style={{ fontSize:10, color:'var(--color-text-muted)', marginBottom:2 }}>평균 향상</p>
@@ -359,7 +424,6 @@ export default function SuggestTab() {
                       </div>
                     )}
                     
-                    {/* 학습 전략 패턴 */}
                     {p.studyStrategyPattern && (
                       <div style={{ padding:'8px 10px', borderRadius:8, background:'var(--color-primary-light)', border:'1px solid #1A56DB20', marginBottom:6 }}>
                         <p style={{ fontSize:10, fontWeight:700, color:'var(--color-primary)', marginBottom:2 }}>📌 학습 전략</p>
@@ -369,7 +433,6 @@ export default function SuggestTab() {
                       </div>
                     )}
                     
-                    {/* 핵심 인사이트 */}
                     {p.keyInsights && (
                       <div style={{ padding:'8px 10px', borderRadius:8, background:'#FFF8E0', border:'1px solid #FFB80030' }}>
                         <p style={{ fontSize:10, fontWeight:700, color:'#8A6500', marginBottom:2 }}>💡 핵심 인사이트</p>
@@ -383,7 +446,6 @@ export default function SuggestTab() {
               })}
             </div>
           ) : (
-            // 폴백
             <div style={{ padding:'32px 16px', textAlign:'center', background:'var(--color-surface-2)', borderRadius:12, border:'1px dashed var(--color-border)' }}>
               <p style={{ fontSize:32, marginBottom:8 }}>📊</p>
               <p style={{ fontSize:13, color:'var(--color-text-muted)', marginBottom:4 }}>
@@ -397,7 +459,7 @@ export default function SuggestTab() {
         </div>
       </div>
 
-      {/* 맞춤 공부 방식 - 실제 학습 패턴 기반 */}
+      {/* 맞춤 공부 방식 - 학습 패턴 v2 기반 */}
       <div style={{ margin:'12px 16px 16px' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🧭 맞춤 공부 방식 제안</p>
@@ -465,20 +527,113 @@ export default function SuggestTab() {
                   </p>
                 </div>
               )}
+
+              {/* 🆕 나의 학습 성향 (대표 과목 기준) */}
+              {(() => {
+                const subjects = Object.keys(studyMethods)
+                if (subjects.length === 0) return null
+                
+                // 가장 많이 공부한 과목 = 대표 과목
+                const topSubject = Object.entries(studyPattern.subjectStudyMinutes)
+                  .sort((a, b) => b[1] - a[1])[0]?.[0]
+                
+                const mainMethod = studyMethods[topSubject]
+                if (!mainMethod?.tendency) return null
+                
+                const info = TENDENCY_INFO[mainMethod.tendency] || TENDENCY_INFO.VISUAL
+                
+                return (
+                  <div style={{ 
+                    padding:'16px', borderRadius:14, 
+                    background:`linear-gradient(135deg, ${info.color}15, ${info.color}08)`,
+                    border:`1.5px solid ${info.color}40`,
+                    marginBottom:14,
+                  }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+                      <span style={{ fontSize:36 }}>{info.emoji}</span>
+                      <div>
+                        <p style={{ fontSize:11, fontWeight:600, color:info.color, marginBottom:2 }}>
+                          나의 학습 성향 ({topSubject} 기준)
+                        </p>
+                        <p style={{ fontSize:20, fontWeight:800, color:info.color }}>
+                          {info.label}
+                        </p>
+                        <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:2 }}>
+                          {info.description}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {mainMethod.studyGuide && (
+                      <div style={{ padding:'10px 12px', borderRadius:10, background:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+                        <p style={{ fontSize:11, fontWeight:700, color:info.color, marginBottom:4 }}>📖 학습 가이드</p>
+                        <p style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.6 }}>
+                          {mainMethod.studyGuide}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {mainMethod.recommendedApproach && (
+                      <div style={{ padding:'10px 12px', borderRadius:10, background:'rgba(255,255,255,0.6)' }}>
+                        <p style={{ fontSize:11, fontWeight:700, color:info.color, marginBottom:4 }}>🎯 추천 접근법</p>
+                        <p style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.6 }}>
+                          {mainMethod.recommendedApproach}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
               
-              {/* 과목별 학습 팁 */}
+              {/* 🆕 과목별 학습 가이드 (API 기반) */}
               <p style={{ fontSize:12, fontWeight:700, color:'var(--color-text-secondary)', marginBottom:8 }}>
-                📚 과목별 학습 팁
+                📚 과목별 학습 가이드
               </p>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {Object.keys(studyPattern.subjectStudyMinutes).map(subject => {
-                  const tip = SUBJECT_TIPS[subject] || { tip: '꾸준한 학습이 가장 중요해요', emoji: '✏️' }
+                  const apiData = studyMethods[subject]
+                  const fallback = SUBJECT_TIPS[subject] || { tip: '꾸준한 학습이 가장 중요해요', emoji: '✏️' }
+                  
+                  // API 데이터 있으면 그거 사용, 없으면 mock 폴백
+                  if (apiData?.studyGuide) {
+                    const info = TENDENCY_INFO[apiData.tendency] || TENDENCY_INFO.VISUAL
+                    return (
+                      <div key={subject} style={{ 
+                        padding:'12px 14px', borderRadius:10, 
+                        background:'var(--color-surface-2)', 
+                        border:`1px solid ${info.color}30`,
+                      }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                          <span style={{ fontSize:18 }}>{info.emoji}</span>
+                          <span style={{ fontSize:13, fontWeight:700, color:SUBJECT_COLORS[subject] || 'var(--color-primary)' }}>
+                            {subject}
+                          </span>
+                          <span style={{ 
+                            fontSize:10, fontWeight:600, padding:'2px 8px', borderRadius:20, 
+                            background:info.color+'18', color:info.color,
+                          }}>
+                            {info.label}
+                          </span>
+                        </div>
+                        <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5, marginBottom:4 }}>
+                          {apiData.studyGuide}
+                        </p>
+                        {apiData.recommendedApproach && (
+                          <p style={{ fontSize:11, color:'var(--color-text-muted)', lineHeight:1.5, marginTop:6, paddingTop:6, borderTop:'1px dashed var(--color-border)' }}>
+                            💡 {apiData.recommendedApproach}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  }
+                  
+                  // 폴백: 기존 mock 팁
                   return (
                     <div key={subject} style={{ display:'flex', gap:12, padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
-                      <span style={{ fontSize:20, flexShrink:0 }}>{tip.emoji}</span>
+                      <span style={{ fontSize:20, flexShrink:0 }}>{fallback.emoji}</span>
                       <div>
                         <p style={{ fontSize:12, fontWeight:700, color:SUBJECT_COLORS[subject] || 'var(--color-primary)' }}>{subject}</p>
-                        <p style={{ fontSize:12, color:'var(--color-text-secondary)', marginTop:2, lineHeight:1.5 }}>{tip.tip}</p>
+                        <p style={{ fontSize:12, color:'var(--color-text-secondary)', marginTop:2, lineHeight:1.5 }}>{fallback.tip}</p>
                       </div>
                     </div>
                   )
