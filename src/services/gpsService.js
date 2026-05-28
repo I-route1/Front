@@ -43,3 +43,27 @@ export const sendGpsLocation = async (locationData) => {
     throw error;
   }
 };
+
+/**
+ * 학부모 앱에서 특정 차량의 최신 위치를 단발성으로 조회
+ * @param {number} busId 차량 ID
+ * @returns {Promise<Object>} 서버 응답 데이터
+ */
+export const getBusCurrentLocation = async (busId) => {
+  try {
+    const response = await api.get(`/api/gps/buses/${busId}/current-location`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error(
+        `[GPS 조회 에러 - 서버 응답 오류] 상태 코드: ${error.response.status}`,
+        error.response.data
+      );
+    } else if (error.request) {
+      console.error('[GPS 조회 에러 - 응답 없음] 네트워크 상태를 확인해주세요.', error.request);
+    } else {
+      console.error('[GPS 조회 에러 - 설정 오류]', error.message);
+    }
+    throw error;
+  }
+};

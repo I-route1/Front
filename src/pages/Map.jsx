@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
+import { getBusCurrentLocation } from '../services/gpsService';
 
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
@@ -31,6 +32,12 @@ export default function Map() {
 
   const [isDelayed, setIsDelayed] = useState(false)
 
+  const [errorMessage, setErrorMessage] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [busLocation, setBusLocation] = useState(null)
+  const [mapInstance, setMapInstance] = useState(null)
+  const [busMarker, setBusMarker] = useState(null)
+
   const globalEta = Math.max(12 - currentStopIndex * 3, 0) + (isDelayed ? 5 : 0);
 
   useEffect(() => {
@@ -38,12 +45,47 @@ export default function Map() {
   }, [])
 
   useEffect(() => {
+    const fetchLocation = async () => {
+      try {
+        const res = await getBusCurrentLocation(1); // 테스트용 busId: 1
+        if (res?.success && res.data) {
+          const { latitude, longitude, busNumber, driverName, updatedAt: updatedTime, speed: currentSpeed } = res.data;
+
+          setBusLocation({ lat: latitude, lng: longitude });
+          setUpdatedAt(updatedTime);
+          if (currentSpeed !== undefined) {
+            setSpeed(currentSpeed);
+          }
+
+          setDriverInfo(prev => ({
+            ...(prev || mockVehicleInfo),
+            vehicleNumber: busNumber || mockVehicleInfo.vehicleNumber,
+            driverName: driverName || mockVehicleInfo.driverName
+          }));
+          setErrorMessage(null);
+        }
+      } catch (err) {
+        setErrorMessage("현재 운행 중인 셔틀버스가 없습니다");
+      }
+    };
+
+    fetchLocation();
+  }, []);
+
+  useEffect(() => {
     requestAndGetFCMToken();
     initForegroundMessageListener();
   }, []);
 
   useEffect(() => {
-    let mapInterval = null;
+    if (mapInstance && busMarker && busLocation) {
+      const loc = new window.kakao.maps.LatLng(busLocation.lat, busLocation.lng);
+      busMarker.setPosition(loc);
+      mapInstance.panTo(loc);
+    }
+  }, [mapInstance, busMarker, busLocation]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const initMap = () => {
@@ -62,6 +104,7 @@ export default function Map() {
         };
 
         const map = new window.kakao.maps.Map(container, options);
+        setMapInstance(map);
 
         const passedPolyline = new window.kakao.maps.Polyline({
           path: [new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng)],
@@ -103,49 +146,13 @@ export default function Map() {
         busContent.style.border = '2px solid white';
         busContent.innerHTML = '🚌';
 
-        const busMarker = new window.kakao.maps.CustomOverlay({
+        const marker = new window.kakao.maps.CustomOverlay({
           position: new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng),
           content: busContent,
           map: map,
           yAnchor: 0.5,
         });
-
-        let localIndex = 0;
-        mapInterval = setInterval(() => {
-          localIndex = (localIndex + 1) % MOCK_ROUTE.length;
-          const nextPos = new window.kakao.maps.LatLng(MOCK_ROUTE[localIndex].lat, MOCK_ROUTE[localIndex].lng);
-
-          busMarker.setPosition(nextPos);
-          map.panTo(nextPos);
-
-          setCurrentStopIndex(localIndex);
-
-          if (localIndex === 2) {
-            setIsDelayed(true);
-            setSpeed(Math.floor(Math.random() * 5 + 5));
-          } else {
-            setIsDelayed(false);
-            setSpeed(Math.floor(Math.random() * 20 + 20));
-          }
-
-          if (MOCK_ROUTE[localIndex].id === MY_CHILD_STOP_ID) {
-            setStatus('child_arrived');
-          } else if (localIndex === MOCK_ROUTE.length - 1) {
-            setStatus('ended');
-            setSpeed(0);
-          } else {
-            setStatus('moving');
-          }
-
-          const passedRoute = MOCK_ROUTE.slice(0, localIndex + 1);
-          const passedPath = passedRoute.map(pos => new window.kakao.maps.LatLng(pos.lat, pos.lng));
-          passedPolyline.setPath(passedPath);
-
-          const remainingRoute = MOCK_ROUTE.slice(localIndex);
-          const remainingPath = remainingRoute.map(pos => new window.kakao.maps.LatLng(pos.lat, pos.lng));
-          remainingPolyline.setPath(remainingPath);
-
-        }, 5000);
+        setBusMarker(marker);
       });
     };
 
@@ -168,13 +175,21 @@ export default function Map() {
 
     return () => {
       isMounted = false;
-      if (mapInterval) clearInterval(mapInterval);
       if (script) script.removeEventListener('load', initMap);
     };
   }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
+
+      {errorMessage && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: '20px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <span style={{ fontSize: '24px', display: 'block', marginBottom: '8px' }}>🚫</span>
+            <p style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#111' }}>{errorMessage}</p>
+          </div>
+        </div>
+      )}
 
       {isDelayed && (
         <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
@@ -221,7 +236,10 @@ export default function Map() {
 
         <div style={{ padding: '16px', background: 'white', borderRadius: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <p style={{ fontSize: 13, color: '#666', margin: 0, fontWeight: 600 }}>실시간 노선 진행 상태</p>
+            <p style={{ fontSize: 13, color: '#666', margin: 0, fontWeight: 600 }}>
+              실시간 노선 진행 상태
+              {updatedAt && <span style={{ marginLeft: 6, fontSize: 11, color: '#9CA3AF', fontWeight: 'normal' }}>({new Date(updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })})</span>}
+            </p>
             <span style={{ background: '#FEF08A', color: '#A16207', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '800' }}>
               영남대역 하차 예정
             </span>
