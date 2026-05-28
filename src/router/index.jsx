@@ -17,6 +17,7 @@ import EditProfile from '@/pages/EditProfile'
 import ChangePassword from '@/pages/ChangePassword'
 import DeleteAccount from '@/pages/DeleteAccount'
 import DriverBoardingList from '@/pages/DriverBoardingList'
+import DriverMapPage from '@/pages/DriverMapPage'
 import AdminLearning from '@/pages/AdminLearning'
 import Board from '@/pages/Board'
 import BoardDetail from '@/pages/BoardDetail'
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
   { path: '/find-password', element: <FindPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
   { path: '/driver/boarding', element: <DriverBoardingList /> },
+  { path: '/driver/map', element: <DriverMapPage /> },
 
   // 로그인 필요 페이지
   {
