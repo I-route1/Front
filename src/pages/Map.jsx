@@ -276,9 +276,31 @@ export default function Map() {
 
       {errorMessage && (
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'white', padding: '20px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-            <span style={{ fontSize: '24px', display: 'block', marginBottom: '8px' }}>🚫</span>
-            <p style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#111' }}>{errorMessage}</p>
+          <style>
+            {`
+              @keyframes spinner-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            `}
+          </style>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '16px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '80%' }}>
+            {errorMessage.includes('재연결') ? (
+              <div style={{
+                width: '36px',
+                height: '36px',
+                border: '4px solid #DBEAFE',
+                borderTop: '4px solid #2563EB',
+                borderRadius: '50%',
+                animation: 'spinner-spin 1s linear infinite',
+                marginBottom: '16px'
+              }} />
+            ) : (
+              <span style={{ fontSize: '32px', display: 'block', marginBottom: '16px' }}>🚫</span>
+            )}
+            <p style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#111', lineHeight: '1.4', wordBreak: 'keep-all' }}>
+              {errorMessage}
+            </p>
           </div>
         </div>
       )}
