@@ -67,3 +67,27 @@ export const getBusCurrentLocation = async (busId) => {
     throw error;
   }
 };
+
+/**
+ * 특정 차량이 운행하는 노선의 정류장 목록과 현재 진행 상태(지나감, 도착 예정, 미운행)를 조회
+ * @param {number} busId 차량 ID
+ * @returns {Promise<Object>} 서버 응답 데이터
+ */
+export const getBusRouteStatus = async (busId) => {
+  try {
+    const response = await api.get(`/api/gps/buses/${busId}/route-status`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error(
+        `[노선 상태 조회 에러 - 서버 응답 오류] 상태 코드: ${error.response.status}`,
+        error.response.data
+      );
+    } else if (error.request) {
+      console.error('[노선 상태 조회 에러 - 응답 없음] 네트워크 상태를 확인해주세요.', error.request);
+    } else {
+      console.error('[노선 상태 조회 에러 - 설정 오류]', error.message);
+    }
+    throw error;
+  }
+};

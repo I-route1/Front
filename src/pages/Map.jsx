@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
-import { getBusCurrentLocation } from '../services/gpsService';
-
+import { getBusCurrentLocation, getBusRouteStatus } from '../services/gpsService';
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
   { id: 2, name: '푸르지오', lat: 35.8725, lng: 128.6025 },
@@ -37,19 +36,35 @@ export default function Map() {
   const [busLocation, setBusLocation] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
   const [busMarker, setBusMarker] = useState(null)
+  const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' });
 
-  const globalEta = Math.max(12 - currentStopIndex * 3, 0) + (isDelayed ? 5 : 0);
+  const displayStations = routeData.stations.length > 0
+    ? routeData.stations
+    : MOCK_ROUTE.map((stop, i) => ({
+      stationId: stop.id,
+      stationName: stop.name,
+      sequence: i + 1,
+      status: i < currentStopIndex ? 'PASSED' : (i === currentStopIndex ? 'ARRIVING' : 'NOT_YET')
+    }));
+
+  const activeStationIndex = displayStations.findIndex(s => s.status === 'ARRIVING');
+  const activeIndex = activeStationIndex !== -1 ? activeStationIndex : currentStopIndex;
+  const globalEta = Math.max(12 - activeIndex * 3, 0) + (isDelayed ? 5 : 0);
 
   useEffect(() => {
     setDriverInfo(mockVehicleInfo)
   }, [])
 
   useEffect(() => {
-    const fetchLocation = async () => {
+    const fetchData = async () => {
       try {
-        const res = await getBusCurrentLocation(1); // 테스트용 busId: 1
-        if (res?.success && res.data) {
-          const { latitude, longitude, busNumber, driverName, updatedAt: updatedTime, speed: currentSpeed } = res.data;
+        const [locRes, routeRes] = await Promise.allSettled([
+          getBusCurrentLocation(1),
+          getBusRouteStatus(1)
+        ]);
+
+        if (locRes.status === 'fulfilled' && locRes.value?.success && locRes.value.data) {
+          const { latitude, longitude, busNumber, driverName, updatedAt: updatedTime, speed: currentSpeed } = locRes.value.data;
 
           setBusLocation({ lat: latitude, lng: longitude });
           setUpdatedAt(updatedTime);
@@ -63,13 +78,23 @@ export default function Map() {
             driverName: driverName || mockVehicleInfo.driverName
           }));
           setErrorMessage(null);
+        } else if (locRes.status === 'rejected' || !locRes.value) {
+          setErrorMessage("현재 운행 중인 셔틀버스가 없습니다");
+        }
+
+        if (routeRes.status === 'fulfilled' && routeRes.value?.success && routeRes.value.data) {
+          setRouteData({
+            stations: routeRes.value.data.stations || [],
+            currentStationId: routeRes.value.data.currentStationId,
+            routeName: routeRes.value.data.routeName
+          });
         }
       } catch (err) {
-        setErrorMessage("현재 운행 중인 셔틀버스가 없습니다");
+        setErrorMessage("데이터를 불러오는 중 오류가 발생했습니다.");
       }
     };
 
-    fetchLocation();
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -212,7 +237,7 @@ export default function Map() {
       <div style={{ background: isDelayed ? '#EF4444' : STATUS_CONFIG[status].bg, color: 'white', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 5, transition: 'background 0.3s ease' }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', animation: status === 'moving' ? 'pulse 1.5s ease-in-out infinite' : 'none' }} />
         <span style={{ fontSize: 14, fontWeight: 600 }}>
-          {status === 'moving' ? `이동 중 · ${MOCK_ROUTE[currentStopIndex]?.name} 부근` : STATUS_CONFIG[status].label}
+          {status === 'moving' ? `이동 중 · ${displayStations[activeIndex]?.stationName || ''} 부근` : STATUS_CONFIG[status].label}
         </span>
         <span style={{ fontSize: 12, opacity: 0.8, marginLeft: 'auto' }}>
           {status === 'moving' ? `종점 도착 ${globalEta}분 전` : STATUS_CONFIG[status].sub}
@@ -248,10 +273,10 @@ export default function Map() {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', paddingBottom: '12px' }}>
             <div style={{ position: 'absolute', top: '7px', left: '10%', right: '10%', height: '3px', background: '#E5E7EB', zIndex: 0 }} />
 
-            {MOCK_ROUTE.map((stop, index) => {
-              const isPassed = index < currentStopIndex;
-              const isCurrent = index === currentStopIndex;
-              const isMyChildStop = stop.id === MY_CHILD_STOP_ID;
+            {displayStations.map((stop, index) => {
+              const isPassed = stop.status === 'PASSED';
+              const isCurrent = stop.status === 'ARRIVING';
+              const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID;
 
               const dotColor = isPassed ? '#10B981' : isCurrent ? '#3B82F6' : '#D1D5DB';
 
@@ -261,17 +286,17 @@ export default function Map() {
               if (isPassed) {
                 etaText = '통과';
               } else if (isCurrent) {
-                etaText = '정차중';
+                etaText = '도착예정';
                 etaColor = '#3B82F6';
               } else {
-                let mins = (index - currentStopIndex) * 3;
+                let mins = Math.max((index - activeIndex) * 3, 3);
                 if (isDelayed) mins += 5;
                 etaText = `${mins}분 후`;
                 etaColor = isDelayed ? '#DC2626' : '#10B981';
               }
 
               return (
-                <div key={stop.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, zIndex: 1, width: '20%' }}>
+                <div key={stop.stationId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, zIndex: 1, width: '20%' }}>
                   <div style={{
                     width: isCurrent || isMyChildStop ? 16 : 12,
                     height: isCurrent || isMyChildStop ? 16 : 12,
@@ -290,7 +315,7 @@ export default function Map() {
                     wordBreak: 'keep-all',
                     letterSpacing: '-0.5px'
                   }}>
-                    {stop.name}
+                    {stop.stationName}
                   </span>
 
                   <span style={{ fontSize: '10px', fontWeight: '700', color: etaColor }}>
@@ -302,7 +327,7 @@ export default function Map() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
-            {[['이동거리', `${(currentStopIndex * 1.2).toFixed(1)}km`], ['종점 도착', `${globalEta}분`], ['현재속도', `${speed}km/h`]].map(([k, v]) => (
+            {[['이동거리', `${(activeIndex * 1.2).toFixed(1)}km`], ['종점 도착', `${globalEta}분`], ['현재속도', `${speed}km/h`]].map(([k, v]) => (
               <div key={k} style={{ textAlign: 'center' }}>
                 <p style={{ fontSize: 11, color: '#666' }}>{k}</p>
                 <p style={{ fontSize: 14, fontWeight: 700, color: '#111', marginTop: 4 }}>{v}</p>
@@ -372,13 +397,13 @@ export default function Map() {
         <div style={{ flex: 1, overflowY: 'auto', paddingLeft: '8px', position: 'relative', paddingBottom: '20px' }}>
           <div style={{ position: 'absolute', top: '12px', bottom: '32px', left: '19px', width: '4px', background: '#E5E7EB', zIndex: 0 }} />
 
-          {MOCK_ROUTE.map((stop, index) => {
-            const isPassed = index < currentStopIndex;
-            const isCurrent = index === currentStopIndex;
-            const isMyChildStop = stop.id === MY_CHILD_STOP_ID;
+          {displayStations.map((stop, index) => {
+            const isPassed = stop.status === 'PASSED';
+            const isCurrent = stop.status === 'ARRIVING';
+            const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID;
 
             return (
-              <div key={stop.id} style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', position: 'relative', zIndex: 1 }}>
+              <div key={stop.stationId} style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', position: 'relative', zIndex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', marginRight: '16px' }}>
                   {isCurrent ? (
                     <span style={{ fontSize: '18px' }}>🚌</span>
@@ -398,9 +423,9 @@ export default function Map() {
                   <span style={{
                     fontSize: '15px',
                     fontWeight: isCurrent || isMyChildStop ? '800' : '500',
-                    color: isPassed ? '#9CA3AF' : '#111'
+                    color: isPassed ? '#9CA3AF' : (isCurrent ? '#3B82F6' : '#111')
                   }}>
-                    {stop.name}
+                    {stop.stationName}
                   </span>
                   {isMyChildStop && (
                     <span style={{ marginLeft: '8px', background: '#FEF08A', color: '#A16207', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
@@ -410,7 +435,7 @@ export default function Map() {
                 </div>
 
                 <div style={{ fontSize: '12px', fontWeight: '700', color: isCurrent ? '#FF3B3B' : (isPassed ? '#9CA3AF' : '#2563EB') }}>
-                  {isCurrent ? '운행중' : (isPassed ? '통과' : '대기')}
+                  {isCurrent ? '도착예정' : (isPassed ? '통과' : '대기')}
                 </div>
               </div>
             );
