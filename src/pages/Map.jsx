@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Client } from '@stomp/stompjs';
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
 import { getBusCurrentLocation, getBusRouteStatus, getStudentEtas } from '../services/gpsService';
 
@@ -107,6 +108,65 @@ export default function Map() {
   useEffect(() => {
     requestAndGetFCMToken();
     initForegroundMessageListener();
+  }, []);
+
+  useEffect(() => {
+    const client = new Client({
+      brokerURL: 'ws://localhost:8080/ws',
+      reconnectDelay: 5000,
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
+      onConnect: () => {
+        console.log('Connected to STOMP WebSocket');
+        client.subscribe('/topic/bus/1', (message) => {
+          if (message.body) {
+            try {
+              const data = JSON.parse(message.body);
+
+              if (data.latitude && data.longitude) {
+                setBusLocation({ lat: data.latitude, lng: data.longitude });
+              }
+              if (data.speed !== undefined) {
+                setSpeed(data.speed);
+              }
+              if (data.updatedAt) {
+                setUpdatedAt(data.updatedAt);
+              }
+
+              setDriverInfo(prev => ({
+                ...(prev || mockVehicleInfo),
+                vehicleNumber: data.busNumber || prev?.vehicleNumber || mockVehicleInfo.vehicleNumber,
+                driverName: data.driverName || prev?.driverName || mockVehicleInfo.driverName,
+                contact: data.driverPhoneNumber || prev?.contact || mockVehicleInfo.contact
+              }));
+
+              setErrorMessage(null);
+            } catch (error) {
+              console.error('Error parsing WebSocket message:', error);
+            }
+          }
+        });
+      },
+      onStompError: (frame) => {
+        console.error('Broker reported error: ' + frame.headers['message']);
+        console.error('Additional details: ' + frame.body);
+        setErrorMessage('실시간 데이터 서버에서 오류가 발생했습니다.');
+      },
+      onWebSocketError: (event) => {
+        console.error('WebSocket connection error:', event);
+        setErrorMessage('실시간 데이터 서버와 연결이 끊어졌습니다. 재연결을 시도합니다.');
+      },
+      onWebSocketClose: () => {
+        console.log('WebSocket connection closed');
+      }
+    });
+
+    client.activate();
+
+    return () => {
+      client.deactivate();
+      console.log('STOMP Client deactivated on cleanup');
+    };
   }, []);
 
   useEffect(() => {
