@@ -91,3 +91,24 @@ export const getBusRouteStatus = async (busId) => {
     throw error;
   }
 };
+
+/**
+ * 특정 버스의 학생별 ETA 목록을 조회
+ * @param {number} busId 차량 ID
+ * @returns {Promise<Object>} 서버 응답 데이터
+ */
+export const getStudentEtas = async (busId) => {
+  try {
+    const response = await api.get(`/api/gps/buses/${busId}/etas`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error(`[학생별 ETA 조회 에러 - 서버 응답 오류] 상태 코드: ${error.response.status}`, error.response.data);
+    } else if (error.request) {
+      console.error('[학생별 ETA 조회 에러 - 응답 없음] 네트워크 상태를 확인해주세요.', error.request);
+    } else {
+      console.error('[학생별 ETA 조회 에러 - 설정 오류]', error.message);
+    }
+    throw error;
+  }
+};

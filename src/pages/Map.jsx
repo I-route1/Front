@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
-import { getBusCurrentLocation, getBusRouteStatus } from '../services/gpsService';
+import { getBusCurrentLocation, getBusRouteStatus, getStudentEtas } from '../services/gpsService';
+
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
   { id: 2, name: '푸르지오', lat: 35.8725, lng: 128.6025 },
@@ -37,6 +38,7 @@ export default function Map() {
   const [mapInstance, setMapInstance] = useState(null)
   const [busMarker, setBusMarker] = useState(null)
   const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' });
+  const [studentEtas, setStudentEtas] = useState([]);
 
   const displayStations = routeData.stations.length > 0
     ? routeData.stations
@@ -58,9 +60,10 @@ export default function Map() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [locRes, routeRes] = await Promise.allSettled([
+        const [locRes, routeRes, etaRes] = await Promise.allSettled([
           getBusCurrentLocation(1),
-          getBusRouteStatus(1)
+          getBusRouteStatus(1),
+          getStudentEtas(1)
         ]);
 
         if (locRes.status === 'fulfilled' && locRes.value?.success && locRes.value.data) {
@@ -88,6 +91,10 @@ export default function Map() {
             currentStationId: routeRes.value.data.currentStationId,
             routeName: routeRes.value.data.routeName
           });
+        }
+
+        if (etaRes.status === 'fulfilled' && etaRes.value?.success && etaRes.value.data) {
+          setStudentEtas(etaRes.value.data || []);
         }
       } catch (err) {
         setErrorMessage("데이터를 불러오는 중 오류가 발생했습니다.");
@@ -216,6 +223,28 @@ export default function Map() {
         </div>
       )}
 
+      {studentEtas.length > 0 && (() => {
+        const myChildEta = studentEtas[0];
+        return (
+          <div style={{
+            background: myChildEta.lateRisk ? '#FEF2F2' : '#EFF6FF',
+            borderBottom: `1px solid ${myChildEta.lateRisk ? '#FCA5A5' : '#BFDBFE'}`,
+            color: myChildEta.lateRisk ? '#DC2626' : '#1E3A8A',
+            padding: '10px 20px',
+            fontSize: '13px',
+            fontWeight: '700',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            zIndex: 6
+          }}>
+            <span>{myChildEta.lateRisk ? '🚨' : 'ℹ️'}</span>
+            {myChildEta.studentName} 어린이의 {myChildEta.stopName} 하차까지 {myChildEta.etaMinutes}분 남았습니다.
+            {myChildEta.lateRisk && ' (지각 위험)'}
+          </div>
+        );
+      })()}
+
       {isDelayed && (
         <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
           <span>⚠️</span> 교통 혼잡으로 인해 예상 도착 시간이 5분 지연되고 있습니다.
@@ -293,6 +322,15 @@ export default function Map() {
                 if (isDelayed) mins += 5;
                 etaText = `${mins}분 후`;
                 etaColor = isDelayed ? '#DC2626' : '#10B981';
+
+                const matchedEta = studentEtas.find(eta => eta.stopId === stop.stationId);
+                if (matchedEta) {
+                  etaText = `${matchedEta.etaMinutes}분 후`;
+                  if (matchedEta.lateRisk) {
+                    etaColor = '#DC2626';
+                    etaText += ' 🚨';
+                  }
+                }
               }
 
               return (
