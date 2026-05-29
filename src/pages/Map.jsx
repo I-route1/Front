@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
-import { getBusCurrentLocation } from '../services/gpsService';
+import { getBusCurrentLocation, getBusRouteStatus, getStudentEtas } from '../services/gpsService';
 
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
@@ -37,6 +37,8 @@ export default function Map() {
   const [busLocation, setBusLocation] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
   const [busMarker, setBusMarker] = useState(null)
+  const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' });
+  const [studentEtas, setStudentEtas] = useState([]);
 
   const globalEta = Math.max(12 - currentStopIndex * 3, 0) + (isDelayed ? 5 : 0);
 
@@ -47,9 +49,14 @@ export default function Map() {
   useEffect(() => {
     const fetchLocation = async () => {
       try {
-        const res = await getBusCurrentLocation(1); // 테스트용 busId: 1
-        if (res?.success && res.data) {
-          const { latitude, longitude, busNumber, driverName, updatedAt: updatedTime, speed: currentSpeed } = res.data;
+        const [locRes, routeRes, etaRes] = await Promise.allSettled([
+          getBusCurrentLocation(1),
+          getBusRouteStatus(1),
+          getStudentEtas(1)
+        ]);
+
+        if (locRes.status === 'fulfilled' && locRes.value?.success && locRes.value.data) {
+          const { latitude, longitude, busNumber, driverName, updatedAt: updatedTime, speed: currentSpeed } = locRes.value.data;
 
           setBusLocation({ lat: latitude, lng: longitude });
           setUpdatedAt(updatedTime);
@@ -63,6 +70,10 @@ export default function Map() {
             driverName: driverName || mockVehicleInfo.driverName
           }));
           setErrorMessage(null);
+        }
+
+        if (etaRes.status === 'fulfilled' && etaRes.value?.success && etaRes.value.data) {
+          setStudentEtas(etaRes.value.data || []);
         }
       } catch (err) {
         setErrorMessage("현재 운행 중인 셔틀버스가 없습니다");
@@ -191,6 +202,28 @@ export default function Map() {
         </div>
       )}
 
+      {studentEtas.length > 0 && (() => {
+        const myChildEta = studentEtas[0];
+        return (
+          <div style={{
+            background: myChildEta.lateRisk ? '#FEF2F2' : '#EFF6FF',
+            borderBottom: `1px solid ${myChildEta.lateRisk ? '#FCA5A5' : '#BFDBFE'}`,
+            color: myChildEta.lateRisk ? '#DC2626' : '#1E3A8A',
+            padding: '10px 20px',
+            fontSize: '13px',
+            fontWeight: '700',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            zIndex: 6
+          }}>
+            <span>{myChildEta.lateRisk ? '🚨' : 'ℹ️'}</span>
+            {myChildEta.studentName} 어린이의 {myChildEta.stopName} 하차까지 {myChildEta.etaMinutes}분 남았습니다.
+            {myChildEta.lateRisk && ' (지각 위험)'}
+          </div>
+        );
+      })()}
+
       {isDelayed && (
         <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
           <span>⚠️</span> 교통 혼잡으로 인해 예상 도착 시간이 5분 지연되고 있습니다.
@@ -268,6 +301,15 @@ export default function Map() {
                 if (isDelayed) mins += 5;
                 etaText = `${mins}분 후`;
                 etaColor = isDelayed ? '#DC2626' : '#10B981';
+
+                const matchedEta = studentEtas.find(eta => eta.stopId === stop.stationId);
+                if (matchedEta) {
+                  etaText = `${matchedEta.etaMinutes}분 후`;
+                  if (matchedEta.lateRisk) {
+                    etaColor = '#DC2626';
+                    etaText += ' 🚨';
+                  }
+                }
               }
 
               return (
