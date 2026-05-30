@@ -82,9 +82,9 @@ export async function apiCall(path, options = {}) {
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || `HTTP ${res.status}`)
-  }
+  const err = await res.json().catch(() => ({}))
+  throw new Error(err.message || err.error || `HTTP ${res.status}`)
+}
 
   const text = await res.text()
   return text ? JSON.parse(text) : null

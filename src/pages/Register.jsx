@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-
+import { authAPI } from '@/api'
 const ROLES = [
   { value: 'parent', label: '학부모' },
   { value: 'academy', label: '학원' },
@@ -103,33 +103,62 @@ export default function Register() {
   }
 
   const handleDuplicateCheck = async (type) => {
-    if (!validateDuplicateTarget(type)) return
+  if (!validateDuplicateTarget(type)) return
 
-    setDuplicateStatus((prev) => ({
-      ...prev,
-      [type]: DUPLICATE_STATUS.CHECKING,
-    }))
+  setDuplicateStatus((prev) => ({
+    ...prev,
+    [type]: DUPLICATE_STATUS.CHECKING,
+  }))
 
-    await new Promise((resolve) => setTimeout(resolve, 600))
-
+  try {
     const value = form[type]?.trim?.() ?? ''
 
-    const isDuplicated =
-      value.toLowerCase() === 'admin' ||
-      value.toLowerCase() === 'test' ||
-      value.toLowerCase() === 'blacklist' ||
-      value === '010-0000-0000'
+    if (type === 'username') {
+      await new Promise((resolve) => setTimeout(resolve, 400))
 
-    if (isDuplicated) {
+      const isDuplicated =
+        value.toLowerCase() === 'admin' ||
+        value.toLowerCase() === 'test' ||
+        value.toLowerCase() === 'blacklist'
+
+      if (isDuplicated) {
+        setDuplicateStatus((prev) => ({
+          ...prev,
+          [type]: DUPLICATE_STATUS.INVALID,
+        }))
+
+        setErrors((prev) => ({
+          ...prev,
+          username: '이미 사용 중인 아이디입니다',
+        }))
+        return
+      }
+
+      setDuplicateStatus((prev) => ({
+        ...prev,
+        username: DUPLICATE_STATUS.VALID,
+      }))
+      return
+    }
+
+    const apiValue =
+      type === 'phone'
+        ? form.phone.replace(/\D/g, '')
+        : value
+
+    const data = await authAPI.checkDuplicate(type, apiValue)
+
+    if (!data?.isAvailable) {
+      const label = getDuplicateLabel(type)
+
       setDuplicateStatus((prev) => ({
         ...prev,
         [type]: DUPLICATE_STATUS.INVALID,
       }))
 
-      const label = getDuplicateLabel(type)
       setErrors((prev) => ({
         ...prev,
-        [type]: `이미 사용 중인 ${label}입니다`,
+        [type]: data?.message || `이미 사용 중인 ${label}입니다`,
       }))
       return
     }
@@ -138,28 +167,55 @@ export default function Register() {
       ...prev,
       [type]: DUPLICATE_STATUS.VALID,
     }))
+
+    setErrors((prev) => ({
+      ...prev,
+      [type]: '',
+    }))
+  } catch (error) {
+    setDuplicateStatus((prev) => ({
+      ...prev,
+      [type]: DUPLICATE_STATUS.INVALID,
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      [type]: error.message || '중복 확인 중 오류가 발생했습니다',
+    }))
   }
+}
 
   const handleSendEmailAuth = async () => {
-    if (!form.email.includes('@')) {
-      setErrors((prev) => ({ ...prev, email: '올바른 이메일을 입력해 주세요' }))
-      return
-    }
-
-    if (duplicateStatus.email !== DUPLICATE_STATUS.VALID) {
-      setErrors((prev) => ({ ...prev, email: '이메일 중복 확인을 먼저 진행해 주세요' }))
-      return
-    }
-
-    setEmailAuthLoading(true)
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 700))
-      setEmailAuthStatus(EMAIL_AUTH_STATUS.SENT)
-    } finally {
-      setEmailAuthLoading(false)
-    }
+  if (!form.email.includes('@')) {
+    setErrors((prev) => ({ ...prev, email: '올바른 이메일을 입력해 주세요' }))
+    return
   }
+
+  if (duplicateStatus.email !== DUPLICATE_STATUS.VALID) {
+    setErrors((prev) => ({ ...prev, email: '이메일 중복 확인을 먼저 진행해 주세요' }))
+    return
+  }
+
+  setEmailAuthLoading(true)
+
+  try {
+    if (emailAuthStatus === EMAIL_AUTH_STATUS.SENT) {
+      await authAPI.resendEmailVerification(form.email.trim())
+    } else {
+      await authAPI.sendEmailVerification(form.email.trim())
+    }
+
+    setEmailAuthStatus(EMAIL_AUTH_STATUS.SENT)
+    setErrors((prev) => ({ ...prev, email: '' }))
+  } catch (error) {
+    setErrors((prev) => ({
+      ...prev,
+      email: error.message || '인증 메일 발송에 실패했습니다',
+    }))
+  } finally {
+    setEmailAuthLoading(false)
+  }
+}
 
   const handleVerifyEmail = async () => {
     setEmailAuthLoading(true)
@@ -236,34 +292,65 @@ export default function Register() {
   }
 
   const handleSubmit = async () => {
-    const e = validate()
-    if (Object.keys(e).length > 0) {
-      setErrors(e)
+  const e = validate()
+  if (Object.keys(e).length > 0) {
+    setErrors(e)
+    return
+  }
+
+  setLoading(true)
+
+  try {
+    const isBlacklisted = await checkBlacklistUser()
+
+    if (isBlacklisted) {
+      setErrors({ submit: '가입이 제한된 사용자입니다. 관리자에게 문의해 주세요.' })
       return
     }
 
-    setLoading(true)
+    const commonPayload = {
+      username: form.username.trim(),
+      nickname: form.nickname.trim(),
+      password: form.password,
+      passwordConfirm: form.passwordConfirm,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phoneNumber: form.phone.replace(/\D/g, ''),
+    }
+
+    if (form.role === 'parent') {
+      await authAPI.registerParent({
+        ...commonPayload,
+        role: 'PARENT',
+      })
+    }
+
+    if (form.role === 'academy') {
+      await authAPI.registerAcademy({
+        ...commonPayload,
+        role: 'ACADEMY',
+        academyName: form.academyName.trim(),
+        academyAddress: form.academyAddress.trim(),
+        businessNumber: form.businessNumber.replace(/\D/g, ''),
+      })
+    }
 
     try {
-      const isBlacklisted = await checkBlacklistUser()
-
-      if (isBlacklisted) {
-        setErrors({ submit: '가입이 제한된 사용자입니다. 관리자에게 문의해 주세요.' })
-        return
-      }
-
-      // TODO: POST /api/auth/register
-      // TODO: POST /api/email/welcome
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      setSuccess(true)
-      setTimeout(() => navigate('/login'), 1800)
+      await authAPI.sendWelcomeEmail(form.email.trim())
     } catch {
-      setErrors({ submit: '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.' })
-    } finally {
-      setLoading(false)
+      console.warn('환영 이메일 발송에 실패했지만 회원가입은 완료되었습니다.')
     }
+
+    setSuccess(true)
+    setTimeout(() => navigate('/login'), 1800)
+  } catch (error) {
+    setErrors({
+      submit: error.message || '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+    })
+  } finally {
+    setLoading(false)
   }
+}
 
   if (success) {
     return (
