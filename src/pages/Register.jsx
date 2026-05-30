@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { authAPI } from '@/api'
+
 const ROLES = [
   { value: 'parent', label: '학부모' },
-  { value: 'academy', label: '학원' },
+  { value: 'academy', label: '학원 관계자' },
+]
+
+const STAFF_TYPES = [
+  { value: 'academy', label: '학원 관리자' },
+  { value: 'driver', label: '차량 기사' },
 ]
 
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
@@ -33,9 +39,12 @@ export default function Register() {
     email: '',
     phone: '',
     role: 'parent',
+    staffType: 'academy',
     academyName: '',
     academyAddress: '',
     businessNumber: '',
+    vehicleNumber: '',
+    inviteCode: '',
   })
 
   const [agreed, setAgreed] = useState(false)
@@ -54,8 +63,70 @@ export default function Register() {
   })
 
   const update = (key, val) => {
-    setForm((prev) => ({ ...prev, [key]: val }))
-    setErrors((prev) => ({ ...prev, [key]: '' }))
+    setForm((prev) => {
+      const nextForm = {
+        ...prev,
+        [key]: val,
+      }
+
+      if (key === 'role' && val === 'parent') {
+        nextForm.staffType = 'academy'
+        nextForm.academyName = ''
+        nextForm.academyAddress = ''
+        nextForm.businessNumber = ''
+        nextForm.vehicleNumber = ''
+        nextForm.inviteCode = ''
+      }
+
+      if (key === 'role' && val === 'academy') {
+        nextForm.staffType = prev.staffType || 'academy'
+      }
+
+      if (key === 'staffType' && val === 'academy') {
+        nextForm.vehicleNumber = ''
+        nextForm.inviteCode = ''
+      }
+
+      if (key === 'staffType' && val === 'driver') {
+        nextForm.academyAddress = ''
+        nextForm.businessNumber = ''
+      }
+
+      return nextForm
+    })
+
+    setErrors((prev) => ({
+      ...prev,
+      [key]: '',
+      submit: '',
+    }))
+
+    if (key === 'role') {
+      setErrors((prev) => ({
+        ...prev,
+        role: '',
+        staffType: '',
+        academyName: '',
+        academyAddress: '',
+        businessNumber: '',
+        vehicleNumber: '',
+        inviteCode: '',
+        submit: '',
+      }))
+    }
+
+    if (key === 'staffType') {
+      setErrors((prev) => ({
+        ...prev,
+        staffType: '',
+        academyName: '',
+        academyAddress: '',
+        businessNumber: '',
+        vehicleNumber: '',
+        inviteCode: '',
+        submit: '',
+      }))
+    }
 
     if (key === 'username' || key === 'nickname' || key === 'phone') {
       setDuplicateStatus((prev) => ({
@@ -77,21 +148,31 @@ export default function Register() {
     const nextErrors = {}
 
     if (type === 'username') {
-      if (!form.username.trim()) nextErrors.username = '아이디를 입력해 주세요'
-      else if (form.username.trim().length < 4) nextErrors.username = '아이디는 4자 이상이어야 합니다'
+      if (!form.username.trim()) {
+        nextErrors.username = '아이디를 입력해 주세요'
+      } else if (form.username.trim().length < 4) {
+        nextErrors.username = '아이디는 4자 이상이어야 합니다'
+      }
     }
 
     if (type === 'nickname') {
-      if (!form.nickname.trim()) nextErrors.nickname = '닉네임을 입력해 주세요'
-      else if (form.nickname.trim().length < 2) nextErrors.nickname = '닉네임은 2자 이상이어야 합니다'
+      if (!form.nickname.trim()) {
+        nextErrors.nickname = '닉네임을 입력해 주세요'
+      } else if (form.nickname.trim().length < 2) {
+        nextErrors.nickname = '닉네임은 2자 이상이어야 합니다'
+      }
     }
 
     if (type === 'email') {
-      if (!form.email.includes('@')) nextErrors.email = '올바른 이메일을 입력해 주세요'
+      if (!form.email.includes('@')) {
+        nextErrors.email = '올바른 이메일을 입력해 주세요'
+      }
     }
 
     if (type === 'phone') {
-      if (form.phone.replace(/\D/g, '').length < 10) nextErrors.phone = '올바른 전화번호를 입력해 주세요'
+      if (form.phone.replace(/\D/g, '').length < 10) {
+        nextErrors.phone = '올바른 전화번호를 입력해 주세요'
+      }
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -103,25 +184,51 @@ export default function Register() {
   }
 
   const handleDuplicateCheck = async (type) => {
-  if (!validateDuplicateTarget(type)) return
+    if (!validateDuplicateTarget(type)) return
 
-  setDuplicateStatus((prev) => ({
-    ...prev,
-    [type]: DUPLICATE_STATUS.CHECKING,
-  }))
+    setDuplicateStatus((prev) => ({
+      ...prev,
+      [type]: DUPLICATE_STATUS.CHECKING,
+    }))
 
-  try {
-    const value = form[type]?.trim?.() ?? ''
+    try {
+      const value = form[type]?.trim?.() ?? ''
 
-    if (type === 'username') {
-      await new Promise((resolve) => setTimeout(resolve, 400))
+      if (type === 'username') {
+        await new Promise((resolve) => setTimeout(resolve, 400))
 
-      const isDuplicated =
-        value.toLowerCase() === 'admin' ||
-        value.toLowerCase() === 'test' ||
-        value.toLowerCase() === 'blacklist'
+        const isDuplicated =
+          value.toLowerCase() === 'admin' ||
+          value.toLowerCase() === 'test' ||
+          value.toLowerCase() === 'blacklist'
 
-      if (isDuplicated) {
+        if (isDuplicated) {
+          setDuplicateStatus((prev) => ({
+            ...prev,
+            [type]: DUPLICATE_STATUS.INVALID,
+          }))
+
+          setErrors((prev) => ({
+            ...prev,
+            username: '이미 사용 중인 아이디입니다',
+          }))
+          return
+        }
+
+        setDuplicateStatus((prev) => ({
+          ...prev,
+          username: DUPLICATE_STATUS.VALID,
+        }))
+        return
+      }
+
+      const apiValue = type === 'phone' ? form.phone.replace(/\D/g, '') : value
+
+      const data = await authAPI.checkDuplicate(type, apiValue)
+
+      if (!data?.isAvailable) {
+        const label = getDuplicateLabel(type)
+
         setDuplicateStatus((prev) => ({
           ...prev,
           [type]: DUPLICATE_STATUS.INVALID,
@@ -129,28 +236,21 @@ export default function Register() {
 
         setErrors((prev) => ({
           ...prev,
-          username: '이미 사용 중인 아이디입니다',
+          [type]: data?.message || `이미 사용 중인 ${label}입니다`,
         }))
         return
       }
 
       setDuplicateStatus((prev) => ({
         ...prev,
-        username: DUPLICATE_STATUS.VALID,
+        [type]: DUPLICATE_STATUS.VALID,
       }))
-      return
-    }
 
-    const apiValue =
-      type === 'phone'
-        ? form.phone.replace(/\D/g, '')
-        : value
-
-    const data = await authAPI.checkDuplicate(type, apiValue)
-
-    if (!data?.isAvailable) {
-      const label = getDuplicateLabel(type)
-
+      setErrors((prev) => ({
+        ...prev,
+        [type]: '',
+      }))
+    } catch (error) {
       setDuplicateStatus((prev) => ({
         ...prev,
         [type]: DUPLICATE_STATUS.INVALID,
@@ -158,64 +258,42 @@ export default function Register() {
 
       setErrors((prev) => ({
         ...prev,
-        [type]: data?.message || `이미 사용 중인 ${label}입니다`,
+        [type]: error.message || '중복 확인 중 오류가 발생했습니다',
       }))
+    }
+  }
+
+  const handleSendEmailAuth = async () => {
+    if (!form.email.includes('@')) {
+      setErrors((prev) => ({ ...prev, email: '올바른 이메일을 입력해 주세요' }))
       return
     }
 
-    setDuplicateStatus((prev) => ({
-      ...prev,
-      [type]: DUPLICATE_STATUS.VALID,
-    }))
-
-    setErrors((prev) => ({
-      ...prev,
-      [type]: '',
-    }))
-  } catch (error) {
-    setDuplicateStatus((prev) => ({
-      ...prev,
-      [type]: DUPLICATE_STATUS.INVALID,
-    }))
-
-    setErrors((prev) => ({
-      ...prev,
-      [type]: error.message || '중복 확인 중 오류가 발생했습니다',
-    }))
-  }
-}
-
-  const handleSendEmailAuth = async () => {
-  if (!form.email.includes('@')) {
-    setErrors((prev) => ({ ...prev, email: '올바른 이메일을 입력해 주세요' }))
-    return
-  }
-
-  if (duplicateStatus.email !== DUPLICATE_STATUS.VALID) {
-    setErrors((prev) => ({ ...prev, email: '이메일 중복 확인을 먼저 진행해 주세요' }))
-    return
-  }
-
-  setEmailAuthLoading(true)
-
-  try {
-    if (emailAuthStatus === EMAIL_AUTH_STATUS.SENT) {
-      await authAPI.resendEmailVerification(form.email.trim())
-    } else {
-      await authAPI.sendEmailVerification(form.email.trim())
+    if (duplicateStatus.email !== DUPLICATE_STATUS.VALID) {
+      setErrors((prev) => ({ ...prev, email: '이메일 중복 확인을 먼저 진행해 주세요' }))
+      return
     }
 
-    setEmailAuthStatus(EMAIL_AUTH_STATUS.SENT)
-    setErrors((prev) => ({ ...prev, email: '' }))
-  } catch (error) {
-    setErrors((prev) => ({
-      ...prev,
-      email: error.message || '인증 메일 발송에 실패했습니다',
-    }))
-  } finally {
-    setEmailAuthLoading(false)
+    setEmailAuthLoading(true)
+
+    try {
+      if (emailAuthStatus === EMAIL_AUTH_STATUS.SENT) {
+        await authAPI.resendEmailVerification(form.email.trim())
+      } else {
+        await authAPI.sendEmailVerification(form.email.trim())
+      }
+
+      setEmailAuthStatus(EMAIL_AUTH_STATUS.SENT)
+      setErrors((prev) => ({ ...prev, email: '' }))
+    } catch (error) {
+      setErrors((prev) => ({
+        ...prev,
+        email: error.message || '인증 메일 발송에 실패했습니다',
+      }))
+    } finally {
+      setEmailAuthLoading(false)
+    }
   }
-}
 
   const handleVerifyEmail = async () => {
     setEmailAuthLoading(true)
@@ -232,22 +310,39 @@ export default function Register() {
   const validate = () => {
     const e = {}
 
-    if (!form.username.trim()) e.username = '아이디를 입력해 주세요'
-    else if (form.username.trim().length < 4) e.username = '아이디는 4자 이상이어야 합니다'
+    if (!form.username.trim()) {
+      e.username = '아이디를 입력해 주세요'
+    } else if (form.username.trim().length < 4) {
+      e.username = '아이디는 4자 이상이어야 합니다'
+    }
 
-    if (!form.nickname.trim()) e.nickname = '닉네임을 입력해 주세요'
-    else if (form.nickname.trim().length < 2) e.nickname = '닉네임은 2자 이상이어야 합니다'
+    if (!form.nickname.trim()) {
+      e.nickname = '닉네임을 입력해 주세요'
+    } else if (form.nickname.trim().length < 2) {
+      e.nickname = '닉네임은 2자 이상이어야 합니다'
+    }
 
-    if (!form.password) e.password = '비밀번호를 입력해 주세요'
-    else if (!PASSWORD_RULES.test(form.password)) e.password = '영문·숫자·특수문자 포함 8자 이상'
+    if (!form.password) {
+      e.password = '비밀번호를 입력해 주세요'
+    } else if (!PASSWORD_RULES.test(form.password)) {
+      e.password = '영문·숫자·특수문자 포함 8자 이상'
+    }
 
-    if (form.password !== form.passwordConfirm) e.passwordConfirm = '비밀번호가 일치하지 않습니다'
+    if (form.password !== form.passwordConfirm) {
+      e.passwordConfirm = '비밀번호가 일치하지 않습니다'
+    }
 
-    if (!form.name.trim()) e.name = '이름을 입력해 주세요'
+    if (!form.name.trim()) {
+      e.name = '이름을 입력해 주세요'
+    }
 
-    if (!form.email.includes('@')) e.email = '올바른 이메일을 입력해 주세요'
+    if (!form.email.includes('@')) {
+      e.email = '올바른 이메일을 입력해 주세요'
+    }
 
-    if (form.phone.replace(/\D/g, '').length < 10) e.phone = '올바른 전화번호를 입력해 주세요'
+    if (form.phone.replace(/\D/g, '').length < 10) {
+      e.phone = '올바른 전화번호를 입력해 주세요'
+    }
 
     if (duplicateStatus.username !== DUPLICATE_STATUS.VALID) {
       e.username = '아이디 중복 확인을 완료해 주세요'
@@ -269,14 +364,37 @@ export default function Register() {
       e.email = '이메일 인증을 완료해 주세요'
     }
 
-    if (!agreed) e.agree = '개인정보 수집 및 이용에 동의해 주세요'
+    if (!agreed) {
+      e.agree = '개인정보 수집 및 이용에 동의해 주세요'
+    }
 
-    if (form.role === 'academy') {
-      if (!form.academyName.trim()) e.academyName = '학원 이름을 입력해 주세요'
-      if (!form.academyAddress.trim()) e.academyAddress = '학원 주소를 입력해 주세요'
+    if (form.role === 'academy' && form.staffType === 'academy') {
+      if (!form.academyName.trim()) {
+        e.academyName = '학원 이름을 입력해 주세요'
+      }
+
+      if (!form.academyAddress.trim()) {
+        e.academyAddress = '학원 주소를 입력해 주세요'
+      }
 
       const businessNumber = form.businessNumber.replace(/\D/g, '')
-      if (businessNumber.length !== 10) e.businessNumber = '사업자번호 10자리를 입력해 주세요'
+      if (businessNumber.length !== 10) {
+        e.businessNumber = '사업자번호 10자리를 입력해 주세요'
+      }
+    }
+
+    if (form.role === 'academy' && form.staffType === 'driver') {
+      if (!form.academyName.trim()) {
+        e.academyName = '소속 학원명을 입력해 주세요'
+      }
+
+      if (!form.vehicleNumber.trim()) {
+        e.vehicleNumber = '차량 번호를 입력해 주세요'
+      }
+
+      if (!form.inviteCode.trim()) {
+        e.inviteCode = '초대코드를 입력해 주세요'
+      }
     }
 
     return e
@@ -292,65 +410,74 @@ export default function Register() {
   }
 
   const handleSubmit = async () => {
-  const e = validate()
-  if (Object.keys(e).length > 0) {
-    setErrors(e)
-    return
-  }
+    const e = validate()
 
-  setLoading(true)
-
-  try {
-    const isBlacklisted = await checkBlacklistUser()
-
-    if (isBlacklisted) {
-      setErrors({ submit: '가입이 제한된 사용자입니다. 관리자에게 문의해 주세요.' })
+    if (Object.keys(e).length > 0) {
+      setErrors(e)
       return
     }
 
-    const commonPayload = {
-      username: form.username.trim(),
-      nickname: form.nickname.trim(),
-      password: form.password,
-      passwordConfirm: form.passwordConfirm,
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phoneNumber: form.phone.replace(/\D/g, ''),
-    }
-
-    if (form.role === 'parent') {
-      await authAPI.registerParent({
-        ...commonPayload,
-        role: 'PARENT',
-      })
-    }
-
-    if (form.role === 'academy') {
-      await authAPI.registerAcademy({
-        ...commonPayload,
-        role: 'ACADEMY',
-        academyName: form.academyName.trim(),
-        academyAddress: form.academyAddress.trim(),
-        businessNumber: form.businessNumber.replace(/\D/g, ''),
-      })
-    }
+    setLoading(true)
 
     try {
-      await authAPI.sendWelcomeEmail(form.email.trim())
-    } catch {
-      console.warn('환영 이메일 발송에 실패했지만 회원가입은 완료되었습니다.')
-    }
+      const isBlacklisted = await checkBlacklistUser()
 
-    setSuccess(true)
-    setTimeout(() => navigate('/login'), 1800)
-  } catch (error) {
-    setErrors({
-      submit: error.message || '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.',
-    })
-  } finally {
-    setLoading(false)
+      if (isBlacklisted) {
+        setErrors({ submit: '가입이 제한된 사용자입니다. 관리자에게 문의해 주세요.' })
+        return
+      }
+
+      const commonPayload = {
+        username: form.username.trim(),
+        nickname: form.nickname.trim(),
+        password: form.password,
+        passwordConfirm: form.passwordConfirm,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phoneNumber: form.phone.replace(/\D/g, ''),
+      }
+
+      if (form.role === 'parent') {
+        await authAPI.registerParent({
+          ...commonPayload,
+          role: 'PARENT',
+        })
+      }
+
+      if (form.role === 'academy' && form.staffType === 'academy') {
+        await authAPI.registerAcademy({
+          ...commonPayload,
+          role: 'ACADEMY',
+          academyName: form.academyName.trim(),
+          academyAddress: form.academyAddress.trim(),
+          businessNumber: form.businessNumber.replace(/\D/g, ''),
+        })
+      }
+
+      if (form.role === 'academy' && form.staffType === 'driver') {
+        setErrors({
+          submit:
+            '차량 기사 회원가입 API가 아직 확정되지 않았습니다. 백엔드 명세 확정 후 연결 예정입니다.',
+        })
+        return
+      }
+
+      try {
+        await authAPI.sendWelcomeEmail(form.email.trim())
+      } catch {
+        console.warn('환영 이메일 발송에 실패했지만 회원가입은 완료되었습니다.')
+      }
+
+      setSuccess(true)
+      setTimeout(() => navigate('/login'), 1800)
+    } catch (error) {
+      setErrors({
+        submit: error.message || '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      })
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   if (success) {
     return (
@@ -403,7 +530,9 @@ export default function Register() {
         >
           ←
         </Link>
+
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>회원가입</h1>
+
         <p style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>
           아이루트 서비스에 오신 것을 환영합니다
         </p>
@@ -420,9 +549,17 @@ export default function Register() {
         }}
       >
         <div>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 10 }}>
+          <p
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--color-text-secondary)',
+              marginBottom: 10,
+            }}
+          >
             가입 유형
           </p>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
             {ROLES.map((role) => (
               <button
@@ -434,8 +571,14 @@ export default function Register() {
                   border: `2px solid ${
                     form.role === role.value ? 'var(--color-primary)' : 'var(--color-border)'
                   }`,
-                  background: form.role === role.value ? 'var(--color-primary-light)' : 'var(--color-surface)',
-                  color: form.role === role.value ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                  background:
+                    form.role === role.value
+                      ? 'var(--color-primary-light)'
+                      : 'var(--color-surface)',
+                  color:
+                    form.role === role.value
+                      ? 'var(--color-primary)'
+                      : 'var(--color-text-secondary)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -449,6 +592,54 @@ export default function Register() {
           </div>
         </div>
 
+        {form.role === 'academy' && (
+          <div>
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                marginBottom: 10,
+              }}
+            >
+              학원 관계자 유형
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
+              {STAFF_TYPES.map((staffType) => (
+                <button
+                  key={staffType.value}
+                  onClick={() => update('staffType', staffType.value)}
+                  style={{
+                    padding: '10px 4px',
+                    borderRadius: 10,
+                    border: `2px solid ${
+                      form.staffType === staffType.value
+                        ? 'var(--color-primary)'
+                        : 'var(--color-border)'
+                    }`,
+                    background:
+                      form.staffType === staffType.value
+                        ? 'var(--color-primary-light)'
+                        : 'var(--color-surface)',
+                    color:
+                      form.staffType === staffType.value
+                        ? 'var(--color-primary)'
+                        : 'var(--color-text-secondary)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {staffType.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <Field label="아이디" error={errors.username}>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
@@ -457,11 +648,13 @@ export default function Register() {
               value={form.username}
               onChange={(event) => update('username', event.target.value)}
             />
+
             <CheckButton
               status={duplicateStatus.username}
               onClick={() => handleDuplicateCheck('username')}
             />
           </div>
+
           <StatusText status={duplicateStatus.username} label="아이디" />
         </Field>
 
@@ -473,11 +666,13 @@ export default function Register() {
               value={form.nickname}
               onChange={(event) => update('nickname', event.target.value)}
             />
+
             <CheckButton
               status={duplicateStatus.nickname}
               onClick={() => handleDuplicateCheck('nickname')}
             />
           </div>
+
           <StatusText status={duplicateStatus.nickname} label="닉네임" />
         </Field>
 
@@ -492,32 +687,32 @@ export default function Register() {
         </Field>
 
         <Field label="비밀번호 확인" error={errors.passwordConfirm}>
-  <input
-    className="input-field"
-    type="password"
-    placeholder="비밀번호를 다시 입력해 주세요"
-    value={form.passwordConfirm}
-    onChange={(event) => update('passwordConfirm', event.target.value)}
-    style={{
-      borderColor:
-        form.passwordConfirm && form.password !== form.passwordConfirm
-          ? 'var(--color-danger)'
-          : '',
-    }}
-  />
+          <input
+            className="input-field"
+            type="password"
+            placeholder="비밀번호를 다시 입력해 주세요"
+            value={form.passwordConfirm}
+            onChange={(event) => update('passwordConfirm', event.target.value)}
+            style={{
+              borderColor:
+                form.passwordConfirm && form.password !== form.passwordConfirm
+                  ? 'var(--color-danger)'
+                  : '',
+            }}
+          />
 
-  {form.passwordConfirm && form.password !== form.passwordConfirm && (
-    <p style={{ fontSize: 12, color: 'var(--color-danger)', marginTop: 2 }}>
-      비밀번호가 일치하지 않습니다
-    </p>
-  )}
+          {form.passwordConfirm && form.password !== form.passwordConfirm && (
+            <p style={{ fontSize: 12, color: 'var(--color-danger)', marginTop: 2 }}>
+              비밀번호가 일치하지 않습니다
+            </p>
+          )}
 
-  {form.passwordConfirm && form.password === form.passwordConfirm && (
-    <p style={{ fontSize: 12, color: 'var(--color-success)', marginTop: 2 }}>
-      비밀번호가 일치합니다
-    </p>
-  )}
-</Field>
+          {form.passwordConfirm && form.password === form.passwordConfirm && (
+            <p style={{ fontSize: 12, color: 'var(--color-success)', marginTop: 2 }}>
+              비밀번호가 일치합니다
+            </p>
+          )}
+        </Field>
 
         <Field label="이름" error={errors.name}>
           <input
@@ -537,6 +732,7 @@ export default function Register() {
               value={form.email}
               onChange={(event) => update('email', event.target.value)}
             />
+
             <CheckButton
               status={duplicateStatus.email}
               onClick={() => handleDuplicateCheck('email')}
@@ -621,15 +817,17 @@ export default function Register() {
               value={form.phone}
               onChange={(event) => update('phone', formatPhone(event.target.value))}
             />
+
             <CheckButton
               status={duplicateStatus.phone}
               onClick={() => handleDuplicateCheck('phone')}
             />
           </div>
+
           <StatusText status={duplicateStatus.phone} label="휴대폰 번호" />
         </Field>
 
-        {form.role === 'academy' && (
+        {form.role === 'academy' && form.staffType === 'academy' && (
           <div
             style={{
               display: 'flex',
@@ -641,8 +839,15 @@ export default function Register() {
               padding: '16px 16px 20px',
             }}
           >
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-primary)', marginBottom: -4 }}>
-              🏫 학원 정보
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--color-primary)',
+                marginBottom: -4,
+              }}
+            >
+              🏫 학원 관리자 정보
             </p>
 
             <Field label="학원 이름" error={errors.academyName}>
@@ -671,6 +876,68 @@ export default function Register() {
                 onChange={(event) => update('businessNumber', formatBusinessNumber(event.target.value))}
               />
             </Field>
+          </div>
+        )}
+
+        {form.role === 'academy' && form.staffType === 'driver' && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              background: 'var(--color-primary-light)',
+              border: '1.5px solid var(--color-primary)',
+              borderRadius: 14,
+              padding: '16px 16px 20px',
+            }}
+          >
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--color-primary)',
+                marginBottom: -4,
+              }}
+            >
+              🚐 차량 기사 정보
+            </p>
+
+            <Field label="소속 학원명" error={errors.academyName}>
+              <input
+                className="input-field"
+                placeholder="소속 학원명을 입력해 주세요"
+                value={form.academyName}
+                onChange={(event) => update('academyName', event.target.value)}
+              />
+            </Field>
+
+            <Field label="차량 번호" error={errors.vehicleNumber}>
+              <input
+                className="input-field"
+                placeholder="예: 12가3456"
+                value={form.vehicleNumber}
+                onChange={(event) => update('vehicleNumber', event.target.value)}
+              />
+            </Field>
+
+            <Field label="초대코드" error={errors.inviteCode}>
+              <input
+                className="input-field"
+                placeholder="학원에서 받은 초대코드를 입력해 주세요"
+                value={form.inviteCode}
+                onChange={(event) => update('inviteCode', event.target.value)}
+              />
+            </Field>
+
+            <p
+              style={{
+                fontSize: 12,
+                color: 'var(--color-text-muted)',
+                lineHeight: 1.5,
+              }}
+            >
+              차량 기사 회원가입은 백엔드 API 명세가 확정된 뒤 실제 가입 요청과 연결할 예정입니다.
+            </p>
           </div>
         )}
 
@@ -706,15 +973,25 @@ export default function Register() {
             >
               {agreed && <span style={{ color: 'white', fontSize: 13, fontWeight: 700 }}>✓</span>}
             </div>
+
             <div>
               <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 개인정보 수집 및 이용 동의 <span style={{ color: 'var(--color-danger)' }}>(필수)</span>
               </p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+
+              <p
+                style={{
+                  fontSize: 12,
+                  color: 'var(--color-text-muted)',
+                  marginTop: 4,
+                  lineHeight: 1.5,
+                }}
+              >
                 아이루트는 서비스 제공을 위해 아이디, 닉네임, 이름, 이메일, 전화번호를 수집하며 회원 탈퇴 시 소프트 삭제 처리됩니다.
               </p>
             </div>
           </div>
+
           {errors.agree && (
             <p style={{ fontSize: 12, color: 'var(--color-danger)', marginTop: 8 }}>
               {errors.agree}
@@ -723,7 +1000,14 @@ export default function Register() {
         </div>
 
         {errors.submit && (
-          <div style={{ background: '#FFE9E9', border: '1px solid #FFBCBC', borderRadius: 10, padding: '12px 14px' }}>
+          <div
+            style={{
+              background: '#FFE9E9',
+              border: '1px solid #FFBCBC',
+              borderRadius: 10,
+              padding: '12px 14px',
+            }}
+          >
             <p style={{ fontSize: 13, color: 'var(--color-danger)', fontWeight: 600 }}>
               {errors.submit}
             </p>
@@ -766,7 +1050,9 @@ function Field({ label, error, children }) {
   return (
     <div className="input-group">
       <label className="input-label">{label}</label>
+
       {children}
+
       {error && (
         <p style={{ fontSize: 12, color: 'var(--color-danger)', marginTop: 2 }}>
           {error}
