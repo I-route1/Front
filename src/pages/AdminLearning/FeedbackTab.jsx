@@ -80,7 +80,7 @@ export default function FeedbackTab() {
     }
   }
   
-  const selectedStudentInfo = STUDENTS.find(s => s.id === Number(selectedStudent))
+  const selectedStudentInfo = STUDENTS.find(s => String(s.id) === String(selectedStudent))
   
   // 필터된 학습 기록 (피드백 유무 기준)
   const withFeedback = activities.filter(a => a.instructorFeedback)
