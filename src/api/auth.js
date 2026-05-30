@@ -1,6 +1,62 @@
 import { apiCall } from './client'
 
 export const authAPI = {
+  login({ email, password }) {
+    return apiCall('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    })
+  },
+
+  logout(refreshToken) {
+    return apiCall('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({
+        refreshToken,
+      }),
+    })
+  },
+
+  refreshToken(refreshToken) {
+    return apiCall('/api/auth/token/refresh', {
+      method: 'POST',
+      body: JSON.stringify({
+        refreshToken,
+      }),
+    })
+  },
+
+  sendPasswordResetEmail(email) {
+    return apiCall('/api/auth/password/reset/send', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+      }),
+    })
+  },
+
+  resetPassword({ token, newPassword }) {
+    return apiCall('/api/auth/password/reset', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        token,
+        newPassword,
+      }),
+    })
+  },
+
+  findEmailByPhone(phoneNumber) {
+    return apiCall('/api/auth/find/email', {
+      method: 'POST',
+      body: JSON.stringify({
+        phoneNumber,
+      }),
+    })
+  },
+
   sendEmailVerification(email) {
     return apiCall('/api/auth/email/send', {
       method: 'POST',

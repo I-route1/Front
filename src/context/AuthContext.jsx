@@ -1,28 +1,29 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { authAPI } from '@/api'
 
 export const USER_ROLES = {
-  PARENT:  'PARENT',
+  PARENT: 'PARENT',
   ACADEMY: 'ACADEMY',
   TEACHER: 'TEACHER',
-  ADMIN:   'ADMIN',
-  DRIVER:  'DRIVER',
+  ADMIN: 'ADMIN',
+  DRIVER: 'DRIVER',
   STUDENT: 'STUDENT',
 }
 
 // role 정규화: 소문자/한글/대문자 모두 통일
 export const normalizeRole = (role) => {
   if (!role) return USER_ROLES.STUDENT
-  
+
   const koreanMap = {
     '학부모': USER_ROLES.PARENT,
-    '학원':   USER_ROLES.ACADEMY,
-    '기사':   USER_ROLES.DRIVER,
+    '학원': USER_ROLES.ACADEMY,
+    '기사': USER_ROLES.DRIVER,
     '기사님': USER_ROLES.DRIVER,
     '관리자': USER_ROLES.ADMIN,
-    '학생':   USER_ROLES.STUDENT,
+    '학생': USER_ROLES.STUDENT,
   }
   if (koreanMap[role]) return koreanMap[role]
-  
+
   return String(role).toUpperCase()
 }
 
@@ -31,10 +32,10 @@ export const isAcademy = (role) => {
   const r = normalizeRole(role)
   return [USER_ROLES.ACADEMY, USER_ROLES.TEACHER, USER_ROLES.ADMIN].includes(r)
 }
-export const isParent  = (role) => normalizeRole(role) === USER_ROLES.PARENT
-export const isDriver  = (role) => normalizeRole(role) === USER_ROLES.DRIVER
+export const isParent = (role) => normalizeRole(role) === USER_ROLES.PARENT
+export const isDriver = (role) => normalizeRole(role) === USER_ROLES.DRIVER
 export const isStudent = (role) => normalizeRole(role) === USER_ROLES.STUDENT
-export const isAdmin   = (role) => normalizeRole(role) === USER_ROLES.ADMIN
+export const isAdmin = (role) => normalizeRole(role) === USER_ROLES.ADMIN
 
 // role별 기본 페이지
 export function getDefaultRoute(role) {
@@ -48,7 +49,7 @@ export function getDefaultRoute(role) {
 
 const AuthContext = createContext(null)
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
+
 
 const MOCK_PASSWORD = '1234'
 const MOCK_USERS = {
@@ -95,7 +96,7 @@ const MOCK_USERS = {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null)
+  const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -114,37 +115,34 @@ export function AuthProvider({ children }) {
 
   const loginWithCredentials = async (username, password) => {
     const normalizedUsername = username.trim()
+
     if (!normalizedUsername || !password) {
       throw new Error('아이디 또는 비밀번호가 올바르지 않습니다')
     }
 
-    // mock 계정 우선 체크
     if (MOCK_USERS[normalizedUsername] && password === MOCK_PASSWORD) {
       saveUser(MOCK_USERS[normalizedUsername])
       return
     }
 
-    // 실제 백엔드 로그인
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedUsername, password }),
+      const data = await authAPI.login({
+        email: normalizedUsername,
+        password,
       })
-      if (!res.ok) throw new Error('아이디 또는 비밀번호가 올바르지 않습니다')
-      const data = await res.json()
-      
+
       saveUser({
         id: data.userId,
         name: data.nickname,
-        role: data.role,
+        nickname: data.nickname,
+        role: data.role || USER_ROLES.PARENT,
         token: data.accessToken,
         refreshToken: data.refreshToken,
         username: normalizedUsername,
         email: normalizedUsername,
       })
     } catch (e) {
-      throw new Error(e.message || '로그인에 실패했습니다')
+      throw new Error(e.message || '아이디 또는 비밀번호가 올바르지 않습니다')
     }
   }
 
