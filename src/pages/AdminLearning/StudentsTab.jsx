@@ -32,7 +32,7 @@ export default function StudentsTab() {
     })
   }, [user?.id])
   
-  const GRADE_ORDER = ['초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3']
+  const GRADE_ORDER = ['초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3']
 
   const grades = [
     '전체',

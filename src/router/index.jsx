@@ -23,6 +23,7 @@ import Board from '@/pages/Board'
 import BoardDetail from '@/pages/BoardDetail'
 import BoardWrite from '@/pages/BoardWrite'
 import BoardEdit from '@/pages/BoardEdit'
+import Notifications from '@/pages/Notifications'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -64,6 +65,7 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      { path: 'notifications', element: <Notifications /> },
     ],
   },
 
