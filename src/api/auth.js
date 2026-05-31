@@ -3,11 +3,11 @@ import { apiCall } from './client'
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
 
 export const authAPI = {
-  login({ email, password }) {
+    login({ username, password }) {
     return apiCall('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({
-        email,
+        username,
         password,
       }),
     })
