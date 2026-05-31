@@ -38,7 +38,7 @@ export default function PatternTab() {
   const [metaResult, setMetaResult]     = useState(null)
   const [metaLoading, setMetaLoading]   = useState(false)
 
-  // 🆕 강점 분석
+  // 강점 분석
   const [strengths, setStrengths] = useState(null)
   const [strengthsLoading, setStrengthsLoading] = useState(true)
 
@@ -289,7 +289,7 @@ export default function PatternTab() {
       {/* 강점/약점 영역 */}
       <div style={{ margin:'12px 16px 16px', display:'flex', flexDirection:'column', gap:12 }}>
 
-        {/* 🆕 안정적인 강점 영역 - API 연동 */}
+        {/* 안정적인 강점 영역 - API 연동 */}
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>💪 안정적인 강점 영역</p>
 

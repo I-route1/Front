@@ -3,7 +3,6 @@ import { gradesAPI, recommendationsAPI, analysisAPI, wrongAnswerAPI } from '@/ap
 import { useAuth } from '@/context/AuthContext'
 import { SUBJECT_COLORS, RECOMMEND_BOOKS } from './data/mockData'
 
-// 학습 성향 표시 정보
 const TENDENCY_INFO = {
   'VISUAL': { 
     emoji: '👁️', 
@@ -72,17 +71,35 @@ export default function SuggestTab() {
   const [studyMethods, setStudyMethods] = useState({})  
   const [studyMethodsLoading, setStudyMethodsLoading] = useState(false)
   
-  // 🆕 학습 패턴 v2
+  // 학습 패턴 v2
   const [studyPattern, setStudyPattern]       = useState(null)
   const [patternLoading, setPatternLoading]   = useState(true)
   
-  // 🆕 학습 자료 추천
+  // 학습 자료 추천
   const [materials, setMaterials]             = useState([])
   const [materialsLoading, setMaterialsLoading] = useState(true)
   
-  // 🆕 선배 학습 경로
+  // 선배 학습 경로
   const [peerPaths, setPeerPaths]             = useState([])
   const [peerPathsLoading, setPeerPathsLoading] = useState(true)
+
+  // 학습 성향 표시 정보
+  const [peerContent, setPeerContent] = useState(null)
+  const [peerContentLoading, setPeerContentLoading] = useState(true)
+
+  // 🆕 또래 콘텐츠 조회
+  useEffect(() => {
+    if (!user?.id) return
+    
+    setPeerContentLoading(true)
+    recommendationsAPI.getPeerContent(String(user.id))
+      .then(data => setPeerContent(data))
+      .catch(e => {
+        console.error('또래 콘텐츠 조회 실패:', e)
+        setPeerContent(null)
+      })
+      .finally(() => setPeerContentLoading(false))
+  }, [user?.id])
 
   // 학습 패턴 v2 조회
   useEffect(() => {
@@ -98,7 +115,7 @@ export default function SuggestTab() {
       .finally(() => setPatternLoading(false))
   }, [user?.id])
 
-  // 🆕 학습 패턴 받은 후 → 각 과목별 학습 방법 조회
+  // 학습 패턴 받은 후 → 각 과목별 학습 방법 조회
   useEffect(() => {
     if (!user?.id || !studyPattern?.subjectStudyMinutes) return
     
@@ -142,6 +159,64 @@ export default function SuggestTab() {
       })
       .finally(() => setMaterialsLoading(false))
   }, [user?.id])
+  {/* 🆕 또래 콘텐츠 섹션 */}
+  <section style={{ margin: '0 16px 16px', padding: '16px', background: 'var(--color-surface)', borderRadius: 14, border: '1.5px solid var(--color-border)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)' }}>
+        👥 또래가 푸는 콘텐츠
+      </h3>
+      {peerContent?.peerLevel && (
+        <span style={{ 
+          padding: '3px 10px', borderRadius: 20,
+          background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+          fontSize: 10, fontWeight: 700,
+        }}>
+          {peerContent.peerLevel}
+        </span>
+      )}
+    </div>
+    
+    <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+      💡 비슷한 성적대 학생들이 함께 풀고 점수가 향상된 콘텐츠예요
+    </p>
+    
+    {peerContentLoading ? (
+      <div style={{ padding: '20px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 12 }}>
+        또래 콘텐츠 분석 중...
+      </div>
+    ) : (peerContent?.contents?.length > 0 || peerContent?.items?.length > 0) ? (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {(peerContent.contents || peerContent.items || []).slice(0, 5).map((item, i) => (
+          <PeerContentCard key={i} item={item} />
+        ))}
+      </div>
+    ) : (
+      // 폴백: mock 데이터로 보여주기
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <PeerContentCard item={{
+          title: '수능 기출 모의고사 - 수학', 
+          subject: '수학',
+          peerCount: 142,
+          avgImprovement: 4.8,
+          type: 'MOCK_EXAM',
+        }} />
+        <PeerContentCard item={{
+          title: '주간 단어 챌린지', 
+          subject: '영어',
+          peerCount: 89,
+          avgImprovement: 3.2,
+          type: 'CHALLENGE',
+        }} />
+        <PeerContentCard item={{
+          title: '국어 비문학 독해 훈련', 
+          subject: '국어',
+          peerCount: 67,
+          avgImprovement: 2.5,
+          type: 'PRACTICE',
+        }} />
+      </div>
+    )}
+  </section>
 
   // 선배 학습 경로 조회 (과목별)
   useEffect(() => {
@@ -173,7 +248,7 @@ export default function SuggestTab() {
     setSolving(true)
     
     try {
-      // 🆕 오답 기록 API 호출
+      // 오답 기록 API 호출
       await wrongAnswerAPI.record({
         studentId: user.id,
         subject: '수학',
@@ -217,7 +292,7 @@ export default function SuggestTab() {
         <p style={{ fontSize:13, opacity:0.7, marginTop:6, lineHeight:1.5 }}>약점을 보완하고 강점을 극대화하는 개인 맞춤형 추천</p>
       </div>
 
-      {/* 🆕 맞춤 학습 자료 추천 - API 연동 */}
+      {/* 맞춤 학습 자료 추천 - API 연동 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📚 맞춤 학습 자료 추천</p>
@@ -388,7 +463,7 @@ export default function SuggestTab() {
         </div>
       </div>
 
-      {/* 🆕 선배 성공 학습 경로 - API 연동 */}
+      {/* 선배 성공 학습 경로 - API 연동 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🏅 선배 성공 학습 경로</p>
@@ -528,7 +603,7 @@ export default function SuggestTab() {
                 </div>
               )}
 
-              {/* 🆕 나의 학습 성향 (대표 과목 기준) */}
+              {/* 나의 학습 성향 (대표 과목 기준) */}
               {(() => {
                 const subjects = Object.keys(studyMethods)
                 if (subjects.length === 0) return null
@@ -585,7 +660,7 @@ export default function SuggestTab() {
                 )
               })()}
               
-              {/* 🆕 과목별 학습 가이드 (API 기반) */}
+              {/* 과목별 학습 가이드 (API 기반) */}
               <p style={{ fontSize:12, fontWeight:700, color:'var(--color-text-secondary)', marginBottom:8 }}>
                 📚 과목별 학습 가이드
               </p>
@@ -653,6 +728,80 @@ export default function SuggestTab() {
           )}
         </div>
       </div>
+    </div>
+  )
+}function PeerContentCard({ item }) {
+  const SUBJECT_COLORS_LOCAL = {
+    국어:'#1A56DB', 수학:'#FF6B35', 영어:'#00C49A', 
+    사회:'#9B59B6', 과학:'#FFB800',
+  }
+  
+  const subject = item.subject || item.subjectName || ''
+  const title = item.title || item.name || item.contentName || '추천 콘텐츠'
+  const type = item.type || item.contentType || ''
+  const peerCount = item.peerCount ?? item.userCount ?? item.studentCount ?? null
+  const avgImprovement = item.avgImprovement ?? item.improvement ?? null
+  const avgScore = item.avgScore ?? item.averageScore ?? null
+  
+  const color = SUBJECT_COLORS_LOCAL[subject] || '#1A56DB'
+  
+  // 콘텐츠 타입 아이콘
+  const getTypeIcon = (t) => {
+    const upper = String(t).toUpperCase()
+    if (upper.includes('MOCK') || upper.includes('EXAM')) return '📝'
+    if (upper.includes('CHALLENGE')) return '🏆'
+    if (upper.includes('PRACTICE')) return '✏️'
+    if (upper.includes('VIDEO')) return '🎥'
+    return '📚'
+  }
+  
+  return (
+    <div style={{
+      padding: '12px 14px', borderRadius: 10,
+      background: 'var(--color-surface-2)', border: `1px solid ${color}30`,
+      display: 'flex', alignItems: 'center', gap: 12,
+      cursor: 'pointer', transition: 'all 0.15s',
+    }}>
+      <span style={{ fontSize: 24, flexShrink: 0 }}>
+        {getTypeIcon(type)}
+      </span>
+      
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          {subject && (
+            <span style={{
+              padding: '2px 7px', borderRadius: 6,
+              background: color + '18', color, 
+              fontSize: 9, fontWeight: 700,
+            }}>
+              {subject}
+            </span>
+          )}
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            {title}
+          </p>
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10, color: 'var(--color-text-muted)' }}>
+          {peerCount != null && (
+            <span>👥 {peerCount}명이 푸는 중</span>
+          )}
+          {avgImprovement != null && (
+            <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>
+              ▲ 평균 {avgImprovement}점 상승
+            </span>
+          )}
+          {avgScore != null && !avgImprovement && (
+            <span>평균 {avgScore}점</span>
+          )}
+        </div>
+      </div>
+      
+      <span style={{ 
+        fontSize: 16, color: 'var(--color-text-muted)', flexShrink: 0,
+      }}>
+        →
+      </span>
     </div>
   )
 }

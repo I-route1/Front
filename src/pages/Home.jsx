@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import DriverBoardingList from '@/pages/DriverBoardingList'
+import TodayReviewWidget from '@/components/home/TodayReviewWidget'
 
 export default function Home() {
   const { user, role } = useAuth()
@@ -167,6 +168,10 @@ if (role === USER_ROLES.ADMIN) {
         </div>
       </section>
 
+      <div className="divider" />
+      
+      {/* 오늘의 복습 */}
+      <TodayReviewWidget studentId={user?.children?.[0]?.id || user?.id} />
       <div className="divider" />
 
       {/* 오늘의 일정 */}
