@@ -441,6 +441,13 @@ export default function Profile() {
 
 const SETTINGS = [
   {
+    title: '구독 / 결제',
+    items: [
+      { icon: '💳', label: '요금제 구독', color: '#1A56DB', to: '/payment' },
+      { icon: '📜', label: '결제 내역', color: '#9B59B6', to: '/payment/history' },
+    ],
+  },
+  {
     title: '알림 설정',
     items: [
       { icon: '🔔', label: '푸시 알림', color: '#1A56DB' },
