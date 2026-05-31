@@ -106,9 +106,15 @@ export default function Payment() {
       const TossPayments = await loadTossSDK()
       const origin = window.location.origin
 
+      const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY
+      if (!clientKey) {
+        setError('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.')
+        return
+      }
+
       if (!selectedOption.subscription) {
         const order = await paymentAPI.createOrder(selectedKey)
-        const toss = TossPayments(order.clientKey)
+        const toss = TossPayments(clientKey)
         await toss.requestPayment('카드', {
           amount: order.amount,
           orderId: order.orderId,
@@ -118,11 +124,6 @@ export default function Payment() {
           failUrl: `${origin}/payment/fail`,
         })
       } else {
-        const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY
-        if (!clientKey) {
-          setError('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.')
-          return
-        }
         sessionStorage.setItem('toss-billing-plan', selectedKey)
         const toss = TossPayments(clientKey)
         await toss.requestBillingAuth('카드', {
