@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { boardAPI } from '../api'
 
-const BOARD_STORAGE_KEY = 'i-route-board-posts'
+const DEFAULT_TABS = ['전체', '즐겨찾기']
 
-const DEFAULT_POSTS = [
+const FALLBACK_POSTS = [
   {
     id: 'post-001',
+    boardId: 1,
     category: '공지',
     title: '5월 등원 차량 운행 시간 안내',
     author: '아이루트 운영팀',
     content: '5월부터 일부 노선의 등원 차량 운행 시간이 조정됩니다. 자세한 내용은 학원별 공지사항을 확인해 주세요.',
     createdAt: '오늘 11:20',
+    updatedAt: null,
     views: 32,
     likes: 4,
     comments: 2,
@@ -19,11 +22,13 @@ const DEFAULT_POSTS = [
   },
   {
     id: 'post-002',
+    boardId: 2,
     category: '자유',
     title: '오늘 영어학원 하원 시간이 조금 늦어졌나요?',
     author: '홍길동 학부모',
     content: '오늘 영어학원 하원 알림이 평소보다 늦게 온 것 같아서 확인 차 글 남깁니다.',
     createdAt: '오늘 10:05',
+    updatedAt: null,
     views: 18,
     likes: 1,
     comments: 3,
@@ -32,11 +37,13 @@ const DEFAULT_POSTS = [
   },
   {
     id: 'post-003',
+    boardId: 3,
     category: '질문',
     title: '학습 리포트는 언제 업데이트되나요?',
     author: '김민지 학부모',
     content: '주간 학습 리포트가 아직 보이지 않는데 업데이트 시간이 정해져 있는지 궁금합니다.',
     createdAt: '어제 16:00',
+    updatedAt: null,
     views: 24,
     likes: 2,
     comments: 1,
@@ -45,11 +52,13 @@ const DEFAULT_POSTS = [
   },
   {
     id: 'post-004',
+    boardId: 4,
     category: '건의',
     title: '지도 화면에서 정류장 이름이 더 크게 보이면 좋겠습니다',
     author: '이서준 학부모',
     content: '실시간 위치를 볼 때 정류장명이 작게 보여서 조금 더 크게 표시되면 좋겠습니다.',
     createdAt: '3일 전',
+    updatedAt: null,
     views: 41,
     likes: 7,
     comments: 4,
@@ -58,48 +67,175 @@ const DEFAULT_POSTS = [
   },
 ]
 
-const TABS = ['전체', '즐겨찾기', '공지', '자유', '질문', '건의']
+const FALLBACK_BOARDS = [
+  {
+    id: 1,
+    name: '공지',
+    description: '공지사항 게시판',
+    postCount: 1,
+    createdAt: '',
+    createdBy: '아이루트 운영팀',
+  },
+  {
+    id: 2,
+    name: '자유',
+    description: '자유게시판',
+    postCount: 1,
+    createdAt: '',
+    createdBy: '아이루트 운영팀',
+  },
+  {
+    id: 3,
+    name: '질문',
+    description: '질문 게시판',
+    postCount: 1,
+    createdAt: '',
+    createdBy: '아이루트 운영팀',
+  },
+  {
+    id: 4,
+    name: '건의',
+    description: '건의 게시판',
+    postCount: 1,
+    createdAt: '',
+    createdBy: '아이루트 운영팀',
+  },
+]
 
-function normalizePosts(posts) {
-  return posts.map((post) => ({
-    ...post,
-    favorite: !!post.favorite,
-  }))
+function normalizeBoard(rawBoard) {
+  return {
+    id: rawBoard.id ?? rawBoard.boardId,
+    name: rawBoard.name ?? rawBoard.title ?? '게시판',
+    description: rawBoard.description ?? '',
+    postCount: rawBoard.postCount ?? 0,
+    createdAt: rawBoard.createdAt ?? '',
+    createdBy: rawBoard.createdBy ?? '',
+  }
 }
 
-function getStoredPosts() {
-  const saved = localStorage.getItem(BOARD_STORAGE_KEY)
+function normalizePost(rawPost, board) {
+  const boardName = board?.name ?? rawPost.boardName ?? rawPost.category ?? '게시판'
 
-  if (!saved) {
-    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(DEFAULT_POSTS))
-    return DEFAULT_POSTS
+  return {
+    id: rawPost.id ?? rawPost.postId,
+    boardId: rawPost.boardId ?? board?.id,
+    category: rawPost.category ?? boardName,
+    title: rawPost.title ?? rawPost.name ?? '제목 없음',
+    author: rawPost.author ?? rawPost.createdBy ?? rawPost.writer ?? rawPost.nickname ?? '작성자',
+    content: rawPost.content ?? rawPost.description ?? '',
+    createdAt: formatDate(rawPost.createdAt),
+    updatedAt: rawPost.updatedAt ? formatDate(rawPost.updatedAt) : null,
+    views: rawPost.views ?? rawPost.viewCount ?? rawPost.hitCount ?? 0,
+    likes: rawPost.likes ?? rawPost.likeCount ?? 0,
+    comments: rawPost.comments ?? rawPost.commentCount ?? 0,
+    pinned: !!rawPost.pinned,
+    favorite: !!(rawPost.favorite ?? rawPost.bookmarked ?? rawPost.isBookmarked),
+  }
+}
+
+function formatDate(value) {
+  if (!value) return ''
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
   }
 
-  try {
-    const parsed = JSON.parse(saved)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-    if (!Array.isArray(parsed)) {
-      localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(DEFAULT_POSTS))
-      return DEFAULT_POSTS
-    }
+  if (diffMinutes < 1) return '방금 전'
+  if (diffMinutes < 60) return `${diffMinutes}분 전`
+  if (diffHours < 24) return `${diffHours}시간 전`
+  if (diffDays === 1) return '어제'
+  if (diffDays < 7) return `${diffDays}일 전`
 
-    const normalizedPosts = normalizePosts(parsed)
-    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(normalizedPosts))
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
 
-    return normalizedPosts
-  } catch {
-    localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(DEFAULT_POSTS))
-    return DEFAULT_POSTS
-  }
+  return `${year}.${month}.${day}`
 }
 
 export default function Board() {
   const navigate = useNavigate()
+
   const [activeTab, setActiveTab] = useState('전체')
   const [keyword, setKeyword] = useState('')
-  const [posts] = useState(getStoredPosts)
+  const [boards, setBoards] = useState([])
+  const [posts, setPosts] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [noticeMessage, setNoticeMessage] = useState('')
+
+  useEffect(() => {
+    let ignore = false
+
+    async function fetchBoardData() {
+      try {
+        setIsLoading(true)
+        setNoticeMessage('')
+
+        const boardsResponse = await boardAPI.getBoards()
+        const boardList = Array.isArray(boardsResponse)
+          ? boardsResponse.map(normalizeBoard)
+          : []
+
+        const postResults = await Promise.allSettled(
+          boardList.map(async (board) => {
+            const postsResponse = await boardAPI.getPostsByBoard(board.id)
+
+            if (!Array.isArray(postsResponse)) {
+              return []
+            }
+
+            return postsResponse.map((post) => normalizePost(post, board))
+          }),
+        )
+
+        const mergedPosts = postResults.flatMap((result) => {
+          if (result.status !== 'fulfilled') {
+            return []
+          }
+
+          return result.value
+        })
+
+        if (!ignore) {
+          setBoards(boardList)
+          setPosts(mergedPosts)
+        }
+      } catch (error) {
+        if (!ignore) {
+          setBoards(FALLBACK_BOARDS)
+          setPosts(FALLBACK_POSTS)
+          setNoticeMessage('백엔드 API 연결 전이라 임시 게시글로 표시 중입니다.')
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    fetchBoardData()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const tabs = useMemo(() => {
+    const boardTabs = boards.map((board) => board.name).filter(Boolean)
+    return [...DEFAULT_TABS, ...boardTabs]
+  }, [boards])
 
   const filteredPosts = useMemo(() => {
+    const lowerKeyword = keyword.trim().toLowerCase()
+
     return posts.filter((post) => {
       const matchedTab =
         activeTab === '전체' ||
@@ -107,9 +243,10 @@ export default function Board() {
         post.category === activeTab
 
       const matchedKeyword =
-        post.title.toLowerCase().includes(keyword.toLowerCase()) ||
-        post.content.toLowerCase().includes(keyword.toLowerCase()) ||
-        post.author.toLowerCase().includes(keyword.toLowerCase())
+        !lowerKeyword ||
+        post.title.toLowerCase().includes(lowerKeyword) ||
+        post.content.toLowerCase().includes(lowerKeyword) ||
+        post.author.toLowerCase().includes(lowerKeyword)
 
       return matchedTab && matchedKeyword
     })
@@ -166,7 +303,7 @@ export default function Board() {
           borderBottom: '1px solid var(--color-border)',
         }}
       >
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -185,6 +322,23 @@ export default function Board() {
         ))}
       </div>
 
+      {noticeMessage && (
+        <div
+          style={{
+            margin: '12px 16px 0',
+            padding: '10px 12px',
+            borderRadius: 12,
+            background: '#fff7ed',
+            color: '#c2410c',
+            fontSize: 12,
+            fontWeight: 700,
+            lineHeight: 1.5,
+          }}
+        >
+          {noticeMessage}
+        </div>
+      )}
+
       <section
         className="section"
         style={{
@@ -192,7 +346,13 @@ export default function Board() {
           paddingBottom: 96,
         }}
       >
-        {filteredPosts.length === 0 ? (
+        {isLoading ? (
+          <div className="empty-state">
+            <span className="empty-state__icon">⏳</span>
+            <p className="empty-state__title">게시글을 불러오는 중입니다</p>
+            <p className="empty-state__desc">잠시만 기다려 주세요.</p>
+          </div>
+        ) : filteredPosts.length === 0 ? (
           <div className="empty-state">
             <span className="empty-state__icon">📭</span>
             <p className="empty-state__title">게시글이 없습니다</p>
