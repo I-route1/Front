@@ -77,6 +77,12 @@ export const authAPI = {
     })
   },
 
+    verifyEmail(token) {
+    return apiCall(`/api/auth/email/verify?token=${encodeURIComponent(token)}`, {
+      method: 'GET',
+    })
+  },
+
   checkDuplicate(type, value) {
     return apiCall('/api/auth/check', {
       method: 'POST',
