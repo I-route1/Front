@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { authAPI } from '@/api'
 
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const token = searchParams.get('token') || ''
 
   const [form, setForm] = useState({
     newPassword: '',
@@ -30,6 +33,10 @@ export default function ResetPassword() {
 
   const validate = () => {
     const nextErrors = {}
+
+    if (!token) {
+      nextErrors.submit = '비밀번호 재설정 토큰이 없습니다. 이메일의 재설정 링크로 다시 접속해 주세요.'
+    }
 
     if (!form.newPassword) {
       nextErrors.newPassword = '새 비밀번호를 입력해 주세요'
@@ -57,22 +64,19 @@ export default function ResetPassword() {
     setLoading(true)
 
     try {
-      // TODO: POST /api/auth/password/reset
-      // request body 예시:
-      // {
-      //   resetToken: 'email-link-token',
-      //   newPassword: form.newPassword
-      // }
-      await new Promise((resolve) => setTimeout(resolve, 800))
+      await authAPI.resetPassword({
+        token,
+        newPassword: form.newPassword,
+      })
 
       setSuccess(true)
 
       setTimeout(() => {
         navigate('/login', { replace: true })
       }, 1600)
-    } catch {
+    } catch (error) {
       setErrors({
-        submit: '비밀번호 재설정에 실패했습니다. 다시 시도해 주세요.',
+        submit: error.message || '비밀번호 재설정에 실패했습니다. 다시 시도해 주세요.',
       })
     } finally {
       setLoading(false)
@@ -104,6 +108,7 @@ export default function ResetPassword() {
         </Link>
 
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>비밀번호 재설정</h1>
+
         <p style={{ fontSize: 13, opacity: 0.75, marginTop: 6 }}>
           새로운 비밀번호를 입력해 주세요.
         </p>
@@ -129,13 +134,30 @@ export default function ResetPassword() {
               <p style={{ fontSize: 13, color: 'var(--color-primary)', fontWeight: 700 }}>
                 비밀번호 규칙
               </p>
+
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.6 }}>
                 영문, 숫자, 특수문자를 포함하여 8자 이상 입력해 주세요.
               </p>
             </div>
 
+            {!token && (
+              <div
+                style={{
+                  background: '#FFF4DB',
+                  border: '1px solid #FFD88A',
+                  borderRadius: 10,
+                  padding: '12px 14px',
+                }}
+              >
+                <p style={{ fontSize: 13, color: '#9A6100', fontWeight: 600, lineHeight: 1.5 }}>
+                  재설정 토큰이 없습니다. 이메일로 받은 비밀번호 재설정 링크를 통해 접속해 주세요.
+                </p>
+              </div>
+            )}
+
             <div className="input-group">
               <label className="input-label">새 비밀번호</label>
+
               <input
                 className="input-field"
                 type="password"
@@ -144,6 +166,7 @@ export default function ResetPassword() {
                 placeholder="영문·숫자·특수문자 포함 8자 이상"
                 style={{ borderColor: errors.newPassword ? 'var(--color-danger)' : '' }}
               />
+
               {errors.newPassword && (
                 <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
                   {errors.newPassword}
@@ -153,6 +176,7 @@ export default function ResetPassword() {
 
             <div className="input-group">
               <label className="input-label">새 비밀번호 확인</label>
+
               <input
                 className="input-field"
                 type="password"
@@ -209,12 +233,12 @@ export default function ResetPassword() {
 
             <button
               onClick={handleResetPassword}
-              disabled={loading}
+              disabled={loading || !token}
               className="btn btn--primary btn--full"
               style={{
                 padding: 15,
-                opacity: loading ? 0.65 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading || !token ? 0.65 : 1,
+                cursor: loading || !token ? 'not-allowed' : 'pointer',
               }}
             >
               {loading ? '재설정 중...' : '비밀번호 재설정'}
