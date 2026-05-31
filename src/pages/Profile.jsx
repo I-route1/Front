@@ -16,10 +16,10 @@ export default function Profile() {
 
   const children = user?.children ?? []
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login', { replace: true })
-  }
+  const handleLogout = async () => {
+  await logout()
+  navigate('/login', { replace: true })
+}
 
   const handleMenuClick = (item) => {
     if (item.to) {

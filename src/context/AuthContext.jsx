@@ -198,10 +198,20 @@ export function AuthProvider({ children }) {
     return true
   }
 
-  const logout = () => {
+  const logout = async () => {
+  const refreshToken = user?.refreshToken
+
+  try {
+    if (refreshToken) {
+      await authAPI.logout(refreshToken)
+    }
+  } catch (error) {
+    console.warn('로그아웃 API 호출에 실패했지만 프론트 로그아웃은 진행합니다.', error)
+  } finally {
     setUser(null)
     sessionStorage.removeItem('i-route-user')
   }
+}
 
   return (
     <AuthContext.Provider value={{
