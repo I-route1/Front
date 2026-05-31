@@ -146,14 +146,26 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const loginWithKakao = async () => {
-    await new Promise(resolve => setTimeout(resolve, 500))
+    const loginWithKakao = async () => {
+    window.location.href = authAPI.getSocialLoginUrl('kakao')
+  }
+
+  const loginWithSocialToken = async (data, provider = 'kakao') => {
+    if (!data?.accessToken) {
+      throw new Error('소셜 로그인 토큰을 받지 못했습니다')
+    }
+
     saveUser({
-      id: 'kakao-001', name: '홍길동', role: USER_ROLES.PARENT,
-      username: 'kakao_user', email: 'kakao@iroute.com',
-      phone: '010-1234-5678', avatar: null,
-      children: [{ id: 'child-001', name: '홍민준', grade: '초6' }],
-      token: null,
+      id: data.userId,
+      name: data.nickname ?? `${provider} 사용자`,
+      nickname: data.nickname ?? `${provider} 사용자`,
+      role: data.role || USER_ROLES.PARENT,
+      token: data.accessToken,
+      refreshToken: data.refreshToken,
+      username: `${provider}_${data.userId}`,
+      email: data.email ?? '',
+      provider,
+      isNewUser: !!data.isNewUser,
     })
   }
 
@@ -218,8 +230,9 @@ export function AuthProvider({ children }) {
       user, loading,
       isLoggedIn: !!user,
       role: user?.role ?? null,
-      loginWithCredentials,
+            loginWithCredentials,
       loginWithKakao,
+      loginWithSocialToken,
       updateUser,
       changePassword,
       reissueToken,

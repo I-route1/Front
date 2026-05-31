@@ -24,6 +24,7 @@ import BoardDetail from '@/pages/BoardDetail'
 import BoardWrite from '@/pages/BoardWrite'
 import BoardEdit from '@/pages/BoardEdit'
 import Notifications from '@/pages/Notifications'
+import OAuthCallback from '@/pages/OAuthCallback'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -32,8 +33,11 @@ export const router = createBrowserRouter([
   { path: '/find-id', element: <FindId /> },
   { path: '/find-password', element: <FindPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
+    { path: '/oauth/callback', element: <OAuthCallback /> },
+  { path: '/oauth/callback/:provider', element: <OAuthCallback /> },
   { path: '/driver/boarding', element: <DriverBoardingList /> },
   { path: '/driver/map', element: <DriverMapPage /> },
+
 
   // 로그인 필요 페이지
   {
