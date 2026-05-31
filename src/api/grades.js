@@ -32,4 +32,19 @@ export const gradesAPI = {
     }),
   // 요청 형식:
   // { studentId, score, allScores: [], weakConceptTag }
+
+  // 1-5. 성적 수정
+  // PATCH /api/grades/{gradeId}
+  updateGrade: (gradeId, data) =>
+    apiCall(`/api/grades/${gradeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // 1-6. 성적 삭제
+  // DELETE /api/grades/{gradeId}
+  deleteGrade: (gradeId) =>
+    apiCall(`/api/grades/${gradeId}`, {
+      method: 'DELETE',
+    }),
 }

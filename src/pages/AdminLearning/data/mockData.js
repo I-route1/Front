@@ -5,7 +5,7 @@ export const SUBJECT_COLORS = {
 }
 
 export const STUDENTS = [
-  // 🆕 백엔드 실제 데이터 학생 (성적 오름차순으로 배치)
+  // 백엔드 실제 데이터 학생 (성적 오름차순으로 배치)
   { id:'S-1686', name:'김위험', grade:'고1', class:'A반', avgScore:55, trend:'▼', trendVal:-8,
     scores:{ 국어:60, 수학:45, 영어:50, 사회:55, 과학:65 }, risk:'high' },
   { id:'S-0155', name:'이보통', grade:'고1', class:'B반', avgScore:72, trend:'→', trendVal:0,
@@ -63,7 +63,7 @@ export const INIT_FEEDBACKS = [
 ]
 
 export const AI_REPORTS = {
-  // 🆕 백엔드 실제 학생 폴백 (API 실패 시)
+  // 백엔드 실제 학생 폴백 (API 실패 시)
   'S-1686': { summary:'성적 하락 추세가 명확하게 감지됩니다. 기초 학력 보강이 시급합니다.', strong:'과학 기초', weak:'수학, 영어 전반', recommend:'개별 맞춤 보충 학습 + 학부모 상담 진행 권장' },
   'S-0155': { summary:'평균적인 학습 수준으로 안정적입니다. 약점 과목 보완 시 상위권 진입 가능합니다.', strong:'영어, 과학', weak:'수학 응용', recommend:'수학 응용 문제 집중 훈련 4주 권장' },
   'S-KOR':  { summary:'전 과목 최상위권 유지 중입니다. 심화 학습 및 경시대회 준비 권장합니다.', strong:'전 과목 고른 강점', weak:'없음', recommend:'올림피아드/경시대회 심화반 추천' },
