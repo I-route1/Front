@@ -88,7 +88,7 @@ export default function Payment() {
         sessionStorage.setItem('toss-billing-plan', selectedPlan)
         const toss = TossPayments(clientKey)
         await toss.requestBillingAuth('카드', {
-          customerKey: String(user?.id ?? 'guest'),
+          customerKey: `customer_${user?.id ?? 'guest'}`,
           successUrl: `${origin}/payment/billing/success`,
           failUrl: `${origin}/payment/fail`,
         })
