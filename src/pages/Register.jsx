@@ -183,7 +183,7 @@ export default function Register() {
     return true
   }
 
-  const handleDuplicateCheck = async (type) => {
+    const handleDuplicateCheck = async (type) => {
     if (!validateDuplicateTarget(type)) return
 
     setDuplicateStatus((prev) => ({
@@ -192,41 +192,31 @@ export default function Register() {
     }))
 
     try {
-      const value = form[type]?.trim?.() ?? ''
+      let value = form[type]
 
-      if (type === 'username') {
-        await new Promise((resolve) => setTimeout(resolve, 400))
-
-        const isDuplicated =
-          value.toLowerCase() === 'admin' ||
-          value.toLowerCase() === 'test' ||
-          value.toLowerCase() === 'blacklist'
-
-        if (isDuplicated) {
-          setDuplicateStatus((prev) => ({
-            ...prev,
-            [type]: DUPLICATE_STATUS.INVALID,
-          }))
-
-          setErrors((prev) => ({
-            ...prev,
-            username: '이미 사용 중인 아이디입니다',
-          }))
-          return
-        }
-
-        setDuplicateStatus((prev) => ({
-          ...prev,
-          username: DUPLICATE_STATUS.VALID,
-        }))
-        return
+      if (typeof value === 'string') {
+        value = value.trim()
       }
 
-      const apiValue = type === 'phone' ? form.phone.replace(/\D/g, '') : value
+      if (type === 'phoneNumber') {
+        value = value.replace(/\D/g, '')
+      }
 
-      const data = await authAPI.checkDuplicate(type, apiValue)
+      if (type === 'phone') {
+        value = value.replace(/\D/g, '')
+      }
 
-      if (!data?.isAvailable) {
+      const apiType = type === 'phoneNumber' ? 'phone' : type
+
+      const res = await authAPI.checkDuplicate(apiType, value)
+
+      const data = res?.data ?? res
+
+      const isAvailable =
+        data?.isAvailable ??
+        !(data?.duplicate || data?.isDuplicate || data?.duplicated)
+
+      if (!isAvailable) {
         const label = getDuplicateLabel(type)
 
         setDuplicateStatus((prev) => ({
@@ -236,8 +226,9 @@ export default function Register() {
 
         setErrors((prev) => ({
           ...prev,
-          [type]: data?.message || `이미 사용 중인 ${label}입니다`,
+          [type]: res?.message || `이미 사용 중인 ${label}입니다`,
         }))
+
         return
       }
 

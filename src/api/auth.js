@@ -77,24 +77,13 @@ export const authAPI = {
     })
   },
 
-  checkDuplicate(type, value) {
-    const payload = {}
-
-    if (type === 'email') {
-      payload.email = value
-    }
-
-    if (type === 'nickname') {
-      payload.nickname = value
-    }
-
-    if (type === 'phone') {
-      payload.phone = value
-    }
-
+    checkDuplicate(type, value) {
     return apiCall('/api/auth/check', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        type,
+        value,
+      }),
     })
   },
 
