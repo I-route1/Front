@@ -37,7 +37,7 @@ export default function Register() {
     passwordConfirm: '',
     name: '',
     email: '',
-    phone: '',
+    phoneNumber: '',
     role: 'parent',
     staffType: 'academy',
     academyName: '',
@@ -59,7 +59,7 @@ export default function Register() {
     username: DUPLICATE_STATUS.IDLE,
     nickname: DUPLICATE_STATUS.IDLE,
     email: DUPLICATE_STATUS.IDLE,
-    phone: DUPLICATE_STATUS.IDLE,
+    phoneNumber: DUPLICATE_STATUS.IDLE,
   })
 
   const update = (key, val) => {
@@ -128,7 +128,7 @@ export default function Register() {
       }))
     }
 
-    if (key === 'username' || key === 'nickname' || key === 'phone') {
+    if (key === 'username' || key === 'nickname' || key === 'phoneNumber') {
       setDuplicateStatus((prev) => ({
         ...prev,
         [key]: DUPLICATE_STATUS.IDLE,
@@ -169,9 +169,9 @@ export default function Register() {
       }
     }
 
-    if (type === 'phone') {
-      if (form.phone.replace(/\D/g, '').length < 10) {
-        nextErrors.phone = '올바른 전화번호를 입력해 주세요'
+    if (type === 'phoneNumber') {
+      if (form.phoneNumber.replace(/\D/g, '').length < 10) {
+        nextErrors.phoneNumber = '올바른 전화번호를 입력해 주세요'
       }
     }
 
@@ -183,7 +183,7 @@ export default function Register() {
     return true
   }
 
-    const handleDuplicateCheck = async (type) => {
+  const handleDuplicateCheck = async (type) => {
     if (!validateDuplicateTarget(type)) return
 
     setDuplicateStatus((prev) => ({
@@ -198,23 +198,26 @@ export default function Register() {
         value = value.trim()
       }
 
+      // ✅ 전화번호는 숫자만
       if (type === 'phoneNumber') {
         value = value.replace(/\D/g, '')
       }
 
-      if (type === 'phone') {
-        value = value.replace(/\D/g, '')
-      }
 
-      const apiType = type === 'phoneNumber' ? 'phone' : type
+      console.log('type:', type)
+      console.log('value:', value)
 
-      const res = await authAPI.checkDuplicate(apiType, value)
+      // ✅ API 호출 (4개 공통)
+      const res = await authAPI.checkDuplicate(type, value)
 
       const data = res?.data ?? res
 
+      console.log('response data:', data)
+
       const isAvailable =
-        data?.isAvailable ??
-        !(data?.duplicate || data?.isDuplicate || data?.duplicated)
+          data?.isAvailable ??
+          !(data?.duplicate || data?.isDuplicate || data?.duplicated)
+
 
       if (!isAvailable) {
         const label = getDuplicateLabel(type)
@@ -228,10 +231,10 @@ export default function Register() {
           ...prev,
           [type]: res?.message || `이미 사용 중인 ${label}입니다`,
         }))
-
         return
       }
 
+      // ✅ 사용 가능
       setDuplicateStatus((prev) => ({
         ...prev,
         [type]: DUPLICATE_STATUS.VALID,
@@ -331,8 +334,8 @@ export default function Register() {
       e.email = '올바른 이메일을 입력해 주세요'
     }
 
-    if (form.phone.replace(/\D/g, '').length < 10) {
-      e.phone = '올바른 전화번호를 입력해 주세요'
+    if (form.phoneNumber.replace(/\D/g, '').length < 10) {
+      e.phoneNumber = '올바른 전화번호를 입력해 주세요'
     }
 
     if (duplicateStatus.username !== DUPLICATE_STATUS.VALID) {
@@ -347,8 +350,8 @@ export default function Register() {
       e.email = '이메일 중복 확인을 완료해 주세요'
     }
 
-    if (duplicateStatus.phone !== DUPLICATE_STATUS.VALID) {
-      e.phone = '휴대폰 번호 중복 확인을 완료해 주세요'
+    if (duplicateStatus.phoneNumber !== DUPLICATE_STATUS.VALID) {
+      e.phoneNumber = '휴대폰 번호 중복 확인을 완료해 주세요'
     }
 
     if (emailAuthStatus !== EMAIL_AUTH_STATUS.VERIFIED) {
@@ -425,7 +428,7 @@ export default function Register() {
         passwordConfirm: form.passwordConfirm,
         name: form.name.trim(),
         email: form.email.trim(),
-        phoneNumber: form.phone.replace(/\D/g, ''),
+        phoneNumber: form.phoneNumber.replace(/\D/g, ''),
       }
 
       if (form.role === 'parent') {
@@ -799,23 +802,24 @@ export default function Register() {
           )}
         </Field>
 
-        <Field label="전화번호" error={errors.phone}>
+        <Field label="전화번호" error={errors.phoneNumber}>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
-              className="input-field"
-              type="tel"
-              placeholder="010-0000-0000"
-              value={form.phone}
-              onChange={(event) => update('phone', formatPhone(event.target.value))}
+                className="input-field"
+                type="tel"
+                placeholder="010-0000-0000"
+                value={form.phoneNumber}
+                onChange={(event) =>
+                    update('phoneNumber', formatPhone(event.target.value))
+                }
             />
 
             <CheckButton
-              status={duplicateStatus.phone}
-              onClick={() => handleDuplicateCheck('phone')}
+                status={duplicateStatus.phoneNumber}
+                onClick={() => handleDuplicateCheck('phoneNumber')}
             />
           </div>
-
-          <StatusText status={duplicateStatus.phone} label="휴대폰 번호" />
+        <StatusText status={duplicateStatus.phoneNumber} label="휴대폰 번호" />
         </Field>
 
         {form.role === 'academy' && form.staffType === 'academy' && (
@@ -1104,7 +1108,7 @@ function getDuplicateLabel(type) {
   if (type === 'username') return '아이디'
   if (type === 'nickname') return '닉네임'
   if (type === 'email') return '이메일'
-  if (type === 'phone') return '휴대폰 번호'
+  if (type === 'phoneNumber') return '휴대폰 번호'
   return '값'
 }
 
