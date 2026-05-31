@@ -214,9 +214,24 @@ export default function Payment() {
                       </span>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      {/* 선택 라디오 버튼 */}
+                      <div
+                        style={{
+                          flexShrink: 0,
+                          width: 20, height: 20, borderRadius: '50%',
+                          border: selected ? 'none' : '2px solid var(--color-border)',
+                          background: selected ? 'var(--color-primary)' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'white', fontSize: 12, fontWeight: 700,
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {selected && '✓'}
+                      </div>
+
                       {/* 라벨 + 구독 뱃지 */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1 }}>
                         <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)' }}>
                           {option.label}
                         </p>
@@ -235,7 +250,7 @@ export default function Payment() {
                       </div>
 
                       {/* 가격 */}
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, flexShrink: 0 }}>
                         <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--color-text-primary)' }}>
                           {option.price.toLocaleString()}원
                         </span>
@@ -248,7 +263,7 @@ export default function Payment() {
                     </div>
 
                     {/* 혜택 목록 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 30 }}>
                       {option.features.map((f) => (
                         <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
                           <span style={{ color: 'var(--color-success)', flexShrink: 0 }}>✓</span>
@@ -257,18 +272,11 @@ export default function Payment() {
                       ))}
                     </div>
 
-                    {/* 선택 체크 */}
-                    {selected && (
+                    {/* 선택 체크 - 제거됨 (라디오 버튼으로 대체) */}
+                    {false && (
                       <div
-                        style={{
-                          position: 'absolute', top: 14, right: 14,
-                          width: 20, height: 20, borderRadius: '50%',
-                          background: 'var(--color-primary)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: 'white', fontSize: 12, fontWeight: 700,
-                        }}
+                        style={{}}
                       >
-                        ✓
                       </div>
                     )}
                   </button>
