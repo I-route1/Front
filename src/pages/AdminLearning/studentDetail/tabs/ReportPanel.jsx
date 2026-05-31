@@ -1,9 +1,18 @@
 import { useState } from 'react'
-import { counselingAPI } from '@/api'
+import { counselingAPI, studyPlanAPI } from '@/api'
 import { AI_REPORTS } from '../../data/mockData'
 
-// 리포트 종류 정의
 const REPORT_TYPES = [
+  {
+    id: 'reviewPaper',
+    title: '맞춤 복습 시험지',
+    description: '학생 약점 기반으로 시험지를 생성',
+    emoji: '📝',
+    color: '#00C49A',
+    api: 'getReviewPaper',
+    apiSource: 'studyPlan',
+    primary: true,
+  },
   {
     id: 'math',
     title: '수학 메타인지 리포트',
@@ -11,6 +20,7 @@ const REPORT_TYPES = [
     emoji: '🧮',
     color: '#1A56DB',
     api: 'getMathReport',
+    apiSource: 'counseling',
   },
   {
     id: 'writing',
@@ -19,6 +29,7 @@ const REPORT_TYPES = [
     emoji: '🎯',
     color: '#9C88FF',
     api: 'getWritingReport',
+    apiSource: 'counseling',
   },
   {
     id: 'premium',
@@ -27,14 +38,14 @@ const REPORT_TYPES = [
     emoji: '👑',
     color: '#FFB800',
     api: 'getPremiumReport',
-    primary: true,
+    apiSource: 'counseling',
   },
 ]
 
 export default function ReportPanel({ student }) {
-  const [reports, setReports] = useState({})  // { math: {...}, writing: {...}, premium: {...} }
-  const [loading, setLoading] = useState({})  // { math: true, ... }
-  const [errors, setErrors] = useState({})    // { math: "...", ... }
+  const [reports, setReports] = useState({})
+  const [loading, setLoading] = useState({})
+  const [errors, setErrors] = useState({})
   
   if (!student) return null
   
@@ -45,15 +56,14 @@ export default function ReportPanel({ student }) {
     setErrors(prev => ({ ...prev, [id]: null }))
     
     try {
-      const data = await counselingAPI[api](String(student.id))
+      const apiClient = reportType.apiSource === 'studyPlan' ? studyPlanAPI : counselingAPI
+      const data = await apiClient[api](String(student.id))
       setReports(prev => ({ ...prev, [id]: { data, source: 'API' } }))
     } catch (e) {
       console.error(`${id} 리포트 생성 실패:`, e)
       
-      // 폴백: mock 데이터
       const fallback = AI_REPORTS[student.id]
       if (fallback) {
-        // mock 응답을 API 응답 형식과 비슷하게 가공
         setReports(prev => ({ 
           ...prev, 
           [id]: { 
@@ -109,7 +119,7 @@ export default function ReportPanel({ student }) {
         </p>
       </div>
       
-      {/* 리포트 카드 3개 */}
+      {/* 리포트 카드 */}
       {REPORT_TYPES.map(type => {
         const reportData = reports[type.id]
         const isLoading = loading[type.id]
@@ -197,20 +207,23 @@ export default function ReportPanel({ student }) {
   )
 }
 
-// 리포트 결과 컴포넌트
 function ReportContent({ report, type, onClose }) {
   const { data, source } = report
   
-  // 가능한 필드 모두 시도
   const title    = data.title || type.title
   const summary  = data.careerAnalysis || data.summary || data.message || ''
   const guide    = data.learningGuide || data.guide || data.recommend || ''
   const strong   = data.strong || data.strengths || ''
   const weak     = data.weak || data.weaknesses || ''
   
+  // 시험지 전용 필드
+  const paperUrl = data.paperUrl || data.url || data.downloadUrl || ''
+  const questions = data.questions || data.problems || []
+  const isReviewPaper = type.id === 'reviewPaper'
+  
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-      {/* 출처 뱃지 */}
+      
       {source === 'MOCK' && (
         <div style={{ 
           padding:'6px 10px', borderRadius:8, 
@@ -222,7 +235,116 @@ function ReportContent({ report, type, onClose }) {
         </div>
       )}
       
-      {/* 요약 */}
+      {/* 시험지 전용 - 다운로드 영역 */}
+      {isReviewPaper && (paperUrl || source === 'MOCK') && (
+        <div style={{ 
+          padding:'14px', borderRadius:10,
+          background:`${type.color}15`, border:`1px solid ${type.color}30`,
+        }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            <span style={{ fontSize:24 }}>📄</span>
+            <div style={{ flex:1 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:type.color }}>
+                시험지 생성 완료
+              </p>
+              <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:2 }}>
+                {questions?.length 
+                  ? `총 ${questions.length}문제` 
+                  : '약점 기반 맞춤 문제'}
+              </p>
+            </div>
+          </div>
+          
+          {paperUrl ? (
+            <a
+                href={paperUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                display: 'block',
+                width: '100%',
+                padding: '10px',
+                borderRadius: 8,
+                background: type.color,
+                color: 'white',
+                textAlign: 'center',
+                fontSize: 12,
+                fontWeight: 700,
+                textDecoration: 'none',
+                boxSizing: 'border-box',
+                }}
+            >
+                📥 시험지 다운로드
+            </a>
+            ) : (
+            <button
+                onClick={() => alert('시험지 url이 응답에 없어요 (mock 모드)')}
+                style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'var(--color-text-muted)',
+                color: 'white',
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                }}
+            >
+                📥 다운로드 (mock)
+            </button>
+            )}
+        </div>
+      )}
+      
+      {/* 시험지 문제 미리보기 */}
+      {isReviewPaper && questions.length > 0 && (
+        <div>
+          <p style={{ fontSize:11, fontWeight:700, color:'var(--color-text-secondary)', marginBottom:6 }}>
+            📋 문제 미리보기
+          </p>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {questions.slice(0, 3).map((q, i) => (
+              <div key={i} style={{
+                padding:'10px 12px', borderRadius:8,
+                background:'var(--color-surface-2)', border:'1px solid var(--color-border)',
+              }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+                  <span style={{ 
+                    width:22, height:22, flexShrink:0, borderRadius:'50%',
+                    background:type.color, color:'white',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:10, fontWeight:700,
+                  }}>
+                    {i+1}
+                  </span>
+                  <div style={{ flex:1 }}>
+                    {q.subject && (
+                      <span style={{ 
+                        fontSize:10, fontWeight:700, color:type.color,
+                        padding:'2px 6px', borderRadius:6, background:type.color+'18',
+                        marginBottom:4, display:'inline-block',
+                      }}>
+                        {q.subject}
+                      </span>
+                    )}
+                    <p style={{ fontSize:11, color:'var(--color-text-primary)', lineHeight:1.5 }}>
+                      {q.question || q.text || q.content || '(문제 내용)'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {questions.length > 3 && (
+              <p style={{ fontSize:10, color:'var(--color-text-muted)', textAlign:'center', marginTop:4 }}>
+                +{questions.length - 3}개 문제 더 있음
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+      
       {summary && (
         <div style={{ 
           padding:'12px', borderRadius:10, 
@@ -237,7 +359,6 @@ function ReportContent({ report, type, onClose }) {
         </div>
       )}
       
-      {/* 강점/약점 (있을 때) */}
       {(strong || weak) && (
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
           {strong && (
@@ -265,7 +386,6 @@ function ReportContent({ report, type, onClose }) {
         </div>
       )}
       
-      {/* 학습 가이드/추천 조치 */}
       {guide && (
         <div style={{ 
           padding:'10px 12px', borderRadius:8, 
@@ -280,7 +400,6 @@ function ReportContent({ report, type, onClose }) {
         </div>
       )}
       
-      {/* 닫기 버튼 */}
       <button
         onClick={onClose}
         style={{
