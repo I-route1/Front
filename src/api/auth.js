@@ -1,5 +1,7 @@
 import { apiCall } from './client'
 
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
+
 export const authAPI = {
   login({ email, password }) {
     return apiCall('/api/auth/login', {
@@ -116,6 +118,71 @@ export const authAPI = {
       body: JSON.stringify({
         email,
       }),
+    })
+  },
+
+  /**
+   * 소셜 로그인 인증 페이지 URL 생성
+   * GET /api/oauth/social/{provider}
+   *
+   * provider 예시:
+   * - kakao
+   */
+  getSocialLoginUrl(provider) {
+    return `${BASE_URL}/api/oauth/social/${provider}`
+  },
+
+  /**
+   * 소셜 로그인 인증 완료 후 JWT 발급
+   * POST /api/oauth/social/{provider}/token
+   *
+   * 요청:
+   * {
+   *   code: string
+   * }
+   */
+  getSocialToken(provider, code) {
+    return apiCall(`/api/oauth/social/${provider}/token`, {
+      method: 'POST',
+      body: JSON.stringify({
+        code,
+      }),
+    })
+  },
+
+  /**
+   * 소셜 회원 자동가입
+   * POST /api/oauth/social/{provider}/register
+   *
+   * 요청:
+   * {
+   *   providerId: string,
+   *   email: string,
+   *   nickname: string,
+   *   profileImage: string
+   * }
+   */
+  registerSocialUser(provider, payload) {
+    return apiCall(`/api/oauth/social/${provider}/register`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  /**
+   * 기존 일반 계정에 소셜 계정 연동
+   * POST /api/oauth/social/{provider}/link
+   *
+   * 요청:
+   * {
+   *   userId: string,
+   *   providerId: string
+   * }
+   */
+  linkSocialAccount(provider, payload) {
+    return apiCall(`/api/oauth/social/${provider}/link`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     })
   },
 }
