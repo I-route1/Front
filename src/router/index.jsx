@@ -25,6 +25,7 @@ import BoardWrite from '@/pages/BoardWrite'
 import BoardEdit from '@/pages/BoardEdit'
 import Notifications from '@/pages/Notifications'
 import OAuthCallback from '@/pages/OAuthCallback'
+import Attendance from '@/pages/Attendance'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -70,6 +71,14 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'notifications', element: <Notifications /> },
+      {
+        path: 'attendance',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.PARENT, USER_ROLES.ACADEMY, USER_ROLES.ADMIN]}>
+            <Attendance />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 
