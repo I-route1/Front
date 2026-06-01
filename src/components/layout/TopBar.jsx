@@ -1,11 +1,14 @@
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { notificationsAPI } from '@/api'
 
 const PAGE_TITLES = {
   '/home': null,
   '/map': '실시간 위치',
   '/learning': '학습 리포트',
   '/notice': '공지사항',
+  '/notifications': '알림',
   '/board': '게시판',
   '/board/write': '게시글 작성',
   '/profile': '마이페이지',
@@ -19,8 +22,23 @@ export default function TopBar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  
+  const [hasUnread, setHasUnread] = useState(false)
+  
+  // 안 읽은 알림 확인
+  useEffect(() => {
+    if (!user?.id) return
+    
+    notificationsAPI.getUnread(user.id)
+      .then(data => {
+        const count = Array.isArray(data) ? data.length : (data?.count ?? 0)
+        setHasUnread(count > 0)
+      })
+      .catch(() => setHasUnread(false))
+  }, [user?.id, pathname])  // pathname 의존성 추가 — 페이지 이동 시마다 재확인
+  
   const title = getPageTitle(pathname)
-
+  
   return (
     <header className="topbar">
       {title ? (
@@ -30,13 +48,13 @@ export default function TopBar() {
           아이<span>루트</span>
         </span>
       )}
-
+      
       <div className="topbar__actions">
         {/* 알림 버튼 */}
         <button
           type="button"
           aria-label="알림"
-          onClick={() => navigate('/notice')}
+          onClick={() => navigate('/notifications')}
           style={{
             position: 'relative',
             width: 40,
@@ -49,20 +67,22 @@ export default function TopBar() {
           }}
         >
           <BellIcon />
-          <span
-            style={{
-              position: 'absolute',
-              top: 6,
-              right: 6,
-              width: 8,
-              height: 8,
-              background: 'var(--color-accent)',
-              borderRadius: '50%',
-              border: '2px solid white',
-            }}
-          />
+          {hasUnread && (
+            <span
+              style={{
+                position: 'absolute',
+                top: 6,
+                right: 6,
+                width: 8,
+                height: 8,
+                background: 'var(--color-accent)',
+                borderRadius: '50%',
+                border: '2px solid white',
+              }}
+            />
+          )}
         </button>
-
+        
         {/* 아바타 */}
         <button
           type="button"
@@ -101,15 +121,12 @@ function getPageTitle(pathname) {
   if (PAGE_TITLES[pathname] !== undefined) {
     return PAGE_TITLES[pathname]
   }
-
   if (pathname.startsWith('/board/') && pathname.endsWith('/edit')) {
     return '게시글 수정'
   }
-
   if (pathname.startsWith('/board/')) {
     return '게시글 상세'
   }
-
   return null
 }
 

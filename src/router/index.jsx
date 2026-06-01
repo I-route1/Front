@@ -28,6 +28,9 @@ import PaymentSuccess from '@/pages/PaymentSuccess'
 import PaymentBillingSuccess from '@/pages/PaymentBillingSuccess'
 import PaymentFail from '@/pages/PaymentFail'
 import PaymentHistory from '@/pages/PaymentHistory'
+import Notifications from '@/pages/Notifications'
+import OAuthCallback from '@/pages/OAuthCallback'
+import EmailVerify from '@/pages/EmailVerify'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -36,8 +39,12 @@ export const router = createBrowserRouter([
   { path: '/find-id', element: <FindId /> },
   { path: '/find-password', element: <FindPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
+    { path: '/email/verify', element: <EmailVerify /> },
+    { path: '/oauth/callback', element: <OAuthCallback /> },
+  { path: '/oauth/callback/:provider', element: <OAuthCallback /> },
   { path: '/driver/boarding', element: <DriverBoardingList /> },
   { path: '/driver/map', element: <DriverMapPage /> },
+
 
   // 로그인 필요 페이지
   {
@@ -74,6 +81,7 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      { path: 'notifications', element: <Notifications /> },
     ],
   },
 
