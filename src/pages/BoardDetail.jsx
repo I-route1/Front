@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { boardAPI } from '../api'
+const user = JSON.parse(sessionStorage.getItem('i-route-user') || '{}')
+const userId = user.id || user.userId
 
 const FALLBACK_POSTS = [
   {
@@ -185,14 +187,13 @@ export default function BoardDetail() {
         setIsLoading(true)
         setNoticeMessage('')
 
-        const postResponse = await boardAPI.getPostDetail(postId)
+        const postResponse = await boardAPI.getPostDetail(postId, userId)
         const normalizedPost = normalizePost(postResponse)
 
         let normalizedComments = []
 
         try {
-          const commentsResponse = await boardAPI.getComments(postId)
-
+          const commentsResponse = await boardAPI.getComments(postId, userId)
           if (Array.isArray(commentsResponse)) {
             normalizedComments = commentsResponse.map(normalizeComment)
           }
@@ -242,9 +243,13 @@ export default function BoardDetail() {
     try {
       setIsSubmittingComment(true)
 
-      const response = await boardAPI.createComment(postId, {
-        content: trimmedComment,
-      })
+      const response = await boardAPI.createComment(
+          postId,
+          {
+            content: trimmedComment,
+          },
+          userId
+      )
 
       const newComment = response
         ? normalizeComment(response)
@@ -281,7 +286,7 @@ export default function BoardDetail() {
     setLiked(nextLiked)
 
     try {
-      await boardAPI.likePost(postId)
+      await boardAPI.likePost(postId, userId)
     } catch {
       setNoticeMessage('백엔드 API 연결 전이라 공감 상태가 화면에서만 변경되었습니다.')
     }
@@ -293,7 +298,7 @@ export default function BoardDetail() {
     setFavorite(nextFavorite)
 
     try {
-      await boardAPI.bookmarkPost(postId)
+      await boardAPI.bookmarkPost(postId, userId)
     } catch {
       setNoticeMessage('백엔드 API 연결 전이라 즐겨찾기 상태가 화면에서만 변경되었습니다.')
     }
@@ -345,7 +350,7 @@ export default function BoardDetail() {
     )
 
     try {
-      await boardAPI.likeComment(postId, commentId)
+      await boardAPI.likeComment(postId, commentId, userId)
     } catch {
       setNoticeMessage('백엔드 API 연결 전이라 댓글 공감이 화면에서만 반영되었습니다.')
     }

@@ -480,18 +480,6 @@ export default function Register() {
   }
 
   const handleSubmit = async () => {
-    // 이메일 인증 완료 확인 버튼 안 눌렀으면 차단
-    if (
-        emailAuthStatus !== EMAIL_AUTH_STATUS.VERIFIED ||
-        !emailVerified
-    ) {
-      setErrors((prev) => ({
-        ...prev,
-        email: '이메일 인증을 완료해주세요',
-      }))
-      return
-    }
-
     const e = await validate()
 
     if (Object.keys(e).length > 0) {
@@ -547,7 +535,17 @@ export default function Register() {
           inviteCode: form.inviteCode.trim(),
         })
       }
-
+// 이메일 인증 완료 확인 버튼 안 눌렀으면 차단
+      if (
+          emailAuthStatus !== EMAIL_AUTH_STATUS.VERIFIED ||
+          !emailVerified
+      ) {
+        setErrors((prev) => ({
+          ...prev,
+          email: '이메일 인증을 완료해주세요',
+        }))
+        return
+      }
       try {
         await authAPI.sendWelcomeEmail(form.email.trim())
       } catch {
