@@ -54,6 +54,8 @@ export default function Register() {
 
   const [emailAuthStatus, setEmailAuthStatus] = useState(EMAIL_AUTH_STATUS.IDLE)
   const [emailAuthLoading, setEmailAuthLoading] = useState(false)
+  const [emailVerified, setEmailVerified] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   const [duplicateStatus, setDuplicateStatus] = useState({
     username: DUPLICATE_STATUS.IDLE,
@@ -259,18 +261,37 @@ export default function Register() {
 
   const handleSendEmailAuth = async () => {
     if (!form.email.includes('@')) {
-      setErrors((prev) => ({ ...prev, email: '올바른 이메일을 입력해 주세요' }))
+      setErrors((prev) => ({
+        ...prev,
+        email: '올바른 이메일을 입력해 주세요',
+      }))
       return
     }
 
     if (duplicateStatus.email !== DUPLICATE_STATUS.VALID) {
-      setErrors((prev) => ({ ...prev, email: '이메일 중복 확인을 먼저 진행해 주세요' }))
+      setErrors((prev) => ({
+        ...prev,
+        email: '이메일 중복 확인을 먼저 진행해 주세요',
+      }))
       return
     }
 
     setEmailAuthLoading(true)
 
     try {
+      // 🔥 1. 먼저 서버에서 이미 인증됐는지 확인
+      const statusRes = await authAPI.checkEmailVerified(form.email.trim())
+
+      if (statusRes.data?.verified) {
+        setEmailAuthStatus(EMAIL_AUTH_STATUS.VERIFIED)
+        setErrors((prev) => ({
+          ...prev,
+          email: '이미 인증이 완료된 이메일입니다',
+        }))
+        return
+      }
+
+      // 🔥 2. 인증 안된 경우만 발송
       if (emailAuthStatus === EMAIL_AUTH_STATUS.SENT) {
         await authAPI.resendEmailVerification(form.email.trim())
       } else {
@@ -289,20 +310,75 @@ export default function Register() {
     }
   }
 
-  const handleVerifyEmail = async () => {
+  const handleCheckEmailVerified = async () => {
     setEmailAuthLoading(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      setEmailAuthStatus(EMAIL_AUTH_STATUS.VERIFIED)
-      setErrors((prev) => ({ ...prev, email: '' }))
+      const res = await authAPI.checkEmailVerified(form.email.trim())
+
+      console.log('이메일 인증 확인 응답 전체:', res)
+
+      const data = res?.data ?? res
+
+      const verified =
+          data?.verified ??
+          data?.isVerified ??
+          data?.data?.verified ??
+          data?.data ??
+          false
+
+      setEmailVerified(verified)
+
+      if (verified) {
+        setEmailAuthStatus(EMAIL_AUTH_STATUS.VERIFIED)
+        setErrors(prev => ({ ...prev, email: '' }))
+        setSuccessMessage('이메일 인증이 완료되었습니다.')
+      } else {
+        setEmailAuthStatus(EMAIL_AUTH_STATUS.SENT)
+        setSuccessMessage('')
+        setErrors(prev => ({
+          ...prev,
+          email: '아직 인증이 완료되지 않았습니다',
+        }))
+      }
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        email: error.message || '인증 상태 확인 중 오류가 발생했습니다',
+      }))
     } finally {
       setEmailAuthLoading(false)
     }
   }
+  const getVerifiedFromResponse = (res) => {
+    const data = res?.data ?? res
 
-  const validate = () => {
+    return (
+        data?.verified ??
+        data?.isVerified ??
+        data?.data?.verified ??
+        data?.data ??
+        false
+    )
+  }
+
+  const validate = async () => {
     const e = {}
+
+    if (!form.email.trim()) {
+      e.email = '이메일을 입력해 주세요'
+    } else {
+      try {
+        const emailRes = await authAPI.checkEmailVerified(form.email.trim())
+        const isEmailVerified = getVerifiedFromResponse(emailRes)
+
+        if (!isEmailVerified) {
+          e.email = '이메일 인증을 완료해 주세요'
+        }
+      } catch {
+        e.email = '이메일 인증 확인에 실패했습니다'
+      }
+    }
 
     if (!form.username.trim()) {
       e.username = '아이디를 입력해 주세요'
@@ -322,7 +398,9 @@ export default function Register() {
       e.password = '영문·숫자·특수문자 포함 8자 이상'
     }
 
-    if (form.password !== form.passwordConfirm) {
+    if (!form.passwordConfirm) {
+      e.passwordConfirm = '비밀번호 확인을 입력해 주세요'
+    } else if (form.password !== form.passwordConfirm) {
       e.passwordConfirm = '비밀번호가 일치하지 않습니다'
     }
 
@@ -330,11 +408,10 @@ export default function Register() {
       e.name = '이름을 입력해 주세요'
     }
 
-    if (!form.email.includes('@')) {
-      e.email = '올바른 이메일을 입력해 주세요'
-    }
-
-    if (form.phoneNumber.replace(/\D/g, '').length < 10) {
+    const phoneNumber = form.phoneNumber.replace(/\D/g, '')
+    if (!phoneNumber) {
+      e.phoneNumber = '전화번호를 입력해 주세요'
+    } else if (phoneNumber.length < 10) {
       e.phoneNumber = '올바른 전화번호를 입력해 주세요'
     }
 
@@ -354,10 +431,6 @@ export default function Register() {
       e.phoneNumber = '휴대폰 번호 중복 확인을 완료해 주세요'
     }
 
-    if (emailAuthStatus !== EMAIL_AUTH_STATUS.VERIFIED) {
-      e.email = '이메일 인증을 완료해 주세요'
-    }
-
     if (!agreed) {
       e.agree = '개인정보 수집 및 이용에 동의해 주세요'
     }
@@ -372,7 +445,9 @@ export default function Register() {
       }
 
       const businessNumber = form.businessNumber.replace(/\D/g, '')
-      if (businessNumber.length !== 10) {
+      if (!businessNumber) {
+        e.businessNumber = '사업자번호를 입력해 주세요'
+      } else if (businessNumber.length !== 10) {
         e.businessNumber = '사업자번호 10자리를 입력해 주세요'
       }
     }
@@ -398,13 +473,26 @@ export default function Register() {
     await new Promise((resolve) => setTimeout(resolve, 400))
 
     const blockedKeywords = ['blacklist', 'blocked', '탈퇴회원']
-    const targetText = `${form.username} ${form.email} ${form.phone} ${form.name}`.toLowerCase()
+    const targetText =
+        `${form.username} ${form.email} ${form.phoneNumber} ${form.name}`.toLowerCase()
 
     return blockedKeywords.some((keyword) => targetText.includes(keyword))
   }
 
   const handleSubmit = async () => {
-    const e = validate()
+    // 이메일 인증 완료 확인 버튼 안 눌렀으면 차단
+    if (
+        emailAuthStatus !== EMAIL_AUTH_STATUS.VERIFIED ||
+        !emailVerified
+    ) {
+      setErrors((prev) => ({
+        ...prev,
+        email: '이메일 인증을 완료해주세요',
+      }))
+      return
+    }
+
+    const e = await validate()
 
     if (Object.keys(e).length > 0) {
       setErrors(e)
@@ -417,7 +505,9 @@ export default function Register() {
       const isBlacklisted = await checkBlacklistUser()
 
       if (isBlacklisted) {
-        setErrors({ submit: '가입이 제한된 사용자입니다. 관리자에게 문의해 주세요.' })
+        setErrors({
+          submit: '가입이 제한된 사용자입니다. 관리자에게 문의해 주세요.',
+        })
         return
       }
 
@@ -449,30 +539,31 @@ export default function Register() {
       }
 
       if (form.role === 'academy' && form.staffType === 'driver') {
-        setErrors({
-          submit:
-            '차량 기사 회원가입 API가 아직 확정되지 않았습니다. 백엔드 명세 확정 후 연결 예정입니다.',
+        await authAPI.registerAcademy({
+          ...commonPayload,
+          role: 'DRIVER',
+          academyName: form.academyName.trim(),
+          vehicleNumber: form.vehicleNumber.trim(),
+          inviteCode: form.inviteCode.trim(),
         })
-        return
       }
 
       try {
         await authAPI.sendWelcomeEmail(form.email.trim())
       } catch {
-        console.warn('환영 이메일 발송에 실패했지만 회원가입은 완료되었습니다.')
+        console.warn('환영 이메일 실패 (회원가입은 성공)')
       }
 
       setSuccess(true)
       setTimeout(() => navigate('/login'), 1800)
     } catch (error) {
       setErrors({
-        submit: error.message || '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+        submit: error.message || '회원가입 실패',
       })
     } finally {
       setLoading(false)
     }
   }
-
   if (success) {
     return (
       <div
@@ -718,88 +809,142 @@ export default function Register() {
         </Field>
 
         <Field label="이메일" error={errors.email}>
+          {/* 이메일 입력 + 중복 체크 */}
           <div style={{ display: 'flex', gap: 8 }}>
             <input
-              className="input-field"
-              type="email"
-              placeholder="example@email.com"
-              value={form.email}
-              onChange={(event) => update('email', event.target.value)}
+                className="input-field"
+                type="email"
+                placeholder="example@email.com"
+                value={form.email}
+                onChange={(e) => {
+                  update('email', e.target.value)
+
+                  setEmailAuthStatus(EMAIL_AUTH_STATUS.IDLE)
+                  setEmailVerified(false)
+                  setSuccessMessage('')
+                }}
             />
 
             <CheckButton
-              status={duplicateStatus.email}
-              onClick={() => handleDuplicateCheck('email')}
+                status={duplicateStatus.email}
+                onClick={() => handleDuplicateCheck('email')}
             />
           </div>
 
           <StatusText status={duplicateStatus.email} label="이메일" />
 
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              marginTop: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            <button
-              onClick={handleSendEmailAuth}
-              disabled={emailAuthLoading || duplicateStatus.email !== DUPLICATE_STATUS.VALID}
-              style={{
-                padding: '9px 12px',
-                borderRadius: 10,
-                background:
-                  emailAuthStatus === EMAIL_AUTH_STATUS.VERIFIED
-                    ? 'var(--color-success)'
-                    : 'var(--color-primary)',
-                color: 'white',
-                fontSize: 12,
-                fontWeight: 700,
-                opacity:
-                  emailAuthLoading || duplicateStatus.email !== DUPLICATE_STATUS.VALID
-                    ? 0.55
-                    : 1,
-                cursor:
-                  emailAuthLoading || duplicateStatus.email !== DUPLICATE_STATUS.VALID
-                    ? 'not-allowed'
-                    : 'pointer',
-              }}
-            >
-              {emailAuthStatus === EMAIL_AUTH_STATUS.IDLE && '인증 링크 발송'}
-              {emailAuthStatus === EMAIL_AUTH_STATUS.SENT && '인증 메일 재발송'}
-              {emailAuthStatus === EMAIL_AUTH_STATUS.VERIFIED && '인증 완료'}
-            </button>
-
-            {emailAuthStatus === EMAIL_AUTH_STATUS.SENT && (
-              <button
-                onClick={handleVerifyEmail}
-                disabled={emailAuthLoading}
-                style={{
-                  padding: '9px 12px',
-                  borderRadius: 10,
-                  background: 'var(--color-primary-light)',
-                  color: 'var(--color-primary)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
+          {/* ===================== */}
+          {/* 인증 안내 메시지 */}
+          {/* ===================== */}
+          {emailAuthStatus === EMAIL_AUTH_STATUS.SENT && (
+              <p
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--color-text-muted)',
+                    marginTop: 6,
+                  }}
               >
-                인증 완료 처리
-              </button>
+                이메일로 발송된 인증 링크를 확인해 주세요.
+              </p>
+          )}
+
+          {/* ===================== */}
+          {/* 버튼 영역 */}
+          {/* ===================== */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+
+            {/* 1️⃣ IDLE → 인증 메일 발송 */}
+            {emailAuthStatus === EMAIL_AUTH_STATUS.IDLE && (
+                <button
+                    onClick={handleSendEmailAuth}
+                    disabled={
+                        emailAuthLoading ||
+                        duplicateStatus.email !== DUPLICATE_STATUS.VALID
+                    }
+                    style={{
+                      padding: '9px 12px',
+                      borderRadius: 10,
+                      background: 'var(--color-primary)',
+                      color: 'white',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor:
+                          emailAuthLoading ||
+                          duplicateStatus.email !== DUPLICATE_STATUS.VALID
+                              ? 'not-allowed'
+                              : 'pointer',
+                      opacity:
+                          emailAuthLoading ||
+                          duplicateStatus.email !== DUPLICATE_STATUS.VALID
+                              ? 0.5
+                              : 1,
+                    }}
+                >
+                  인증 링크 발송
+                </button>
+            )}
+
+            {/* 2️⃣ SENT → 확인 + 재전송 */}
+            {emailAuthStatus === EMAIL_AUTH_STATUS.SENT && (
+                <>
+                  <button
+                      onClick={handleCheckEmailVerified}
+                      disabled={emailAuthLoading}
+                      style={{
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        background: 'var(--color-primary-light)',
+                        color: 'var(--color-primary)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        border: 'none',
+                        cursor: emailAuthLoading ? 'not-allowed' : 'pointer',
+                        opacity: emailAuthLoading ? 0.5 : 1,
+                      }}
+                  >
+                    인증 완료 확인
+                  </button>
+
+                  <button
+                      onClick={handleSendEmailAuth}
+                      disabled={emailAuthLoading}
+                      style={{
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        background: 'var(--color-primary)',
+                        color: 'white',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        border: 'none',
+                        cursor: emailAuthLoading ? 'not-allowed' : 'pointer',
+                        opacity: emailAuthLoading ? 0.5 : 1,
+                      }}
+                  >
+                    인증 메일 재발송
+                  </button>
+                </>
+            )}
+
+            {/* 3️⃣ VERIFIED → 완료 */}
+            {emailAuthStatus === EMAIL_AUTH_STATUS.VERIFIED && (
+                <button
+                    disabled
+                    style={{
+                      padding: '9px 12px',
+                      borderRadius: 10,
+                      background: 'var(--color-success)',
+                      color: 'white',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor: 'default',
+                    }}
+                >
+                  이메일 인증 완료
+                </button>
             )}
           </div>
-
-          {emailAuthStatus === EMAIL_AUTH_STATUS.SENT && (
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
-              이메일로 발송된 인증 링크를 확인해 주세요. 테스트에서는 ‘인증 완료 처리’를 누르면 인증됩니다.
-            </p>
-          )}
-
-          {emailAuthStatus === EMAIL_AUTH_STATUS.VERIFIED && (
-            <p style={{ fontSize: 12, color: 'var(--color-success)', marginTop: 6 }}>
-              이메일 인증이 완료되었습니다.
-            </p>
-          )}
         </Field>
 
         <Field label="전화번호" error={errors.phoneNumber}>
@@ -923,16 +1068,6 @@ export default function Register() {
                 onChange={(event) => update('inviteCode', event.target.value)}
               />
             </Field>
-
-            <p
-              style={{
-                fontSize: 12,
-                color: 'var(--color-text-muted)',
-                lineHeight: 1.5,
-              }}
-            >
-              차량 기사 회원가입은 백엔드 API 명세가 확정된 뒤 실제 가입 요청과 연결할 예정입니다.
-            </p>
           </div>
         )}
 

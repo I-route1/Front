@@ -186,4 +186,10 @@ export const authAPI = {
       body: JSON.stringify(payload),
     })
   },
+
+  checkEmailVerified(email) {
+    return apiCall(`/api/auth/email/status?email=${email}`, {
+      method: 'GET',
+    })
+  }
 }
