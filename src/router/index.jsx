@@ -40,12 +40,11 @@ export const router = createBrowserRouter([
   { path: '/find-id', element: <FindId /> },
   { path: '/find-password', element: <FindPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
-    { path: '/email/verify', element: <EmailVerify /> },
-    { path: '/oauth/callback', element: <OAuthCallback /> },
+  { path: '/email/verify', element: <EmailVerify /> },
+  { path: '/oauth/callback', element: <OAuthCallback /> },
   { path: '/oauth/callback/:provider', element: <OAuthCallback /> },
   { path: '/driver/boarding', element: <DriverBoardingList /> },
   { path: '/driver/map', element: <DriverMapPage /> },
-
 
   // 로그인 필요 페이지
   {
@@ -74,6 +73,7 @@ export const router = createBrowserRouter([
       { path: 'payment/billing/success', element: <PaymentBillingSuccess /> },
       { path: 'payment/fail', element: <PaymentFail /> },
       { path: 'payment/history', element: <PaymentHistory /> },
+      { path: 'notifications', element: <Notifications /> },
       {
         path: 'admin/learning',
         element: (
@@ -82,7 +82,6 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      { path: 'notifications', element: <Notifications /> },
       {
         path: 'attendance',
         element: (

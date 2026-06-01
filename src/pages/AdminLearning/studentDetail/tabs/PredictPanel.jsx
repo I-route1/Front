@@ -318,7 +318,7 @@ function RoadmapForm({ targetSubject, setTargetSubject, targetWeeks, setTargetWe
           기간
         </p>
         <div style={{ display:'flex', gap:6 }}>
-          {[2, 4, 8].map(weeks => {
+          {[2, 4].map(weeks => {
             const isActive = targetWeeks === weeks
             return (
               <button

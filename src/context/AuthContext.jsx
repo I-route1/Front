@@ -127,7 +127,7 @@ export function AuthProvider({ children }) {
 
     try {
             const data = await authAPI.login({
-        username: normalizedUsername,
+            username: normalizedUsername,
         password,
       })
 
