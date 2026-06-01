@@ -517,6 +517,10 @@ img {
   display: none;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Utilities ── */
 .text-primary   { color: var(--color-primary); }
 .text-accent    { color: var(--color-accent); }
