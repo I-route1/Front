@@ -77,15 +77,27 @@ export const authAPI = {
     })
   },
 
-    checkDuplicate(type, value) {
+    verifyEmail(token) {
+    return apiCall(`/api/auth/email/verify?token=${encodeURIComponent(token)}`, {
+      method: 'GET',
+    })
+  },
+
+  checkDuplicate(type, value) {
     return apiCall('/api/auth/check', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         type,
         value,
       }),
     })
   },
+
+
+
 
   registerParent(payload) {
     return apiCall('/api/auth/register', {
