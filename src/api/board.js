@@ -1,140 +1,129 @@
+// src/api/board.js
 import { apiCall } from './client'
 
-const getUserId = () => {
-  try {
-    const saved = sessionStorage.getItem('i-route-user')
-    if (!saved) return null
-
-    const user = JSON.parse(saved)
-    return user?.id ?? user?.userId ?? user?.user_id ?? null
-  } catch {
-    return null
-  }
-}
-
-const withUserId = (path) => {
-  const userId = getUserId()
+function withUserId(path, userId) {
   if (!userId) return path
-
   const separator = path.includes('?') ? '&' : '?'
-  return `${path}${separator}userId=${userId}`
+  return `${path}${separator}userId=${encodeURIComponent(userId)}`
 }
 
 export const boardAPI = {
-  getBoards: () => {
-    return apiCall('/api/boards')
-  },
-
-  searchBoards: (keyword) => {
-    const query = new URLSearchParams()
-
-    if (keyword) {
-      query.append('keyword', keyword)
-    }
-
-    const queryString = query.toString()
-    return apiCall(`/api/boards/search${queryString ? `?${queryString}` : ''}`)
-  },
-
-  createBoard: (payload) => {
+  // 게시판 목록
+  getBoards() {
     return apiCall('/api/boards', {
+      method: 'GET',
+    })
+  },
+
+  // 게시판 상세
+  getBoardDetail(boardId) {
+    return apiCall(`/api/boards/${boardId}`, {
+      method: 'GET',
+    })
+  },
+
+  // 게시판 검색
+  searchBoards(keyword) {
+    return apiCall(`/api/boards/search?keyword=${encodeURIComponent(keyword)}`, {
+      method: 'GET',
+    })
+  },
+
+  // 게시판별 게시글 목록
+  getPostsByBoard(boardId, userId) {
+    return apiCall(withUserId(`/api/boards/${boardId}/posts`, userId), {
+      method: 'GET',
+    })
+  },
+
+  // 게시글 상세
+  getPostDetail(postId, userId) {
+    return apiCall(withUserId(`/api/posts/${postId}`, userId), {
+      method: 'GET',
+    })
+  },
+
+  // 호환용
+  getPost(postId, userId) {
+    return this.getPostDetail(postId, userId)
+  },
+
+  // 게시글 검색
+  searchPosts(keyword, userId) {
+    return apiCall(withUserId(`/api/posts/search?keyword=${encodeURIComponent(keyword)}`, userId), {
+      method: 'GET',
+    })
+  },
+
+  // 게시글 작성
+  createPost(boardId, payload, userId) {
+    return apiCall(withUserId(`/api/boards/${boardId}/posts`, userId), {
       method: 'POST',
       body: JSON.stringify(payload),
     })
   },
 
-  updateBoard: (boardId, payload) => {
-    return apiCall(`/api/boards/${boardId}`, {
+  // 게시글 수정
+  updatePost(postId, payload, userId) {
+    return apiCall(withUserId(`/api/posts/${postId}`, userId), {
       method: 'PUT',
       body: JSON.stringify(payload),
     })
   },
 
-  deleteBoard: (boardId) => {
-    return apiCall(`/api/boards/${boardId}`, {
-      method: 'DELETE',
-    })
-  },
-
-  getBoardDetail: (boardId) => {
-    return apiCall(`/api/boards/${boardId}`)
-  },
-
-  getPostsByBoard: (boardId) => {
-    return apiCall(withUserId(`/api/boards/${boardId}/posts`))
-  },
-
-  getPostDetail: (postId) => {
-    return apiCall(withUserId(`/api/posts/${postId}`))
-  },
-
-  searchPosts: (keyword) => {
-    const query = new URLSearchParams()
-
-    if (keyword) {
-      query.append('keyword', keyword)
-    }
-
-    const path = `/api/posts/search${query.toString() ? `?${query.toString()}` : ''}`
-
-    return apiCall(withUserId(path))
-  },
-
-  createPost: (boardId, payload) => {
-    return apiCall(withUserId(`/api/boards/${boardId}/posts`), {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
-  },
-
-  updatePost: (postId, payload) => {
-    return apiCall(withUserId(`/api/posts/${postId}`), {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    })
-  },
-
-  deletePost: (postId) => {
+  // 게시글 삭제
+  deletePost(postId) {
     return apiCall(`/api/posts/${postId}`, {
       method: 'DELETE',
     })
   },
 
-  likePost: (postId) => {
-    return apiCall(withUserId(`/api/posts/${postId}/like`), {
+  // 좋아요
+  likePost(postId, userId) {
+    return apiCall(`/api/posts/${postId}/like?userId=${encodeURIComponent(userId)}`, {
       method: 'POST',
     })
   },
 
-  bookmarkPost: (postId) => {
-    return apiCall(withUserId(`/api/posts/${postId}/bookmark`), {
+  // 북마크
+  bookmarkPost(postId, userId) {
+    return apiCall(`/api/posts/${postId}/bookmark?userId=${encodeURIComponent(userId)}`, {
       method: 'POST',
     })
   },
 
-  getComments: (postId) => {
-    return apiCall(withUserId(`/api/posts/${postId}/comments`))
+  // 댓글 목록
+  getComments(postId, userId) {
+    return apiCall(withUserId(`/api/posts/${postId}/comments`, userId), {
+      method: 'GET',
+    })
   },
 
-  getCommentDetail: (postId, commentId) => {
-    return apiCall(withUserId(`/api/posts/${postId}/comments/${commentId}`))
-  },
-
-  createComment: (postId, payload) => {
-    return apiCall(withUserId(`/api/posts/${postId}/comments`), {
+  // 댓글 작성
+  createComment(postId, payload, userId) {
+    return apiCall(withUserId(`/api/posts/${postId}/comments`, userId), {
       method: 'POST',
       body: JSON.stringify(payload),
     })
   },
 
-  deleteComment: (postId, commentId) => {
+  // 댓글 상세
+  getCommentDetail(postId, commentId, userId) {
+    return apiCall(withUserId(`/api/posts/${postId}/comments/${commentId}`, userId), {
+      method: 'GET',
+    })
+  },
+
+  // 댓글 삭제
+  deleteComment(postId, commentId) {
     return apiCall(`/api/posts/${postId}/comments/${commentId}`, {
       method: 'DELETE',
     })
   },
 
-  likeComment: (postId, commentId) => {
-    return apiCall(withUserId(`/api/posts/${postId}/comments/${commentId}/like`), {
+  // 댓글 좋아요
+  likeComment(postId, commentId, userId) {
+    return apiCall(`/api/posts/${postId}/comments/${commentId}/like?userId=${encodeURIComponent(userId)}`, {
       method: 'POST',
     })
   },

@@ -41,8 +41,8 @@ export const router = createBrowserRouter([
   { path: '/find-password', element: <FindPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
     { path: '/email/verify', element: <EmailVerify /> },
-    { path: '/oauth/callback', element: <OAuthCallback /> },
-  { path: '/oauth/callback/:provider', element: <OAuthCallback /> },
+  { path: '/oauth/:provider/callback', element: <OAuthCallback /> },
+  { path: '/oauth/callback', element: <OAuthCallback /> },
   { path: '/driver/boarding', element: <DriverBoardingList /> },
   { path: '/driver/map', element: <DriverMapPage /> },
 
