@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Client } from '@stomp/stompjs';
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
-import { getBusCurrentLocation, getBusRouteStatus, getStudentEtas } from '../services/gpsService';
+import { getBusCurrentLocation, getBusRoute, getStudentEtas, getStudentCurrentLocation } from '../services/gpsService';
 
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
@@ -40,6 +40,7 @@ export default function Map() {
   const [busMarker, setBusMarker] = useState(null)
   const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' });
   const [studentEtas, setStudentEtas] = useState([]);
+  const [isChildOnBoard, setIsChildOnBoard] = useState(null); // null=미확인, true=탑승중, false=하차완료
 
   const displayStations = routeData.stations.length > 0
     ? routeData.stations
@@ -63,40 +64,68 @@ export default function Map() {
       try {
         const [locRes, routeRes, etaRes] = await Promise.allSettled([
           getBusCurrentLocation(1),
-          getBusRouteStatus(1),
+          getBusRoute(1),
           getStudentEtas(1)
         ]);
 
-        if (locRes.status === 'fulfilled' && locRes.value?.success && locRes.value.data) {
-          const { latitude, longitude, busNumber, driverName, updatedAt: updatedTime, speed: currentSpeed } = locRes.value.data;
-
+        // 버스 현재 위치 — 백엔드가 직접 반환 (래퍼 없음)
+        if (locRes.status === 'fulfilled' && locRes.value?.latitude) {
+          const { latitude, longitude, updatedAt: updatedTime, speed: currentSpeed } = locRes.value;
           setBusLocation({ lat: latitude, lng: longitude });
           setUpdatedAt(updatedTime);
-          if (currentSpeed !== undefined) {
-            setSpeed(currentSpeed);
-          }
-
-          setDriverInfo(prev => ({
-            ...(prev || mockVehicleInfo),
-            vehicleNumber: busNumber || mockVehicleInfo.vehicleNumber,
-            driverName: driverName || mockVehicleInfo.driverName
-          }));
+          if (currentSpeed !== undefined) setSpeed(currentSpeed);
           setErrorMessage(null);
         } else if (locRes.status === 'rejected' || !locRes.value) {
           setErrorMessage("현재 운행 중인 셔틀버스가 없습니다");
         }
 
-        if (routeRes.status === 'fulfilled' && routeRes.value?.success && routeRes.value.data) {
+        // 버스 노선 — stops 배열을 stations 형식으로 변환
+        // StopStatus: BEFORE_ARRIVAL | ARRIVED | PASSED
+        if (routeRes.status === 'fulfilled' && routeRes.value) {
+          const route = routeRes.value;
+          const stops = route.stops || [];
+          const stations = stops.map(s => ({
+            stationId: s.stopId,
+            stationName: s.stopName,
+            sequence: s.stopOrder,
+            status: s.status === 'ARRIVED'        ? 'ARRIVING'
+                  : s.status === 'PASSED'          ? 'PASSED'
+                  : /* BEFORE_ARRIVAL */             'NOT_YET',
+            etaMinutes: s.etaMinutes,
+          }));
+          const currentStop = stops.find(s => s.status === 'ARRIVED');
           setRouteData({
-            stations: routeRes.value.data.stations || [],
-            currentStationId: routeRes.value.data.currentStationId,
-            routeName: routeRes.value.data.routeName
+            stations,
+            currentStationId: currentStop?.stopId ?? null,
+            routeName: route.routeName,
           });
+          // 기사 정보는 노선 응답에서 가져옴
+          setDriverInfo(prev => ({
+            ...(prev || mockVehicleInfo),
+            vehicleNumber: route.busNumber    || mockVehicleInfo.vehicleNumber,
+            driverName:    route.driverName   || mockVehicleInfo.driverName,
+            contact:       route.driverPhoneNumber || mockVehicleInfo.contact,
+          }));
         }
 
-        if (etaRes.status === 'fulfilled' && etaRes.value?.success && etaRes.value.data) {
-          setStudentEtas(etaRes.value.data || []);
+        // 학생별 ETA — 배열 직접 반환
+        if (etaRes.status === 'fulfilled' && Array.isArray(etaRes.value)) {
+          setStudentEtas(etaRes.value);
         }
+
+        // 학생 탑승 여부 (user.id를 studentId로 사용, 없으면 skip)
+        try {
+          const childStudentId = 1; // TODO: 실제 서비스에서는 user.children[0].id 사용
+          const studentLoc = await getStudentCurrentLocation(childStudentId);
+          if (studentLoc === null) {
+            // 204 → 하차 완료
+            setIsChildOnBoard(false);
+            setStatus('child_arrived');
+          } else {
+            setIsChildOnBoard(true);
+          }
+        } catch {}
+
       } catch (err) {
         setErrorMessage("데이터를 불러오는 중 오류가 발생했습니다.");
       }
@@ -333,9 +362,9 @@ export default function Map() {
         </div>
       )}
 
-      {status === 'child_arrived' && (
-        <div style={{ background: '#ECFDF5', borderBottom: '1px solid #A7F3D0', color: '#047857', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6, animation: 'slideDown 0.3s ease' }}>
-          <span></span> [영남대역] 우리 아이 하차 정류장에 버스가 도착했습니다!
+      {(status === 'child_arrived' || isChildOnBoard === false) && (
+        <div style={{ background: '#ECFDF5', borderBottom: '1px solid #A7F3D0', color: '#047857', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
+          <span>✅</span> 우리 아이 하차가 완료되었습니다.
         </div>
       )}
 
