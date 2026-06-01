@@ -2,8 +2,12 @@ import { apiCall } from './client'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
 
+const KAKAO_CLIENT_ID = import.meta.env.VITE_KAKAO_CLIENT_ID
+const KAKAO_REDIRECT_URI =
+    import.meta.env.VITE_KAKAO_REDIRECT_URI || 'http://localhost:3000/oauth/kakao/callback'
+
 export const authAPI = {
-    login({ username, password }) {
+  login({ username, password }) {
     return apiCall('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({
@@ -77,7 +81,7 @@ export const authAPI = {
     })
   },
 
-    verifyEmail(token) {
+  verifyEmail(token) {
     return apiCall(`/api/auth/email/verify?token=${encodeURIComponent(token)}`, {
       method: 'GET',
     })
@@ -95,9 +99,6 @@ export const authAPI = {
       }),
     })
   },
-
-
-
 
   registerParent(payload) {
     return apiCall('/api/auth/register', {
@@ -122,47 +123,29 @@ export const authAPI = {
     })
   },
 
-  /**
-   * 소셜 로그인 인증 페이지 URL 생성
-   * GET /api/oauth/social/{provider}
-   *
-   * provider 예시:
-   * - kakao
-   */
   getSocialLoginUrl(provider) {
-    return `${BASE_URL}/api/oauth/social/${provider}`
+    if (provider !== 'kakao') {
+      return `${BASE_URL}/api/oauth/social/${provider}`
+    }
+
+    if (!KAKAO_CLIENT_ID) {
+      throw new Error('VITE_KAKAO_CLIENT_ID가 설정되지 않았습니다.')
+    }
+
+    return (
+        'https://kauth.kakao.com/oauth/authorize' +
+        `?client_id=${encodeURIComponent(KAKAO_CLIENT_ID)}` +
+        `&redirect_uri=${encodeURIComponent(KAKAO_REDIRECT_URI)}` +
+        '&response_type=code'
+    )
   },
 
-  /**
-   * 소셜 로그인 인증 완료 후 JWT 발급
-   * POST /api/oauth/social/{provider}/token
-   *
-   * 요청:
-   * {
-   *   code: string
-   * }
-   */
   getSocialToken(provider, code) {
-    return apiCall(`/api/oauth/social/${provider}/token`, {
-      method: 'POST',
-      body: JSON.stringify({
-        code,
-      }),
+    return apiCall(`/api/oauth/social/${provider}/token?code=${encodeURIComponent(code)}`, {
+      method: 'GET',
     })
   },
 
-  /**
-   * 소셜 회원 자동가입
-   * POST /api/oauth/social/{provider}/register
-   *
-   * 요청:
-   * {
-   *   providerId: string,
-   *   email: string,
-   *   nickname: string,
-   *   profileImage: string
-   * }
-   */
   registerSocialUser(provider, payload) {
     return apiCall(`/api/oauth/social/${provider}/register`, {
       method: 'POST',
@@ -170,16 +153,6 @@ export const authAPI = {
     })
   },
 
-  /**
-   * 기존 일반 계정에 소셜 계정 연동
-   * POST /api/oauth/social/{provider}/link
-   *
-   * 요청:
-   * {
-   *   userId: string,
-   *   providerId: string
-   * }
-   */
   linkSocialAccount(provider, payload) {
     return apiCall(`/api/oauth/social/${provider}/link`, {
       method: 'POST',
@@ -188,8 +161,8 @@ export const authAPI = {
   },
 
   checkEmailVerified(email) {
-    return apiCall(`/api/auth/email/status?email=${email}`, {
+    return apiCall(`/api/auth/email/status?email=${encodeURIComponent(email)}`, {
       method: 'GET',
     })
-  }
+  },
 }
