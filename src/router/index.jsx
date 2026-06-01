@@ -30,6 +30,7 @@ import PaymentFail from '@/pages/PaymentFail'
 import PaymentHistory from '@/pages/PaymentHistory'
 import Notifications from '@/pages/Notifications'
 import OAuthCallback from '@/pages/OAuthCallback'
+import Attendance from '@/pages/Attendance'
 import EmailVerify from '@/pages/EmailVerify'
 
 export const router = createBrowserRouter([
@@ -82,6 +83,14 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'notifications', element: <Notifications /> },
+      {
+        path: 'attendance',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.PARENT, USER_ROLES.ACADEMY, USER_ROLES.ADMIN]}>
+            <Attendance />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 

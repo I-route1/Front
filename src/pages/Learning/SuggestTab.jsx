@@ -159,6 +159,82 @@ export default function SuggestTab() {
       })
       .finally(() => setMaterialsLoading(false))
   }, [user?.id])
+
+  function PeerContentCard({ item }) {
+    const SUBJECT_COLORS_LOCAL = {
+      국어:'#1A56DB', 수학:'#FF6B35', 영어:'#00C49A', 
+      사회:'#9B59B6', 과학:'#FFB800',
+    }
+    
+    const subject = item.subject || item.subjectName || ''
+    const title = item.title || item.name || item.contentName || '추천 콘텐츠'
+    const type = item.type || item.contentType || ''
+    const peerCount = item.peerCount ?? item.userCount ?? item.studentCount ?? null
+    const avgImprovement = item.avgImprovement ?? item.improvement ?? null
+    const avgScore = item.avgScore ?? item.averageScore ?? null
+    
+    const color = SUBJECT_COLORS_LOCAL[subject] || '#1A56DB'
+    
+    const getTypeIcon = (t) => {
+      const upper = String(t).toUpperCase()
+      if (upper.includes('MOCK') || upper.includes('EXAM')) return '📝'
+      if (upper.includes('CHALLENGE')) return '🏆'
+      if (upper.includes('PRACTICE')) return '✏️'
+      if (upper.includes('VIDEO')) return '🎥'
+      return '📚'
+    }
+    
+    return (
+      <div style={{
+        padding: '12px 14px', borderRadius: 10,
+        background: 'var(--color-surface-2)', border: `1px solid ${color}30`,
+        display: 'flex', alignItems: 'center', gap: 12,
+        cursor: 'pointer', transition: 'all 0.15s',
+      }}>
+        <span style={{ fontSize: 24, flexShrink: 0 }}>
+          {getTypeIcon(type)}
+        </span>
+        
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            {subject && (
+              <span style={{
+                padding: '2px 7px', borderRadius: 6,
+                background: color + '18', color, 
+                fontSize: 9, fontWeight: 700,
+              }}>
+                {subject}
+              </span>
+            )}
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              {title}
+            </p>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10, color: 'var(--color-text-muted)' }}>
+            {peerCount != null && (
+              <span>👥 {peerCount}명이 푸는 중</span>
+            )}
+            {avgImprovement != null && (
+              <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>
+                ▲ 평균 {avgImprovement}점 상승
+              </span>
+            )}
+            {avgScore != null && !avgImprovement && (
+              <span>평균 {avgScore}점</span>
+            )}
+          </div>
+        </div>
+        
+        <span style={{ 
+          fontSize: 16, color: 'var(--color-text-muted)', flexShrink: 0,
+        }}>
+          →
+        </span>
+      </div>
+    )
+  }
+  
   {/* 🆕 또래 콘텐츠 섹션 */}
   <section style={{ margin: '0 16px 16px', padding: '16px', background: 'var(--color-surface)', borderRadius: 14, border: '1.5px solid var(--color-border)' }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -728,80 +804,6 @@ export default function SuggestTab() {
           )}
         </div>
       </div>
-    </div>
-  )
-}function PeerContentCard({ item }) {
-  const SUBJECT_COLORS_LOCAL = {
-    국어:'#1A56DB', 수학:'#FF6B35', 영어:'#00C49A', 
-    사회:'#9B59B6', 과학:'#FFB800',
-  }
-  
-  const subject = item.subject || item.subjectName || ''
-  const title = item.title || item.name || item.contentName || '추천 콘텐츠'
-  const type = item.type || item.contentType || ''
-  const peerCount = item.peerCount ?? item.userCount ?? item.studentCount ?? null
-  const avgImprovement = item.avgImprovement ?? item.improvement ?? null
-  const avgScore = item.avgScore ?? item.averageScore ?? null
-  
-  const color = SUBJECT_COLORS_LOCAL[subject] || '#1A56DB'
-  
-  // 콘텐츠 타입 아이콘
-  const getTypeIcon = (t) => {
-    const upper = String(t).toUpperCase()
-    if (upper.includes('MOCK') || upper.includes('EXAM')) return '📝'
-    if (upper.includes('CHALLENGE')) return '🏆'
-    if (upper.includes('PRACTICE')) return '✏️'
-    if (upper.includes('VIDEO')) return '🎥'
-    return '📚'
-  }
-  
-  return (
-    <div style={{
-      padding: '12px 14px', borderRadius: 10,
-      background: 'var(--color-surface-2)', border: `1px solid ${color}30`,
-      display: 'flex', alignItems: 'center', gap: 12,
-      cursor: 'pointer', transition: 'all 0.15s',
-    }}>
-      <span style={{ fontSize: 24, flexShrink: 0 }}>
-        {getTypeIcon(type)}
-      </span>
-      
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          {subject && (
-            <span style={{
-              padding: '2px 7px', borderRadius: 6,
-              background: color + '18', color, 
-              fontSize: 9, fontWeight: 700,
-            }}>
-              {subject}
-            </span>
-          )}
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            {title}
-          </p>
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10, color: 'var(--color-text-muted)' }}>
-          {peerCount != null && (
-            <span>👥 {peerCount}명이 푸는 중</span>
-          )}
-          {avgImprovement != null && (
-            <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>
-              ▲ 평균 {avgImprovement}점 상승
-            </span>
-          )}
-          {avgScore != null && !avgImprovement && (
-            <span>평균 {avgScore}점</span>
-          )}
-        </div>
-      </div>
-      
-      <span style={{ 
-        fontSize: 16, color: 'var(--color-text-muted)', flexShrink: 0,
-      }}>
-        →
-      </span>
     </div>
   )
 }
