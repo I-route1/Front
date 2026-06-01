@@ -15,9 +15,13 @@ export default function OverviewTab() {
 
   useEffect(() => {
     if (!user?.id) return
-    analysisAPI.getRiskAnalysis('14')
-      .then(data => {
-        if (data?.atRisk) setApiRiskStudents([data])
+    const stringIds = STUDENTS.map(s => s.id).filter(id => typeof id === 'string')
+    Promise.allSettled(stringIds.map(id => analysisAPI.getRiskAnalysis(id)))
+      .then(results => {
+        const risks = results
+          .filter(r => r.status === 'fulfilled' && r.value?.atRisk)
+          .map(r => r.value)
+        setApiRiskStudents(risks)
       })
       .catch(e => console.error('위험 학생 조회 실패:', e))
   }, [user?.id])
