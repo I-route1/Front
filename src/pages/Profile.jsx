@@ -451,8 +451,6 @@ const SETTINGS = [
   title: '알림 설정',
   items: [
     { icon: '🔔', label: '푸시 알림', color: '#1A56DB', to: '/notification-settings' },
-    { icon: '📍', label: '위치 추적 설정', color: '#00C49A' },
-    { icon: '⚠️', label: '경고 구역 설정', color: '#FF6B35' },
   ],
 },
   {
