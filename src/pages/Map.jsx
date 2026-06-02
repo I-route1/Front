@@ -141,7 +141,7 @@ export default function Map() {
 
   useEffect(() => {
     const client = new Client({
-      brokerURL: 'ws://localhost:8080/ws',
+      brokerURL: (import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090').replace(/^http/, 'ws') + '/ws',
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,

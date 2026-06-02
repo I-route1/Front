@@ -44,6 +44,28 @@ export default function PaymentHistory() {
 
   return (
     <div style={{ paddingBottom: 32 }}>
+      {/* 홈으로 플로팅 버튼 */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          position: 'fixed',
+          top: 16,
+          left: 16,
+          zIndex: 100,
+          background: 'rgba(255,255,255,0.15)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255,255,255,0.3)',
+          color: 'white',
+          borderRadius: 10,
+          padding: '8px 14px',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
+      >
+        ← 뒤로
+      </button>
       {/* 헤더 */}
       <div
         style={{
