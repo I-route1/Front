@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { counselingAPI, studyPlanAPI } from '@/api'
+import { paymentAPI } from '@/api/payment'
 import { RecommendRoadmapSection, AnalysisReportSection } from './RecommendRoadmap'
 import { counselingAPI, studyPlanAPI, aiReportAPI } from '@/api'
 
@@ -54,8 +57,21 @@ const REPORT_TYPES = [
   },
 ]
 
+const RETURN_TO = '/learning?tab=counseling'
+
 export default function CounselingTab() {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState({})
+  const [results, setResults] = useState({})
+  const [errors, setErrors]   = useState({})
+  const [credits, setCredits] = useState(null)
+
+  useEffect(() => {
+    paymentAPI.getCredits()
+      .then(data => setCredits(data.premiumCredits))
+      .catch(() => setCredits(0))
+  }, [])
   const [loading, setLoading]         = useState({})
   const [results, setResults]         = useState({})
   const [errors, setErrors]           = useState({})
@@ -64,10 +80,30 @@ export default function CounselingTab() {
   const handleGenerate = async (reportType) => {
     const { id, api, apiSource } = reportType
 
+    // 프리미엄 리포트는 크레딧 필요
+    if (id === 'premium') {
+      if (credits === null) return
+      if (credits <= 0) {
+        sessionStorage.setItem('payment-return-to', RETURN_TO)
+        navigate('/payment')
+        return
+      }
+      // 크레딧 차감
+      try {
+        const updated = await paymentAPI.useCredit()
+        setCredits(updated.premiumCredits)
+      } catch {
+        setErrors(prev => ({ ...prev, [id]: '크레딧 사용 중 오류가 발생했습니다.' }))
+        return
+      }
+    }
+
     setLoading(prev => ({ ...prev, [id]: true }))
     setErrors(prev => ({ ...prev, [id]: null }))
 
     try {
+      const apiClient = apiSource === 'studyPlan' ? studyPlanAPI : counselingAPI
+      const res = await apiClient[api](String(user.id))
       let res
       if (apiSource === 'aiReport') {
         const subject = selectedSubject[id] || '수학'
@@ -80,6 +116,8 @@ export default function CounselingTab() {
       setResults(prev => ({ ...prev, [id]: res }))
     } catch (e) {
       setErrors(prev => ({ ...prev, [id]: e.message }))
+      // 실패 시 크레딧 복구
+      if (id === 'premium') setCredits(prev => (prev ?? 0) + 1)
     } finally {
       setLoading(prev => ({ ...prev, [id]: false }))
     }
@@ -111,6 +149,22 @@ export default function CounselingTab() {
               </div>
             </div>
 
+            {/* 생성 버튼 */}
+            <div style={{ padding:'0 16px 16px' }}>
+              {/* 프리미엄 크레딧 표시 */}
+              {r.id === 'premium' && (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                  <span style={{ fontSize:12, color:'var(--color-text-muted)' }}>보유 크레딧</span>
+                  <span style={{
+                    fontSize:13, fontWeight:700,
+                    color: credits > 0 ? '#1A56DB' : 'var(--color-danger)',
+                    background: credits > 0 ? '#1A56DB18' : '#FF3B3B12',
+                    padding:'2px 10px', borderRadius:20,
+                  }}>
+                    {credits === null ? '...' : `${credits}개`}
+                  </span>
+                </div>
+              )}
             {/* 생성 버튼 영역 */}
             <div style={{ padding: '0 16px 16px' }}>
 
@@ -137,8 +191,13 @@ export default function CounselingTab() {
 
               <button
                 onClick={() => handleGenerate(r)}
-                disabled={loading[r.id]}
+                disabled={loading[r.id] || (r.id === 'premium' && credits === null)}
                 style={{
+                  width:'100%', padding:'11px', borderRadius:10, border:'none',
+                  background: loading[r.id] ? 'var(--color-text-muted)'
+                    : (r.id === 'premium' && credits === 0) ? '#FF6B35'
+                    : r.color,
+                  color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit',
                   width: '100%', padding: '11px', borderRadius: 10, border: 'none',
                   background: loading[r.id] ? 'var(--color-text-muted)' : r.color,
                   color: 'white', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
@@ -146,7 +205,9 @@ export default function CounselingTab() {
                   transition: 'all 0.2s',
                 }}
               >
-                {loading[r.id] ? '🤖 AI 분석 중...' : `${r.emoji} 리포트 생성`}
+                {loading[r.id] ? '🤖 AI 분석 중...'
+                  : (r.id === 'premium' && credits === 0) ? '💳 크레딧 충전하기'
+                  : `${r.emoji} 리포트 생성`}
               </button>
 
               {/* 에러 */}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import GradeTab from './GradeTab'
 import PatternTab from './PatternTab'
 import SuggestTab from './SuggestTab'
@@ -13,8 +14,12 @@ const TABS = [
   { id:'counseling', label:'🌱 AI 리포트' },
 ]
 
+const VALID_TABS = TABS.map(t => t.id)
+
 export default function Learning() {
-  const [active, setActive] = useState('grade')
+  const [searchParams] = useSearchParams()
+  const initialTab = VALID_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'grade'
+  const [active, setActive] = useState(initialTab)
 
   return (
     <div style={{ height:'100%', display:'flex', flexDirection:'column' }}>

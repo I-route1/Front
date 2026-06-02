@@ -24,4 +24,10 @@ export const paymentAPI = {
 
   getHistory: () =>
     apiCall('/api/payments/history'),
+
+  getCredits: () =>
+    apiCall('/api/users/me/credits'),
+
+  useCredit: () =>
+    apiCall('/api/users/me/credits/use', { method: 'POST' }),
 }

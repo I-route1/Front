@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { paymentAPI } from '@/api/payment'
@@ -94,6 +94,12 @@ export default function Payment() {
   const [selectedKey, setSelectedKey] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [returnTo, setReturnTo] = useState(null)
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('payment-return-to')
+    if (saved) setReturnTo(saved)
+  }, [])
 
   const selectedOption = ALL_OPTIONS.find((o) => o.key === selectedKey)
 
@@ -154,7 +160,7 @@ export default function Payment() {
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => returnTo ? navigate(returnTo) : navigate(-1)}
           style={{
             background: 'none', border: 'none', color: 'white',
             cursor: 'pointer', padding: '4px 0', marginBottom: 16,
@@ -162,7 +168,7 @@ export default function Payment() {
             fontSize: 14, fontFamily: 'inherit', opacity: 0.85,
           }}
         >
-          ← 뒤로
+          ← {returnTo ? 'AI 리포트로 돌아가기' : '뒤로'}
         </button>
         <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>요금제 선택</h1>
         <p style={{ fontSize: 13, opacity: 0.75 }}>필요한 플랜을 선택하고 결제해주세요</p>
