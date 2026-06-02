@@ -4,6 +4,12 @@ import { boardAPI } from '../api'
 
 const TABS = ['전체', '즐겨찾기', '공지', '자유', '질문', '건의']
 
+const SORT_OPTIONS = [
+    { key: 'latest', label: '등록순' },
+    { key: 'views', label: '조회순' },
+    { key: 'likes', label: '공감순' },
+]
+
 function normalizeBoard(rawBoard) {
     return {
         id: rawBoard.id ?? rawBoard.boardId,
@@ -24,6 +30,9 @@ function normalizePost(rawPost, board) {
         rawPost.postCategory ??
         '자유'
 
+    const createdAtRaw = rawPost.createdAt ?? ''
+    const updatedAtRaw = rawPost.updatedAt ?? ''
+
     return {
         id,
         boardId: rawPost.boardId ?? board?.id,
@@ -31,11 +40,13 @@ function normalizePost(rawPost, board) {
         title: rawPost.title ?? rawPost.name ?? '제목 없음',
         author: rawPost.author ?? rawPost.createdBy ?? rawPost.writer ?? rawPost.nickname ?? '작성자',
         content: rawPost.content ?? rawPost.description ?? '',
-        createdAt: formatDate(rawPost.createdAt),
-        updatedAt: rawPost.updatedAt ? formatDate(rawPost.updatedAt) : null,
-        views: rawPost.views ?? rawPost.viewCount ?? rawPost.hitCount ?? 0,
-        likes: rawPost.likes ?? rawPost.likeCount ?? 0,
-        comments: rawPost.comments ?? rawPost.commentCount ?? 0,
+        createdAtRaw,
+        updatedAtRaw,
+        createdAt: formatDate(createdAtRaw),
+        updatedAt: updatedAtRaw ? formatDate(updatedAtRaw) : null,
+        views: Number(rawPost.views ?? rawPost.viewCount ?? rawPost.hitCount ?? 0),
+        likes: Number(rawPost.likes ?? rawPost.likeCount ?? 0),
+        comments: Number(rawPost.comments ?? rawPost.commentCount ?? 0),
         pinned: !!rawPost.pinned,
         favorite: !!(rawPost.favorite ?? rawPost.bookmarked ?? rawPost.isBookmarked),
     }
@@ -69,10 +80,53 @@ function formatDate(value) {
     return `${year}.${month}.${day}`
 }
 
+function getTimeValue(value) {
+    if (!value) return 0
+
+    const time = new Date(value).getTime()
+
+    if (Number.isNaN(time)) {
+        return 0
+    }
+
+    return time
+}
+
+function sortPosts(posts, sortType) {
+    return [...posts].sort((a, b) => {
+        if (a.pinned !== b.pinned) {
+            return a.pinned ? -1 : 1
+        }
+
+        if (sortType === 'views') {
+            const viewDiff = b.views - a.views
+
+            if (viewDiff !== 0) {
+                return viewDiff
+            }
+
+            return getTimeValue(b.createdAtRaw) - getTimeValue(a.createdAtRaw)
+        }
+
+        if (sortType === 'likes') {
+            const likeDiff = b.likes - a.likes
+
+            if (likeDiff !== 0) {
+                return likeDiff
+            }
+
+            return getTimeValue(b.createdAtRaw) - getTimeValue(a.createdAtRaw)
+        }
+
+        return getTimeValue(b.createdAtRaw) - getTimeValue(a.createdAtRaw)
+    })
+}
+
 export default function Board() {
     const navigate = useNavigate()
 
     const [activeTab, setActiveTab] = useState('전체')
+    const [sortType, setSortType] = useState('latest')
     const [keyword, setKeyword] = useState('')
     const [boards, setBoards] = useState([])
     const [posts, setPosts] = useState([])
@@ -96,7 +150,6 @@ export default function Board() {
                     boardList.map(async (board) => {
                         const user = JSON.parse(sessionStorage.getItem('i-route-user') || '{}')
                         const userId = user.id ?? user.userId
-
 
                         const postsResponse = await boardAPI.getPostsByBoard(board.id, userId)
 
@@ -149,7 +202,7 @@ export default function Board() {
     const filteredPosts = useMemo(() => {
         const lowerKeyword = keyword.trim().toLowerCase()
 
-        return posts.filter((post) => {
+        const matchedPosts = posts.filter((post) => {
             const matchedTab =
                 activeTab === '전체' ||
                 (activeTab === '즐겨찾기' && post.favorite) ||
@@ -163,7 +216,9 @@ export default function Board() {
 
             return matchedTab && matchedKeyword
         })
-    }, [posts, activeTab, keyword])
+
+        return sortPosts(matchedPosts, sortType)
+    }, [posts, activeTab, keyword, sortType])
 
     return (
         <div>
@@ -235,6 +290,63 @@ export default function Board() {
                 ))}
             </div>
 
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    padding: '12px 16px',
+                    background: 'var(--color-bg)',
+                }}
+            >
+                <span
+                    style={{
+                        fontSize: 13,
+                        fontWeight: 800,
+                        color: 'var(--color-text-primary)',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    정렬
+                </span>
+
+                <div
+                    style={{
+                        display: 'flex',
+                        gap: 8,
+                        overflowX: 'auto',
+                    }}
+                >
+                    {SORT_OPTIONS.map((option) => (
+                        <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setSortType(option.key)}
+                            style={{
+                                padding: '7px 12px',
+                                borderRadius: 999,
+                                border: sortType === option.key
+                                    ? '1px solid var(--color-primary)'
+                                    : '1px solid var(--color-border)',
+                                background: sortType === option.key
+                                    ? 'var(--color-primary)'
+                                    : 'var(--color-surface)',
+                                color: sortType === option.key
+                                    ? 'white'
+                                    : 'var(--color-text-secondary)',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             {noticeMessage && (
                 <div
                     style={{
@@ -287,23 +399,23 @@ export default function Board() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                                     {post.pinned && (
                                         <span className="badge badge--orange" style={{ fontSize: 10 }}>
-                      고정
-                    </span>
+                                            고정
+                                        </span>
                                     )}
 
                                     {post.favorite && (
                                         <span className="badge badge--yellow" style={{ fontSize: 10 }}>
-                      ★ 즐겨찾기
-                    </span>
+                                            ★ 즐겨찾기
+                                        </span>
                                     )}
 
                                     <span className={`badge ${getCategoryBadgeClass(post.category)}`} style={{ fontSize: 10 }}>
-                    {post.category}
-                  </span>
+                                        {post.category}
+                                    </span>
 
                                     <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    {post.updatedAt ?? post.createdAt}
-                  </span>
+                                        {post.updatedAt ?? post.createdAt}
+                                    </span>
                                 </div>
 
                                 <h2
