@@ -8,6 +8,8 @@ export default function PaymentSuccess() {
   const [status, setStatus] = useState('loading')
   const [errorMsg, setErrorMsg] = useState('')
 
+  const returnTo = sessionStorage.getItem('payment-return-to')
+
   useEffect(() => {
     const paymentKey = searchParams.get('paymentKey')
     const orderId = searchParams.get('orderId')
@@ -21,7 +23,10 @@ export default function PaymentSuccess() {
 
     paymentAPI
       .confirmPayment(paymentKey, orderId, amount)
-      .then(() => setStatus('done'))
+      .then(() => {
+        sessionStorage.removeItem('payment-return-to')
+        setStatus('done')
+      })
       .catch((e) => {
         setStatus('error')
         setErrorMsg(e?.message ?? '결제 승인 중 오류가 발생했습니다.')
@@ -65,7 +70,15 @@ export default function PaymentSuccess() {
       <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 28, textAlign: 'center' }}>
         결제가 성공적으로 처리되었습니다.
       </p>
-      <button onClick={() => navigate('/payment/history')} style={btnStyle}>
+      {returnTo && (
+        <button onClick={() => navigate(returnTo)} style={btnStyle}>
+          AI 리포트로 돌아가기
+        </button>
+      )}
+      <button
+        onClick={() => navigate('/payment/history')}
+        style={{ ...btnStyle, marginTop: returnTo ? 10 : 0, background: returnTo ? 'var(--color-surface)' : 'var(--color-primary)', color: returnTo ? 'var(--color-primary)' : 'white', border: returnTo ? '1.5px solid var(--color-primary)' : 'none' }}
+      >
         결제 내역 보기
       </button>
       <button
