@@ -49,7 +49,7 @@ export function getDefaultRoute(role) {
 
 const AuthContext = createContext(null)
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
-
+const BASE_URL = import.meta.env.VITE_API_URL
 
 const MOCK_PASSWORD = '1234'
 const MOCK_USERS = {
@@ -127,7 +127,7 @@ export function AuthProvider({ children }) {
 
     try {
             const data = await authAPI.login({
-        username: normalizedUsername,
+            username: normalizedUsername,
         password,
       })
 

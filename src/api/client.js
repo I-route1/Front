@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
+const BASE_URL = import.meta.env.VITE_API_URL
 
 function getToken() {
   try {
@@ -57,6 +57,7 @@ export async function apiCall(path, options = {}) {
 
   const headers = {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': '69420',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   }
