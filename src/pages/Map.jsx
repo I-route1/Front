@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Client } from '@stomp/stompjs';
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
-import { getBusCurrentLocation, getBusRoute, getStudentEtas, getStudentCurrentLocation } from '../services/gpsService';
-import BackButton from '../components/common/BackButton'
 
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
@@ -35,72 +31,7 @@ export default function Map() {
 
   const [isDelayed, setIsDelayed] = useState(false)
 
-  const [errorMessage, setErrorMessage] = useState(null)
-  const [updatedAt, setUpdatedAt] = useState(null)
-  const [busLocation, setBusLocation] = useState(null)
-  const [mapInstance, setMapInstance] = useState(null)
-  const [busMarker, setBusMarker] = useState(null)
-  const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' });
-  const [studentEtas, setStudentEtas] = useState([]);
-  const [isChildOnBoard, setIsChildOnBoard] = useState(null); // null=미확인, true=탑승중, false=하차완료
-  const [portalContainer, setPortalContainer] = useState(null)
-
-  useEffect(() => {
-    let active = true
-    let cleanupFn = null
-
-    const setupPortal = () => {
-      const titleEl = document.querySelector('.topbar__title')
-      const topBar = document.querySelector('.topbar')
-
-      if (titleEl && topBar) {
-        const btnWrapper = document.createElement('div')
-        btnWrapper.id = 'map-back-button-portal'
-        btnWrapper.style.display = 'flex'
-        btnWrapper.style.alignItems = 'center'
-        btnWrapper.style.marginRight = '8px'
-        btnWrapper.style.cursor = 'pointer'
-
-        topBar.insertBefore(btnWrapper, titleEl)
-
-        const originalMarginRight = titleEl.style.marginRight
-        titleEl.style.marginRight = 'auto'
-
-        if (active) {
-          setPortalContainer(btnWrapper)
-        }
-
-        cleanupFn = () => {
-          btnWrapper.remove()
-          if (titleEl) {
-            titleEl.style.marginRight = originalMarginRight
-          }
-        }
-      }
-    }
-
-    setupPortal()
-
-    return () => {
-      active = false
-      if (cleanupFn) {
-        cleanupFn()
-      }
-    }
-  }, [])
-
-  const displayStations = routeData.stations.length > 0
-    ? routeData.stations
-    : MOCK_ROUTE.map((stop, i) => ({
-      stationId: stop.id,
-      stationName: stop.name,
-      sequence: i + 1,
-      status: i < currentStopIndex ? 'PASSED' : (i === currentStopIndex ? 'ARRIVING' : 'NOT_YET')
-    }));
-
-  const activeStationIndex = displayStations.findIndex(s => s.status === 'ARRIVING');
-  const activeIndex = activeStationIndex !== -1 ? activeStationIndex : currentStopIndex;
-  const globalEta = Math.max(12 - activeIndex * 3, 0) + (isDelayed ? 5 : 0);
+  const globalEta = Math.max(12 - currentStopIndex * 3, 0) + (isDelayed ? 5 : 0);
 
   useEffect(() => {
     setDriverInfo(mockVehicleInfo)
@@ -469,14 +400,6 @@ export default function Map() {
         </div>
       </div>
 
-      {portalContainer && createPortal(
-        <BackButton
-          to="/home"
-          label=""
-          style={{ color: 'var(--color-text-primary)' }}
-        />,
-        portalContainer
-      )}
     </div>
   )
 }
