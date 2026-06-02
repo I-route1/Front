@@ -48,7 +48,7 @@ export function getDefaultRoute(role) {
 
 const AuthContext = createContext(null)
 const PASSWORD_RULES = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
+const BASE_URL = import.meta.env.VITE_API_URL
 
 const MOCK_PASSWORD = '1234'
 const MOCK_USERS = {
