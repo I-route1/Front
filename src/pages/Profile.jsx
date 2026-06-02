@@ -464,10 +464,10 @@ const SETTINGS = [
     ],
   },
   {
-    title: '앱',
-    items: [
-      { icon: '❓', label: '도움말', color: '#95A5A6' },
-      { icon: '📋', label: '이용약관', color: '#7F8C8D' },
-    ],
-  },
+  title: '앱',
+  items: [
+    { icon: '❓', label: '도움말', color: '#95A5A6', to: '/help' },
+    { icon: '📋', label: '이용약관', color: '#7F8C8D', to: '/terms' },
+  ],
+},
 ]

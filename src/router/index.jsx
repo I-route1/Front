@@ -32,6 +32,8 @@ import Notifications from '@/pages/Notifications'
 import OAuthCallback from '@/pages/OAuthCallback'
 import Attendance from '@/pages/Attendance'
 import EmailVerify from '@/pages/EmailVerify'
+import Help from '@/pages/Help'
+import Terms from '@/pages/Terms'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -71,6 +73,8 @@ export const router = createBrowserRouter([
       { path: 'profile/edit', element: <EditProfile /> },
       { path: 'profile/password', element: <ChangePassword /> },
       { path: 'profile/delete', element: <DeleteAccount /> },
+      { path: 'help', element: <Help /> },
+      { path: 'terms', element: <Terms /> },
       { path: 'payment', element: <Payment /> },
       { path: 'payment/success', element: <PaymentSuccess /> },
       { path: 'payment/billing/success', element: <PaymentBillingSuccess /> },
