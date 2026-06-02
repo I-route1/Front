@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import BackButton from '../components/common/BackButton'
+import { authAPI } from '@/api'
 
 export default function FindPassword() {
   const [form, setForm] = useState({
-    loginIdOrEmail: '',
+    email: '',
   })
+
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -25,10 +28,10 @@ export default function FindPassword() {
   const validate = () => {
     const nextErrors = {}
 
-    if (!form.loginIdOrEmail.trim()) {
-      nextErrors.loginIdOrEmail = '이메일 또는 아이디를 입력해 주세요'
-    } else if (form.loginIdOrEmail.trim().length < 4) {
-      nextErrors.loginIdOrEmail = '이메일 또는 아이디는 4자 이상 입력해 주세요'
+    if (!form.email.trim()) {
+      nextErrors.email = '이메일을 입력해 주세요'
+    } else if (!form.email.includes('@')) {
+      nextErrors.email = '올바른 이메일을 입력해 주세요'
     }
 
     return nextErrors
@@ -45,17 +48,11 @@ export default function FindPassword() {
     setLoading(true)
 
     try {
-      // TODO: POST /api/auth/password/reset-link
-      // request body 예시:
-      // {
-      //   loginIdOrEmail: form.loginIdOrEmail
-      // }
-      await new Promise((resolve) => setTimeout(resolve, 800))
-
+      await authAPI.sendPasswordResetEmail(form.email.trim())
       setSent(true)
-    } catch {
+    } catch (error) {
       setErrors({
-        submit: '비밀번호 재설정 링크 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+        submit: error.message || '비밀번호 재설정 링크 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.',
       })
     } finally {
       setLoading(false)
@@ -73,22 +70,16 @@ export default function FindPassword() {
           position: 'relative',
         }}
       >
-        <Link
-          to="/login"
-          style={{
-            position: 'absolute',
-            left: 20,
-            top: 16,
-            color: 'rgba(255,255,255,0.75)',
-            fontSize: 24,
-          }}
-        >
-          ←
-        </Link>
+        <BackButton
+  label="뒤로가기"
+  className="absolute left-5 top-4"
+  style={{ color: 'white' }}
+/>
 
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>비밀번호 찾기</h1>
+
         <p style={{ fontSize: 13, opacity: 0.75, marginTop: 6 }}>
-          가입한 이메일 또는 아이디로 비밀번호 재설정 링크를 발송합니다.
+          가입한 이메일로 비밀번호 재설정 링크를 발송합니다.
         </p>
       </div>
 
@@ -112,23 +103,27 @@ export default function FindPassword() {
               <p style={{ fontSize: 13, color: 'var(--color-primary)', fontWeight: 700 }}>
                 비밀번호 재설정 안내
               </p>
+
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.6 }}>
-                입력한 정보가 가입 정보와 일치하면 비밀번호 재설정 링크가 이메일로 발송됩니다.
+                입력한 이메일이 가입 정보와 일치하면 비밀번호 재설정 링크가 발송됩니다.
               </p>
             </div>
 
             <div className="input-group">
-              <label className="input-label">이메일 또는 아이디</label>
+              <label className="input-label">이메일</label>
+
               <input
                 className="input-field"
-                value={form.loginIdOrEmail}
-                onChange={(event) => update('loginIdOrEmail', event.target.value)}
-                placeholder="이메일 또는 아이디를 입력해 주세요"
-                style={{ borderColor: errors.loginIdOrEmail ? 'var(--color-danger)' : '' }}
+                type="email"
+                value={form.email}
+                onChange={(event) => update('email', event.target.value)}
+                placeholder="example@email.com"
+                style={{ borderColor: errors.email ? 'var(--color-danger)' : '' }}
               />
-              {errors.loginIdOrEmail && (
+
+              {errors.email && (
                 <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                  {errors.loginIdOrEmail}
+                  {errors.email}
                 </p>
               )}
             </div>
@@ -162,9 +157,9 @@ export default function FindPassword() {
             </button>
 
             <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>
-              아이디가 기억나지 않나요?{' '}
+              가입 이메일이 기억나지 않나요?{' '}
               <Link to="/find-id" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>
-                아이디 찾기
+                이메일 찾기
               </Link>
             </p>
           </div>
@@ -177,7 +172,7 @@ export default function FindPassword() {
             </h2>
 
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8, lineHeight: 1.6 }}>
-              입력한 정보가 가입 정보와 일치하면 이메일로 비밀번호 재설정 링크가 발송됩니다.
+              입력한 이메일이 가입 정보와 일치하면 비밀번호 재설정 링크가 발송됩니다.
               <br />
               메일함을 확인해 주세요.
             </p>
@@ -194,6 +189,7 @@ export default function FindPassword() {
               <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-primary)' }}>
                 이메일을 확인해 주세요
               </p>
+
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.6 }}>
                 비밀번호 재설정 링크는 일정 시간 동안만 유효합니다.
                 메일이 보이지 않는 경우 스팸함을 확인하거나 다시 요청해 주세요.

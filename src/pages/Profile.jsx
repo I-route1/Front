@@ -16,10 +16,10 @@ export default function Profile() {
 
   const children = user?.children ?? []
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login', { replace: true })
-  }
+  const handleLogout = async () => {
+  await logout()
+  navigate('/login', { replace: true })
+}
 
   const handleMenuClick = (item) => {
     if (item.to) {
@@ -440,6 +440,13 @@ export default function Profile() {
 }
 
 const SETTINGS = [
+  {
+    title: '구독 / 결제',
+    items: [
+      { icon: '💳', label: '요금제 구독', color: '#1A56DB', to: '/payment' },
+      { icon: '📜', label: '결제 내역', color: '#9B59B6', to: '/payment/history' },
+    ],
+  },
   {
     title: '알림 설정',
     items: [

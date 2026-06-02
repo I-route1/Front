@@ -5,6 +5,15 @@ export const SUBJECT_COLORS = {
 }
 
 export const STUDENTS = [
+  // 백엔드 실제 데이터 학생 (성적 오름차순으로 배치)
+  { id:'S-1686', name:'김위험', grade:'고1', class:'A반', avgScore:55, trend:'▼', trendVal:-8,
+    scores:{ 국어:60, 수학:45, 영어:50, 사회:55, 과학:65 }, risk:'high' },
+  { id:'S-0155', name:'이보통', grade:'고1', class:'B반', avgScore:72, trend:'→', trendVal:0,
+    scores:{ 국어:70, 수학:68, 영어:75, 사회:72, 과학:75 }, risk:'low' },
+  { id:'S-KOR',  name:'박우수', grade:'고1', class:'A반', avgScore:92, trend:'▲', trendVal:5,
+    scores:{ 국어:95, 수학:88, 영어:90, 사회:93, 과학:94 }, risk:'low' },
+
+  // 기존 mock 학생들 (백엔드 데이터 없음)
   { id:1, name:'홍민준', grade:'초6', class:'A반', avgScore:82, trend:'▲', trendVal:4,
     scores:{ 국어:83, 수학:76, 영어:91, 사회:82, 과학:83 }, risk:'low' },
   { id:2, name:'김지은', grade:'초6', class:'A반', avgScore:71, trend:'▼', trendVal:-8,
@@ -21,14 +30,13 @@ export const STUDENTS = [
     scores:{ 국어:93, 수학:90, 영어:95, 사회:89, 과학:88 }, risk:'low' },
   { id:8, name:'윤서준', grade:'초6', class:'B반', avgScore:68, trend:'▼', trendVal:-6,
     scores:{ 국어:70, 수학:62, 영어:72, 사회:68, 과학:68 }, risk:'high' },
-    
 ]
 
 export const ACADEMY_STATS = {
-  totalStudents: 8,
-  avgScore: 77,
-  topCount: 3,      // 80점 이상
-  riskCount: 3,     // 주의 학생
+  totalStudents: 11,   // 8 → 11
+  avgScore: 76,
+  topCount: 4,
+  riskCount: 4,
 }
 
 export const SUBJECT_AVG = [
@@ -40,11 +48,11 @@ export const SUBJECT_AVG = [
 ]
 
 export const GRADE_DIST = [
-  { grade:'1등급', count:1, color:'#1A56DB' },
+  { grade:'1등급', count:2, color:'#1A56DB' },
   { grade:'2등급', count:2, color:'#00C49A' },
   { grade:'3등급', count:3, color:'#FFB800' },
-  { grade:'4등급', count:2, color:'#FF6B35' },
-  { grade:'5등급', count:0, color:'#FF3B3B' },
+  { grade:'4등급', count:3, color:'#FF6B35' },
+  { grade:'5등급', count:1, color:'#FF3B3B' },
 ]
 
 export const INIT_FEEDBACKS = [
@@ -55,6 +63,12 @@ export const INIT_FEEDBACKS = [
 ]
 
 export const AI_REPORTS = {
+  // 백엔드 실제 학생 폴백 (API 실패 시)
+  'S-1686': { summary:'성적 하락 추세가 명확하게 감지됩니다. 기초 학력 보강이 시급합니다.', strong:'과학 기초', weak:'수학, 영어 전반', recommend:'개별 맞춤 보충 학습 + 학부모 상담 진행 권장' },
+  'S-0155': { summary:'평균적인 학습 수준으로 안정적입니다. 약점 과목 보완 시 상위권 진입 가능합니다.', strong:'영어, 과학', weak:'수학 응용', recommend:'수학 응용 문제 집중 훈련 4주 권장' },
+  'S-KOR':  { summary:'전 과목 최상위권 유지 중입니다. 심화 학습 및 경시대회 준비 권장합니다.', strong:'전 과목 고른 강점', weak:'없음', recommend:'올림피아드/경시대회 심화반 추천' },
+
+  // 기존 학생 폴백
   1: { summary:'전반적으로 안정적인 성적을 유지하고 있습니다. 수학 분수 영역 집중 보완 시 전체 평균 85점 달성 가능합니다.', strong:'영어 독해, 국어 문학', weak:'수학 분수', recommend:'분수 나눗셈 집중 훈련 2주 권장' },
   2: { summary:'최근 급격한 성적 하락이 감지되었습니다. 정서적 요인 점검 및 학부모 상담이 시급합니다.', strong:'영어 기초', weak:'수학 전반, 국어', recommend:'기초 개념 재학습 및 상담 병행 권장' },
   3: { summary:'전 과목 최상위권 유지 중입니다. 심화 학습으로 경시대회 준비를 권장합니다.', strong:'전 과목 고른 강점', weak:'없음', recommend:'올림피아드 준비 심화반 추천' },

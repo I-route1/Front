@@ -4,7 +4,7 @@ import { STUDENTS, INIT_FEEDBACKS } from './data/mockData'
 
 export default function FeedbackTab() {
   const [selectedStudent, setSelectedStudent] = useState('')
-  const [activities, setActivities] = useState([])      // 🆕 학습 기록 목록
+  const [activities, setActivities] = useState([])      
   const [loadingActivities, setLoadingActivities] = useState(false)
   
   // 피드백 작성 중인 activityId (인라인 폼)
@@ -15,7 +15,7 @@ export default function FeedbackTab() {
   
   const [filterStudent, setFilterStudent] = useState('전체')
   
-  // 🆕 학생 선택 시 학습 기록 조회
+  // 학생 선택 시 학습 기록 조회
   useEffect(() => {
     if (!selectedStudent) {
       setActivities([])
@@ -38,7 +38,7 @@ export default function FeedbackTab() {
       .finally(() => setLoadingActivities(false))
   }, [selectedStudent])
   
-  // 🆕 피드백 작성 시작
+  // 피드백 작성 시작
   const startEdit = (activity) => {
     setEditingId(activity.id || activity.activityId)
     setFeedbackText(activity.instructorFeedback || '')
@@ -49,7 +49,7 @@ export default function FeedbackTab() {
     setFeedbackText('')
   }
   
-  // 🆕 피드백 저장 (PATCH)
+  // 피드백 저장 (PATCH)
   const handleSaveFeedback = async (activityId) => {
     if (!feedbackText.trim()) {
       alert('피드백 내용을 입력해 주세요')
@@ -80,7 +80,7 @@ export default function FeedbackTab() {
     }
   }
   
-  const selectedStudentInfo = STUDENTS.find(s => s.id === Number(selectedStudent))
+  const selectedStudentInfo = STUDENTS.find(s => String(s.id) === String(selectedStudent))
   
   // 필터된 학습 기록 (피드백 유무 기준)
   const withFeedback = activities.filter(a => a.instructorFeedback)
@@ -225,7 +225,7 @@ export default function FeedbackTab() {
   )
 }
 
-// 🆕 학습 기록 카드 (피드백 작성/조회/수정 통합)
+// 학습 기록 카드 (피드백 작성/조회/수정 통합)
 function ActivityCard({ activity, subjectColor, editingId, feedbackText, setFeedbackText, startEdit, cancelEdit, handleSave, savingId, savedId }) {
   const activityId = activity.id || activity.activityId
   const isEditing = editingId === activityId

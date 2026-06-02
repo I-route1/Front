@@ -26,7 +26,7 @@ async function refreshAccessToken() {
   const refreshToken = getRefreshToken()
   if (!refreshToken) throw new Error('No refresh token')
 
-  const res = await fetch(`${BASE_URL}/api/auth/reissue`, {
+  const res = await fetch(`${BASE_URL}/api/auth/token/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
@@ -36,11 +36,16 @@ async function refreshAccessToken() {
 
   const data = await res.json()
 
-  // 새 토큰 저장
   const saved = sessionStorage.getItem('i-route-user')
   if (saved) {
     const user = JSON.parse(saved)
+
     user.token = data.accessToken
+
+    if (data.refreshToken) {
+      user.refreshToken = data.refreshToken
+    }
+
     sessionStorage.setItem('i-route-user', JSON.stringify(user))
   }
 
@@ -83,9 +88,9 @@ export async function apiCall(path, options = {}) {
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || `HTTP ${res.status}`)
-  }
+  const err = await res.json().catch(() => ({}))
+  throw new Error(err.message || err.error || `HTTP ${res.status}`)
+}
 
   const text = await res.text()
   return text ? JSON.parse(text) : null

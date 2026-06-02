@@ -15,14 +15,18 @@ export default function OverviewTab() {
 
   useEffect(() => {
     if (!user?.id) return
-    analysisAPI.getRiskAnalysis('14')
-      .then(data => {
-        if (data?.atRisk) setApiRiskStudents([data])
+    const stringIds = STUDENTS.map(s => s.id).filter(id => typeof id === 'string')
+    Promise.allSettled(stringIds.map(id => analysisAPI.getRiskAnalysis(id)))
+      .then(results => {
+        const risks = results
+          .filter(r => r.status === 'fulfilled' && r.value?.atRisk)
+          .map(r => r.value)
+        setApiRiskStudents(risks)
       })
       .catch(e => console.error('위험 학생 조회 실패:', e))
   }, [user?.id])
 
-  const grades  = ['전체', ...new Set(STUDENTS.map(s => s.grade))].sort()
+  const grades  = ['전체', '초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3']
   const classes = ['전체', 'A반', 'B반', 'C반']
 
   // 필터 적용된 학생 목록

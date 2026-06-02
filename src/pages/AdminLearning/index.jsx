@@ -2,11 +2,13 @@ import { useState } from 'react'
 import OverviewTab from './OverviewTab'
 import StudentsTab from './StudentsTab'
 import FeedbackTab from './FeedbackTab'
+import GradeRegisterTab from './GradeRegisterTab'   
 
 const TABS = [
   { id: 'overview', label: '📊 전체현황' },
   { id: 'students', label: '👥 학생관리' },
   { id: 'feedback', label: '📝 피드백' },
+  { id: 'grade',    label: '🎯 성적 등록' },         
 ]
 
 export default function AdminLearning() {
@@ -34,6 +36,7 @@ export default function AdminLearning() {
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'students' && <StudentsTab />}
       {activeTab === 'feedback' && <FeedbackTab />}
+      {activeTab === 'grade'    && <GradeRegisterTab />}   
     </div>
   )
 }

@@ -1,23 +1,47 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import BackButton from '../components/common/BackButton'
+import { authAPI } from '@/api'
 
 export default function FindId() {
-  const [form, setForm] = useState({ name: '', email: '' })
+  const [form, setForm] = useState({
+    phoneNumber: '',
+  })
+
   const [errors, setErrors] = useState({})
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
   const update = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-    setErrors((prev) => ({ ...prev, [key]: '' }))
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }))
+
+    setErrors((prev) => ({
+      ...prev,
+      [key]: '',
+      submit: '',
+    }))
+
     setResult(null)
   }
 
-  const handleSubmit = async () => {
+  const validate = () => {
     const nextErrors = {}
+    const onlyNumbers = form.phoneNumber.replace(/\D/g, '')
 
-    if (!form.name.trim()) nextErrors.name = '이름을 입력해 주세요'
-    if (!form.email.includes('@')) nextErrors.email = '올바른 이메일을 입력해 주세요'
+    if (!onlyNumbers) {
+      nextErrors.phoneNumber = '휴대폰 번호를 입력해 주세요'
+    } else if (onlyNumbers.length < 10) {
+      nextErrors.phoneNumber = '올바른 휴대폰 번호를 입력해 주세요'
+    }
+
+    return nextErrors
+  }
+
+  const handleSubmit = async () => {
+    const nextErrors = validate()
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
@@ -27,11 +51,14 @@ export default function FindId() {
     setLoading(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 700))
+      const data = await authAPI.findEmailByPhone(form.phoneNumber.replace(/\D/g, ''))
 
       setResult({
-        username: 'parent_user',
-        joinedAt: '2026.03.27',
+        email: data?.email || '',
+      })
+    } catch (error) {
+      setErrors({
+        submit: error.message || '가입 정보를 찾을 수 없습니다.',
       })
     } finally {
       setLoading(false)
@@ -49,69 +76,123 @@ export default function FindId() {
           position: 'relative',
         }}
       >
-        <Link to="/login" style={{ position: 'absolute', left: 20, top: 16, color: 'rgba(255,255,255,0.75)', fontSize: 24 }}>
-          ←
-        </Link>
+        <BackButton
+  label="뒤로가기"
+  className="absolute left-5 top-4"
+  style={{ color: 'white' }}
+/>
+
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>아이디 찾기</h1>
+
         <p style={{ fontSize: 13, opacity: 0.75, marginTop: 6 }}>
-          가입 시 입력한 정보를 통해 아이디를 확인합니다.
+          가입 시 입력한 휴대폰 번호로 이메일을 확인합니다.
         </p>
       </div>
 
-      <div style={{ padding: '28px 20px', maxWidth: 480, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div
+        style={{
+          padding: '28px 20px',
+          maxWidth: 480,
+          width: '100%',
+          margin: '0 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 18,
+        }}
+      >
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="input-group">
-            <label className="input-label">이름</label>
-            <input
-              className="input-field"
-              value={form.name}
-              onChange={(e) => update('name', e.target.value)}
-              placeholder="이름을 입력해 주세요"
-              style={{ borderColor: errors.name ? 'var(--color-danger)' : '' }}
-            />
-            {errors.name && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.name}</p>}
+          <div
+            style={{
+              background: 'var(--color-primary-light)',
+              borderRadius: 12,
+              padding: 14,
+            }}
+          >
+            <p style={{ fontSize: 13, color: 'var(--color-primary)', fontWeight: 700 }}>
+              가입 이메일 조회 안내
+            </p>
+
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.6 }}>
+              가입 시 등록한 휴대폰 번호를 입력하면 연결된 이메일을 확인할 수 있습니다.
+            </p>
           </div>
 
           <div className="input-group">
-            <label className="input-label">이메일</label>
+            <label className="input-label">휴대폰 번호</label>
+
             <input
               className="input-field"
-              type="email"
-              value={form.email}
-              onChange={(e) => update('email', e.target.value)}
-              placeholder="example@email.com"
-              style={{ borderColor: errors.email ? 'var(--color-danger)' : '' }}
+              type="tel"
+              value={form.phoneNumber}
+              onChange={(event) => update('phoneNumber', formatPhone(event.target.value))}
+              placeholder="010-0000-0000"
+              style={{ borderColor: errors.phoneNumber ? 'var(--color-danger)' : '' }}
             />
-            {errors.email && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.email}</p>}
+
+            {errors.phoneNumber && (
+              <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+                {errors.phoneNumber}
+              </p>
+            )}
           </div>
+
+          {errors.submit && (
+            <div
+              style={{
+                background: '#FFE9E9',
+                border: '1px solid #FFBCBC',
+                borderRadius: 10,
+                padding: '12px 14px',
+              }}
+            >
+              <p style={{ fontSize: 13, color: 'var(--color-danger)', fontWeight: 600 }}>
+                {errors.submit}
+              </p>
+            </div>
+          )}
 
           <button
             onClick={handleSubmit}
             disabled={loading}
             className="btn btn--primary btn--full"
-            style={{ padding: 15, opacity: loading ? 0.65 : 1 }}
+            style={{
+              padding: 15,
+              opacity: loading ? 0.65 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
           >
-            {loading ? '확인 중...' : '아이디 찾기'}
+            {loading ? '확인 중...' : '이메일 찾기'}
           </button>
         </div>
 
         {result && (
           <div className="card" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-primary-light)' }}>
             <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-              입력하신 정보와 일치하는 아이디입니다.
+              입력하신 휴대폰 번호와 연결된 이메일입니다.
             </p>
+
             <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-primary)' }}>
-              {result.username}
+              {result.email || '이메일 정보 없음'}
             </h2>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
-              가입일: {result.joinedAt}
-            </p>
+
             <Link to="/login" className="btn btn--primary btn--full" style={{ marginTop: 16 }}>
               로그인하러 가기
+            </Link>
+
+            <Link to="/find-password" className="btn btn--secondary btn--full" style={{ marginTop: 10 }}>
+              비밀번호 찾기
             </Link>
           </div>
         )}
       </div>
     </div>
   )
+}
+
+function formatPhone(value) {
+  const raw = value.replace(/\D/g, '').slice(0, 11)
+
+  if (raw.length <= 3) return raw
+  if (raw.length <= 7) return `${raw.slice(0, 3)}-${raw.slice(3)}`
+  return `${raw.slice(0, 3)}-${raw.slice(3, 7)}-${raw.slice(7)}`
 }

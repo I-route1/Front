@@ -14,10 +14,13 @@
     "@stomp/stompjs": "^7.3.0",
     "axios": "^1.16.1",
     "firebase": "^12.13.0",
+    "lucide-react": "^1.17.0",
+    "playwright": "^1.60.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.0",
-    "recharts": "^2.15.4"
+    "recharts": "^2.15.4",
+    "stomp": "^0.1.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

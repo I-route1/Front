@@ -1,22 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { boardAPI } from '../api'
+import BackButton from '../components/common/BackButton'
 
-const BOARD_STORAGE_KEY = 'i-route-board-posts'
-
-const CATEGORY_OPTIONS = ['공지', '자유', '질문', '건의']
-
-function getPosts() {
-  const saved = localStorage.getItem(BOARD_STORAGE_KEY)
-  if (!saved) return []
-
-  try {
-    const parsed = JSON.parse(saved)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
+const CATEGORIES = ['공지', '자유', '질문', '건의']
+const DEFAULT_BOARD_ID = 1
 
 export default function BoardWrite() {
   const navigate = useNavigate()
@@ -32,11 +21,15 @@ export default function BoardWrite() {
 
   const update = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
-    setErrors((prev) => ({ ...prev, [key]: '' }))
+    setErrors((prev) => ({ ...prev, [key]: '', submit: '' }))
   }
 
   const validate = () => {
     const nextErrors = {}
+
+    if (!form.category) {
+      nextErrors.category = '태그를 선택해 주세요'
+    }
 
     if (!form.title.trim()) {
       nextErrors.title = '제목을 입력해 주세요'
@@ -62,129 +55,176 @@ export default function BoardWrite() {
     }
 
     setLoading(true)
+    setErrors({})
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      const userId = user?.id ?? user?.userId
 
-      const newPost = {
-        id: `post-${Date.now()}`,
-        category: form.category,
+      const payload = {
         title: form.title.trim(),
-        author: user?.name ?? '나',
         content: form.content.trim(),
-        createdAt: '방금 전',
-        views: 0,
-        likes: 0,
-        comments: 0,
-        pinned: false,
+        category: form.category,
+        author: user?.name ?? user?.nickname ?? '나',
+        userId,
       }
 
-      const posts = getPosts()
-      localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify([newPost, ...posts]))
+      const response = await boardAPI.createPost(DEFAULT_BOARD_ID, payload, userId)
 
-      navigate(`/board/${newPost.id}`, { replace: true })
+      const createdPostId =
+          response?.id ??
+          response?.postId ??
+          response?.post_id ??
+          response?.data?.id ??
+          response?.data?.postId
+
+      if (createdPostId && /^\d+$/.test(String(createdPostId))) {
+        navigate(`/board/${createdPostId}`, { replace: true })
+        return
+      }
+
+      navigate('/board', { replace: true })
+    } catch (error) {
+      console.error('게시글 등록 실패:', error)
+
+      setErrors({
+        submit: error.message || '게시글 등록에 실패했습니다. 백엔드 API를 확인해 주세요.',
+      })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div>
-      <section style={{ padding: '16px 20px', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            color: 'var(--color-primary)',
-          }}
-        >
-          ← 뒤로가기
-        </button>
-      </section>
+      <div>
+        <section
+    style={{
+      padding: '16px 20px',
+      background: 'var(--color-surface)',
+      borderBottom: '1px solid var(--color-border)',
+    }}
+>
+  <BackButton
+      label="뒤로가기"
+      style={{ color: 'var(--color-primary)' }}
+  />
+</section>
 
-      <section className="section">
-        <div className="section__header">
-          <h1 className="section__title" style={{ fontSize: 22 }}>
-            게시글 작성
-          </h1>
-        </div>
+        <section className="section">
+          <div className="section__header">
+            <h1 className="section__title" style={{ fontSize: 22 }}>
+              게시글 작성
+            </h1>
+          </div>
 
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div className="input-group">
-            <label className="input-label">게시글 유형</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {CATEGORY_OPTIONS.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => update('category', category)}
-                  style={{
-                    padding: '9px 4px',
-                    borderRadius: 10,
-                    border: `1.5px solid ${form.category === category ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                    background: form.category === category ? 'var(--color-primary-light)' : 'var(--color-surface-2)',
-                    color: form.category === category ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
-                  {category}
-                </button>
-              ))}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div className="input-group">
+              <label className="input-label">태그 선택</label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {CATEGORIES.map((category) => (
+                    <button
+                        key={category}
+                        type="button"
+                        onClick={() => update('category', category)}
+                        style={{
+                          padding: '9px 4px',
+                          borderRadius: 10,
+                          border: `1.5px solid ${
+                              form.category === category
+                                  ? 'var(--color-primary)'
+                                  : 'var(--color-border)'
+                          }`,
+                          background:
+                              form.category === category
+                                  ? 'var(--color-primary-light)'
+                                  : 'var(--color-surface-2)',
+                          color:
+                              form.category === category
+                                  ? 'var(--color-primary)'
+                                  : 'var(--color-text-secondary)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                    >
+                      {category}
+                    </button>
+                ))}
+              </div>
+
+              {errors.category && (
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+                    {errors.category}
+                  </p>
+              )}
             </div>
-          </div>
 
-          <div className="input-group">
-            <label className="input-label">제목</label>
-            <input
-              className="input-field"
-              value={form.title}
-              onChange={(e) => update('title', e.target.value)}
-              placeholder="제목을 입력해 주세요"
-              style={{ borderColor: errors.title ? 'var(--color-danger)' : '' }}
-            />
-            {errors.title && (
-              <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                {errors.title}
-              </p>
+            <div className="input-group">
+              <label className="input-label">제목</label>
+              <input
+                  className="input-field"
+                  value={form.title}
+                  onChange={(e) => update('title', e.target.value)}
+                  placeholder="제목을 입력해 주세요"
+                  style={{ borderColor: errors.title ? 'var(--color-danger)' : '' }}
+              />
+              {errors.title && (
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+                    {errors.title}
+                  </p>
+              )}
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">내용</label>
+              <textarea
+                  className="input-field"
+                  value={form.content}
+                  onChange={(e) => update('content', e.target.value)}
+                  placeholder="내용을 입력해 주세요"
+                  rows={8}
+                  style={{
+                    resize: 'none',
+                    lineHeight: 1.6,
+                    borderColor: errors.content ? 'var(--color-danger)' : '',
+                  }}
+              />
+              {errors.content && (
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+                    {errors.content}
+                  </p>
+              )}
+            </div>
+
+            {errors.submit && (
+                <div
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: 12,
+                      background: '#fee2e2',
+                      color: '#b91c1c',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      lineHeight: 1.5,
+                    }}
+                >
+                  {errors.submit}
+                </div>
             )}
-          </div>
 
-          <div className="input-group">
-            <label className="input-label">내용</label>
-            <textarea
-              className="input-field"
-              value={form.content}
-              onChange={(e) => update('content', e.target.value)}
-              placeholder="내용을 입력해 주세요"
-              rows={8}
-              style={{
-                resize: 'none',
-                lineHeight: 1.6,
-                borderColor: errors.content ? 'var(--color-danger)' : '',
-              }}
-            />
-            {errors.content && (
-              <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                {errors.content}
-              </p>
-            )}
+            <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="btn btn--primary btn--full"
+                style={{
+                  padding: '15px',
+                  opacity: loading ? 0.65 : 1,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                }}
+            >
+              {loading ? '등록 중...' : '등록하기'}
+            </button>
           </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="btn btn--primary btn--full"
-            style={{
-              padding: '15px',
-              opacity: loading ? 0.65 : 1,
-              cursor: loading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {loading ? '등록 중...' : '등록하기'}
-          </button>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
   )
 }
