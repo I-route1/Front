@@ -34,6 +34,7 @@ import Attendance from '@/pages/Attendance'
 import EmailVerify from '@/pages/EmailVerify'
 import Help from '@/pages/Help'
 import Terms from '@/pages/Terms'
+import PushNotificationSettings from '@/pages/PushNotificationSettings'
 
 export const router = createBrowserRouter([
   // 비로그인 페이지
@@ -75,6 +76,7 @@ export const router = createBrowserRouter([
       { path: 'profile/delete', element: <DeleteAccount /> },
       { path: 'help', element: <Help /> },
       { path: 'terms', element: <Terms /> },
+      { path: 'notification-settings', element: <PushNotificationSettings /> },
       { path: 'payment', element: <Payment /> },
       { path: 'payment/success', element: <PaymentSuccess /> },
       { path: 'payment/billing/success', element: <PaymentBillingSuccess /> },
