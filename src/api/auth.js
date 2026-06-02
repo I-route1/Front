@@ -54,8 +54,8 @@ export const authAPI = {
     })
   },
 
-  findEmailByPhone(phoneNumber) {
-    return apiCall('/api/auth/find/email', {
+  findUsernameAndEmailByPhone(phoneNumber) {
+    return apiCall('/api/auth/find/username-email', {
       method: 'POST',
       body: JSON.stringify({
         phoneNumber,

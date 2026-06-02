@@ -31,7 +31,7 @@ export const boardAPI = {
 
   // 게시판별 게시글 목록
   getPostsByBoard(boardId, userId) {
-    return apiCall(withUserId(`/api/boards/${boardId}/posts`, userId), {
+    return apiCall(withUserId(`/api/posts`, userId), {
       method: 'GET',
     })
   },
@@ -56,8 +56,8 @@ export const boardAPI = {
   },
 
   // 게시글 작성
-  createPost(boardId, payload, userId) {
-    return apiCall(withUserId(`/api/boards/${boardId}/posts`, userId), {
+  createPost(payload, userId) {
+    return apiCall(withUserId('/api/posts', userId), {
       method: 'POST',
       body: JSON.stringify(payload),
     })
@@ -72,10 +72,13 @@ export const boardAPI = {
   },
 
   // 게시글 삭제
-  deletePost(postId) {
-    return apiCall(`/api/posts/${postId}`, {
-      method: 'DELETE',
-    })
+  deletePost(postId, userId) {
+    return apiCall(
+        `/api/posts/${postId}?userId=${userId}`,
+        {
+          method: 'DELETE',
+        }
+    )
   },
 
   // 좋아요
@@ -115,8 +118,8 @@ export const boardAPI = {
   },
 
   // 댓글 삭제
-  deleteComment(postId, commentId) {
-    return apiCall(`/api/posts/${postId}/comments/${commentId}`, {
+  deleteComment(postId, commentId, userId) {
+    return apiCall(`/api/posts/${postId}/comments/${commentId}?userId=${encodeURIComponent(userId)}`, {
       method: 'DELETE',
     })
   },

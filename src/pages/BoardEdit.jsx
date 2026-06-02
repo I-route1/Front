@@ -21,6 +21,7 @@ function normalizePost(rawPost) {
     comments: rawPost.comments ?? rawPost.commentCount ?? 0,
     pinned: !!rawPost.pinned,
     favorite: !!(rawPost.favorite ?? rawPost.bookmarked ?? rawPost.isBookmarked),
+    userId: rawPost.userId ?? rawPost.authorId ?? rawPost.writerId,
   }
 }
 
