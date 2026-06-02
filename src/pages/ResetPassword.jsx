@@ -95,17 +95,19 @@ export default function ResetPassword() {
         }}
       >
         <Link
-          to="/login"
-          style={{
-            position: 'absolute',
-            left: 20,
-            top: 16,
-            color: 'rgba(255,255,255,0.75)',
-            fontSize: 24,
-          }}
-        >
-          ←
-        </Link>
+  to="/login"
+  style={{
+    position: 'absolute',
+    left: 20,
+    top: 16,
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 700,
+    textDecoration: 'none',
+  }}
+>
+  ← 로그인
+</Link>
 
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>비밀번호 재설정</h1>
 
