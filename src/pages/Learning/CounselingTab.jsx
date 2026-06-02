@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { counselingAPI, studyPlanAPI } from '@/api'
 import { paymentAPI } from '@/api/payment'
 import { RecommendRoadmapSection, AnalysisReportSection } from './RecommendRoadmap'
 import { counselingAPI, studyPlanAPI, aiReportAPI } from '@/api'
@@ -64,18 +63,15 @@ export default function CounselingTab() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState({})
   const [results, setResults] = useState({})
-  const [errors, setErrors]   = useState({})
+  const [errors, setErrors] = useState({})
   const [credits, setCredits] = useState(null)
+  const [selectedSubject, setSelectedSubject] = useState({})
 
   useEffect(() => {
     paymentAPI.getCredits()
       .then(data => setCredits(data.premiumCredits))
       .catch(() => setCredits(0))
   }, [])
-  const [loading, setLoading]         = useState({})
-  const [results, setResults]         = useState({})
-  const [errors, setErrors]           = useState({})
-  const [selectedSubject, setSelectedSubject] = useState({})
 
   const handleGenerate = async (reportType) => {
     const { id, api, apiSource } = reportType
@@ -102,8 +98,6 @@ export default function CounselingTab() {
     setErrors(prev => ({ ...prev, [id]: null }))
 
     try {
-      const apiClient = apiSource === 'studyPlan' ? studyPlanAPI : counselingAPI
-      const res = await apiClient[api](String(user.id))
       let res
       if (apiSource === 'aiReport') {
         const subject = selectedSubject[id] || '수학'
@@ -149,24 +143,23 @@ export default function CounselingTab() {
               </div>
             </div>
 
-            {/* 생성 버튼 */}
-            <div style={{ padding:'0 16px 16px' }}>
+            {/* 생성 버튼 영역 */}
+            <div style={{ padding: '0 16px 16px' }}>
+
               {/* 프리미엄 크레딧 표시 */}
               {r.id === 'premium' && (
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:12, color:'var(--color-text-muted)' }}>보유 크레딧</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>보유 크레딧</span>
                   <span style={{
-                    fontSize:13, fontWeight:700,
+                    fontSize: 13, fontWeight: 700,
                     color: credits > 0 ? '#1A56DB' : 'var(--color-danger)',
                     background: credits > 0 ? '#1A56DB18' : '#FF3B3B12',
-                    padding:'2px 10px', borderRadius:20,
+                    padding: '2px 10px', borderRadius: 20,
                   }}>
                     {credits === null ? '...' : `${credits}개`}
                   </span>
                 </div>
               )}
-            {/* 생성 버튼 영역 */}
-            <div style={{ padding: '0 16px 16px' }}>
 
               {/* 과목 선택 드롭다운 (AI 추천만) */}
               {r.needsSubject && (
@@ -193,13 +186,10 @@ export default function CounselingTab() {
                 onClick={() => handleGenerate(r)}
                 disabled={loading[r.id] || (r.id === 'premium' && credits === null)}
                 style={{
-                  width:'100%', padding:'11px', borderRadius:10, border:'none',
+                  width: '100%', padding: '11px', borderRadius: 10, border: 'none',
                   background: loading[r.id] ? 'var(--color-text-muted)'
                     : (r.id === 'premium' && credits === 0) ? '#FF6B35'
                     : r.color,
-                  color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit',
-                  width: '100%', padding: '11px', borderRadius: 10, border: 'none',
-                  background: loading[r.id] ? 'var(--color-text-muted)' : r.color,
                   color: 'white', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
                   cursor: loading[r.id] ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
