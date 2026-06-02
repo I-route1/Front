@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { boardAPI } from '../api'
+import BackButton from '../components/common/BackButton'
 
 const CATEGORIES = ['공지', '자유', '질문', '건의']
 
@@ -183,23 +184,17 @@ export default function BoardEdit() {
   return (
       <div>
         <section
-            style={{
-              padding: '16px 20px',
-              background: 'var(--color-surface)',
-              borderBottom: '1px solid var(--color-border)',
-            }}
-        >
-          <button
-              onClick={() => navigate(-1)}
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: 'var(--color-primary)',
-              }}
-          >
-            ← 뒤로가기
-          </button>
-        </section>
+    style={{
+      padding: '16px 20px',
+      background: 'var(--color-surface)',
+      borderBottom: '1px solid var(--color-border)',
+    }}
+>
+  <BackButton
+      label="뒤로가기"
+      style={{ color: 'var(--color-primary)' }}
+  />
+</section>
 
         {noticeMessage && (
             <div

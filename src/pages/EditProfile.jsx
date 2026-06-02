@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
+import BackButton from '../components/common/BackButton'
 
 export default function EditProfile() {
   const navigate = useNavigate()
@@ -224,23 +225,17 @@ const isValidGrade = (grade) => {
   return (
     <div>
       <section
-        style={{
-          padding: '16px 20px',
-          background: 'var(--color-surface)',
-          borderBottom: '1px solid var(--color-border)',
-        }}
-      >
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            color: 'var(--color-primary)',
-          }}
-        >
-          ← 뒤로가기
-        </button>
-      </section>
+  style={{
+    padding: '16px 20px',
+    background: 'var(--color-surface)',
+    borderBottom: '1px solid var(--color-border)',
+  }}
+>
+  <BackButton
+    label="뒤로가기"
+    style={{ color: 'var(--color-primary)' }}
+  />
+</section>
 
       <section className="section">
         <div className="section__header">

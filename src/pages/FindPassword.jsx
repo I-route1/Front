@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import BackButton from '../components/common/BackButton'
 import { authAPI } from '@/api'
 
 export default function FindPassword() {
@@ -69,18 +70,11 @@ export default function FindPassword() {
           position: 'relative',
         }}
       >
-        <Link
-          to="/login"
-          style={{
-            position: 'absolute',
-            left: 20,
-            top: 16,
-            color: 'rgba(255,255,255,0.75)',
-            fontSize: 24,
-          }}
-        >
-          ←
-        </Link>
+        <BackButton
+  label="뒤로가기"
+  className="absolute left-5 top-4"
+  style={{ color: 'white' }}
+/>
 
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>비밀번호 찾기</h1>
 

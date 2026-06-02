@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import BackButton from '../components/common/BackButton'
 import { authAPI } from '@/api'
 
 const ROLES = [
@@ -601,18 +602,11 @@ export default function Register() {
               position: 'relative',
             }}
         >
-          <Link
-              to="/login"
-              style={{
-                position: 'absolute',
-                left: 20,
-                top: 16,
-                color: 'rgba(255,255,255,0.7)',
-                fontSize: 24,
-              }}
-          >
-            ←
-          </Link>
+        <BackButton
+  label="뒤로가기"
+  className="absolute left-5 top-4"
+  style={{ color: 'white' }}
+/>
 
           <h1 style={{ fontSize: 24, fontWeight: 800 }}>회원가입</h1>
 
