@@ -2,113 +2,96 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-// Axios 인스턴스 생성
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
+// 인터셉터: sessionStorage 토큰 자동 첨부
+api.interceptors.request.use((config) => {
+  try {
+    const saved = sessionStorage.getItem('i-route-user');
+    if (saved) {
+      const user = JSON.parse(saved);
+      if (user?.token) config.headers.Authorization = `Bearer ${user.token}`;
+    }
+  } catch {}
+  return config;
+});
+
+const handleError = (label, error) => {
+  if (error.response) {
+    console.error(`[${label} - 서버 오류] ${error.response.status}`, error.response.data);
+  } else if (error.request) {
+    console.error(`[${label} - 응답 없음] 네트워크를 확인해주세요.`);
+  } else {
+    console.error(`[${label} - 설정 오류]`, error.message);
+  }
+  throw error;
+};
+
 /**
- * 기사 앱에서 현재 차량의 GPS 위치(위도, 경도, 속도, 방향 등)를 서버로 전송
- * @param {Object} locationData GPS 데이터 객체
- * @param {number} locationData.busId 차량 ID (Long 타입에 대응)
- * @param {number} locationData.latitude 현재 위도 (Double)
- * @param {number} locationData.longitude 현재 경도 (Double)
- * @param {number} locationData.speed 차량 속도 (Integer)
- * @param {number} locationData.heading 차량 이동 방향 각도 (Integer)
- * @returns {Promise<Object>} 서버 응답 데이터 (success, code, message 등)
+ * 기사 앱: GPS 위치 전송
+ * POST /api/gps/locations
+ * Body: { busId, latitude, longitude, speed, heading }
  */
 export const sendGpsLocation = async (locationData) => {
   try {
-    const response = await api.post('/api/gps/locations', locationData);
-    return response.data; // 성공 시 data(실제 응답 본문) 반환
-  } catch (error) {
-    if (error.response) {
-      // 서버가 2xx 범위를 벗어나는 상태 코드로 응답한 경우 (예: 400, 500)
-      console.error(
-        `[GPS 전송 에러 - 서버 응답 오류] 상태 코드: ${error.response.status}`,
-        error.response.data
-      );
-    } else if (error.request) {
-      // 요청이 전송되었으나 응답을 받지 못한 경우 (네트워크 오류, 서버 다운 등)
-      console.error('[GPS 전송 에러 - 응답 없음] 네트워크 상태를 확인해주세요.', error.request);
-    } else {
-      // 요청 설정 중에 문제가 발생한 경우
-      console.error('[GPS 전송 에러 - 설정 오류]', error.message);
-    }
-
-    // 호출부(컴포넌트)에서 UI 에러 처리를 할 수 있도록 에러를 다시 던짐
-    throw error;
-  }
+    const res = await api.post('/api/gps/locations', locationData);
+    return res.data;
+  } catch (e) { handleError('GPS 전송', e); }
 };
 
 /**
- * 학부모 앱에서 특정 차량의 최신 위치를 단발성으로 조회
- * @param {number} busId 차량 ID
- * @returns {Promise<Object>} 서버 응답 데이터
+ * 학부모 앱: 버스 현재 위치 조회
+ * GET /api/gps/buses/{busId}/current-location
+ * 응답: { busId, latitude, longitude, speed, heading, updatedAt, busNumber, driverName, driverPhoneNumber }
  */
 export const getBusCurrentLocation = async (busId) => {
   try {
-    const response = await api.get(`/api/gps/buses/${busId}/current-location`);
-    return response.data;
-  } catch (error) {
-    if (error.response) {
-      console.error(
-        `[GPS 조회 에러 - 서버 응답 오류] 상태 코드: ${error.response.status}`,
-        error.response.data
-      );
-    } else if (error.request) {
-      console.error('[GPS 조회 에러 - 응답 없음] 네트워크 상태를 확인해주세요.', error.request);
-    } else {
-      console.error('[GPS 조회 에러 - 설정 오류]', error.message);
-    }
-    throw error;
-  }
+    const res = await api.get(`/api/gps/buses/${busId}/current-location`);
+    return res.data;
+  } catch (e) { handleError('버스 위치 조회', e); }
 };
 
 /**
- * 특정 차량이 운행하는 노선의 정류장 목록과 현재 진행 상태(지나감, 도착 예정, 미운행)를 조회
- * @param {number} busId 차량 ID
- * @returns {Promise<Object>} 서버 응답 데이터
+ * 학부모 앱: 버스 노선·정류장 진행 상태·기사 정보 조회
+ * GET /api/gps/buses/{busId}/route
+ * 응답: { busId, routeId, routeName, busNumber, driverName, driverPhoneNumber,
+ *         stops: [{ stopId, stopName, latitude, longitude, stopOrder, status, etaMinutes }] }
+ * status: BEFORE_ARRIVAL | ARRIVED | PASSED
  */
-export const getBusRouteStatus = async (busId) => {
+export const getBusRoute = async (busId) => {
   try {
-    const response = await api.get(`/api/gps/buses/${busId}/route-status`);
-    return response.data;
-  } catch (error) {
-    if (error.response) {
-      console.error(
-        `[노선 상태 조회 에러 - 서버 응답 오류] 상태 코드: ${error.response.status}`,
-        error.response.data
-      );
-    } else if (error.request) {
-      console.error('[노선 상태 조회 에러 - 응답 없음] 네트워크 상태를 확인해주세요.', error.request);
-    } else {
-      console.error('[노선 상태 조회 에러 - 설정 오류]', error.message);
-    }
-    throw error;
-  }
+    const res = await api.get(`/api/gps/buses/${busId}/route`);
+    return res.data;
+  } catch (e) { handleError('버스 노선 조회', e); }
 };
 
 /**
- * 특정 버스의 학생별 ETA 목록을 조회
- * @param {number} busId 차량 ID
- * @returns {Promise<Object>} 서버 응답 데이터
+ * 학부모 앱: 학생별 ETA 목록 조회
+ * GET /api/gps/buses/{busId}/etas
+ * 응답: [{ studentId, studentName, stopId, stopName, etaMinutes, delayMinutes, lateRisk, delayReason }]
  */
 export const getStudentEtas = async (busId) => {
   try {
-    const response = await api.get(`/api/gps/buses/${busId}/etas`);
-    return response.data;
-  } catch (error) {
-    if (error.response) {
-      console.error(`[학생별 ETA 조회 에러 - 서버 응답 오류] 상태 코드: ${error.response.status}`, error.response.data);
-    } else if (error.request) {
-      console.error('[학생별 ETA 조회 에러 - 응답 없음] 네트워크 상태를 확인해주세요.', error.request);
-    } else {
-      console.error('[학생별 ETA 조회 에러 - 설정 오류]', error.message);
-    }
-    throw error;
+    const res = await api.get(`/api/gps/buses/${busId}/etas`);
+    return res.data;
+  } catch (e) { handleError('학생별 ETA 조회', e); }
+};
+
+/**
+ * 학부모 앱: 학생 현재 탑승 위치 조회
+ * GET /api/gps/students/{studentId}/current-location
+ * - 탑승 중: 200 + { busId, latitude, longitude, ... }
+ * - 하차 후: 204 No Content (null 반환)
+ */
+export const getStudentCurrentLocation = async (studentId) => {
+  try {
+    const res = await api.get(`/api/gps/students/${studentId}/current-location`);
+    return res.status === 204 ? null : res.data;
+  } catch (e) {
+    if (e.response?.status === 204) return null;
+    handleError('학생 탑승 위치 조회', e);
   }
 };
