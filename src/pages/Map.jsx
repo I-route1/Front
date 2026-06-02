@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Client } from '@stomp/stompjs';
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
 import { getBusCurrentLocation, getBusRoute, getStudentEtas, getStudentCurrentLocation } from '../services/gpsService';
+import BackButton from '../components/common/BackButton'
 
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
@@ -41,6 +43,37 @@ export default function Map() {
   const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' });
   const [studentEtas, setStudentEtas] = useState([]);
   const [isChildOnBoard, setIsChildOnBoard] = useState(null); // null=미확인, true=탑승중, false=하차완료
+  const [portalContainer, setPortalContainer] = useState(null)
+
+  useEffect(() => {
+    const topbar = document.querySelector('.topbar')
+    const titleEl = document.querySelector('.topbar__title')
+    let btnContainer = null
+
+    if (topbar) {
+      btnContainer = document.createElement('div')
+      btnContainer.className = 'topbar__back-container'
+      btnContainer.style.display = 'flex'
+      btnContainer.style.alignItems = 'center'
+      btnContainer.style.marginRight = '8px'
+
+      topbar.insertBefore(btnContainer, topbar.firstChild)
+      setPortalContainer(btnContainer)
+    }
+
+    if (titleEl) {
+      titleEl.style.marginRight = 'auto'
+    }
+
+    return () => {
+      if (topbar && btnContainer && topbar.contains(btnContainer)) {
+        topbar.removeChild(btnContainer)
+      }
+      if (titleEl) {
+        titleEl.style.marginRight = ''
+      }
+    }
+  }, [])
 
   const displayStations = routeData.stations.length > 0
     ? routeData.stations
@@ -302,6 +335,14 @@ export default function Map() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
+      {portalContainer && createPortal(
+        <BackButton
+          to="/home"
+          label=""
+          style={{ color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center' }}
+        />,
+        portalContainer
+      )}
 
       {errorMessage && (
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
