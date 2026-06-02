@@ -178,14 +178,32 @@ export function AuthProvider({ children }) {
   }
 
   const changePassword = async ({ currentPassword, newPassword, newPasswordConfirm }) => {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    if (!currentPassword) throw new Error('현재 비밀번호를 입력해 주세요')
-    if (!newPassword) throw new Error('새 비밀번호를 입력해 주세요')
-    if (!PASSWORD_RULES.test(newPassword))
+    if (!user) {
+      throw new Error('로그인 정보가 없습니다')
+    }
+
+    if (!currentPassword) {
+      throw new Error('현재 비밀번호를 입력해 주세요')
+    }
+
+    if (!newPassword) {
+      throw new Error('새 비밀번호를 입력해 주세요')
+    }
+
+    if (!PASSWORD_RULES.test(newPassword)) {
       throw new Error('새 비밀번호는 영문·숫자·특수문자를 포함하여 8자 이상이어야 합니다')
-    if (newPassword !== newPasswordConfirm)
+    }
+
+    if (newPassword !== newPasswordConfirm) {
       throw new Error('새 비밀번호가 일치하지 않습니다')
-    return true
+    }
+
+    return await authAPI.changePassword({
+      userId: user.id,
+      currentPassword,
+      newPassword,
+      newPasswordConfirm,
+    })
   }
 
   const reissueToken = async () => {

@@ -165,4 +165,11 @@ export const authAPI = {
       method: 'GET',
     })
   },
+
+  changePassword(payload) {
+    return apiCall('/api/auth/password/change', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
 }

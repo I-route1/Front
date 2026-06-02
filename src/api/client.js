@@ -68,7 +68,7 @@ export async function apiCall(path, options = {}) {
   })
 
   // 401이면 토큰 갱신 후 재시도
-  if (res.status === 401) {
+  if (res.status === 401 && path !== '/api/auth/login') {
     try {
       const newToken = await refreshAccessToken()
       const retryRes = await fetch(`${BASE_URL}${path}`, {
@@ -80,7 +80,6 @@ export async function apiCall(path, options = {}) {
       })
       res = retryRes
     } catch {
-      // 갱신 실패 시 로그아웃
       sessionStorage.removeItem('i-route-user')
       window.location.href = '/login'
       return
@@ -88,9 +87,14 @@ export async function apiCall(path, options = {}) {
   }
 
   if (!res.ok) {
-  const err = await res.json().catch(() => ({}))
-  throw new Error(err.message || err.error || `HTTP ${res.status}`)
-}
+    const err = await res.json().catch(() => ({}))
+    throw new Error(
+        err.message ||
+        err.error ||
+        err.detail ||
+        '요청 처리에 실패했습니다.'
+    )
+  }
 
   const text = await res.text()
   return text ? JSON.parse(text) : null
