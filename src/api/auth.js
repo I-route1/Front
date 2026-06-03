@@ -3,8 +3,7 @@ import { apiCall } from './client'
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://14.56.197.183:9090'
 
 const KAKAO_CLIENT_ID = import.meta.env.VITE_KAKAO_CLIENT_ID
-const KAKAO_REDIRECT_URI =
-    import.meta.env.VITE_KAKAO_REDIRECT_URI || 'http://localhost:3000/oauth/kakao/callback'
+const KAKAO_REDIRECT_URI = import.meta.env.VITE_KAKAO_REDIRECT_URI
 
 export const authAPI = {
   login({ username, password }) {
@@ -131,6 +130,10 @@ export const authAPI = {
     if (!KAKAO_CLIENT_ID) {
       throw new Error('VITE_KAKAO_CLIENT_ID가 설정되지 않았습니다.')
     }
+
+    if (!KAKAO_REDIRECT_URI) {
+  throw new Error('VITE_KAKAO_REDIRECT_URI가 설정되지 않았습니다.')
+}
 
     return (
         'https://kauth.kakao.com/oauth/authorize' +
