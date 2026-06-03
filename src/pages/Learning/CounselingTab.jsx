@@ -82,6 +82,7 @@ export default function CounselingTab() {
       .finally(() => setGradesLoading(false))
   }, [user?.id])
   
+
   useEffect(() => {
     paymentAPI.getCredits()
       .then(data => setCredits(data.premiumCredits))
@@ -161,6 +162,7 @@ export default function CounselingTab() {
             {/* 생성 버튼 영역 */}
             <div style={{ padding: '0 16px 16px' }}>
 
+            <div style={{ padding:'0 16px 16px' }}>
               {/* 프리미엄 크레딧 표시 */}
               {r.id === 'premium' && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -228,6 +230,23 @@ export default function CounselingTab() {
                   </>
                 )
               })()}
+              <button
+                onClick={() => handleGenerate(r)}
+                disabled={loading[r.id] || (r.id === 'premium' && credits === null)}
+                style={{
+                  width:'100%', padding:'11px', borderRadius:10, border:'none',
+                  background: loading[r.id] ? 'var(--color-text-muted)'
+                    : (r.id === 'premium' && credits === 0) ? '#FF6B35'
+                    : r.color,
+                  color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit',
+                  cursor: loading[r.id] ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {loading[r.id] ? '🤖 AI 분석 중...'
+                  : (r.id === 'premium' && credits === 0) ? '💳 크레딧 충전하기'
+                  : `${r.emoji} 리포트 생성`}
+              </button>
 
               {/* 에러 */}
               {errors[r.id] && (

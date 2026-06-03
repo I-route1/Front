@@ -18,27 +18,30 @@ export default function Login() {
     setErrors((prev) => ({ ...prev, [key]: '' }))
   }
 
-  const handleLogin = async () => {
-    const e = {}
+    const handleLogin = async () => {
+        const e = {}
 
-    if (!form.username.trim()) e.username = '아이디를 입력해 주세요'
-    if (!form.password) e.password = '비밀번호를 입력해 주세요'
+        if (!form.username.trim()) e.username = '아이디를 입력해 주세요'
+        if (!form.password) e.password = '비밀번호를 입력해 주세요'
 
-    if (Object.keys(e).length > 0) {
-      setErrors(e)
-      return
+        if (Object.keys(e).length > 0) {
+            setErrors(e)
+            return
+        }
+
+        setLoading(true)
+        setErrors({})
+
+        try {
+            await loginWithCredentials(form.username, form.password)
+        } catch (err) {
+            setErrors({
+                submit: err.message || '아이디 또는 비밀번호가 올바르지 않습니다.',
+            })
+        } finally {
+            setLoading(false)
+        }
     }
-
-    setLoading(true)
-
-    try {
-      await loginWithCredentials(form.username, form.password)
-    } catch (err) {
-      setErrors({ submit: err.message || '아이디 또는 비밀번호가 올바르지 않습니다' })
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleLogin()

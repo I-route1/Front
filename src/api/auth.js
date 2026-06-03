@@ -54,8 +54,8 @@ export const authAPI = {
     })
   },
 
-  findEmailByPhone(phoneNumber) {
-    return apiCall('/api/auth/find/email', {
+  findUsernameAndEmailByPhone(phoneNumber) {
+    return apiCall('/api/auth/find/username-email', {
       method: 'POST',
       body: JSON.stringify({
         phoneNumber,
@@ -163,6 +163,13 @@ export const authAPI = {
   checkEmailVerified(email) {
     return apiCall(`/api/auth/email/status?email=${encodeURIComponent(email)}`, {
       method: 'GET',
+    })
+  },
+
+  changePassword(payload) {
+    return apiCall('/api/auth/password/change', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     })
   },
 }

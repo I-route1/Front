@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { boardAPI } from '../api'
 import { useAuth } from '@/context/AuthContext'
+import { useEffect, useState, useRef } from 'react'
 import BackButton from '../components/common/BackButton'
 
 function normalizePost(rawPost) {
@@ -20,6 +20,7 @@ function normalizePost(rawPost) {
     pinned: !!rawPost.pinned,
     favorite: !!(rawPost.favorite ?? rawPost.bookmarked ?? rawPost.isBookmarked),
     liked: !!(rawPost.liked ?? rawPost.likedByMe ?? rawPost.isLiked),
+      userId: rawPost.userId ?? rawPost.authorId ?? rawPost.writerId,
   }
 }
 
@@ -31,6 +32,7 @@ function normalizeComment(rawComment) {
     createdAt: formatDate(rawComment.createdAt),
     likes: rawComment.likes ?? rawComment.likeCount ?? 0,
     liked: !!(rawComment.liked ?? rawComment.likedByMe ?? rawComment.isLiked),
+      userId: rawComment.userId ?? rawComment.authorId ?? rawComment.writerId,
   }
 }
 
@@ -74,41 +76,42 @@ export default function BoardDetail() {
   const [isLoading, setIsLoading] = useState(true)
   const [noticeMessage, setNoticeMessage] = useState('')
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+    const fetchedRef = useRef(false)
 
+    const isOwner = String(post?.userId) === String(userId)
   useEffect(() => {
-    let ignore = false
+      let ignore = false
 
-    async function fetchPostDetail() {
-      try {
-        setIsLoading(true)
-        setNoticeMessage('')
+      async function fetchPostDetail() {
 
-        if (!/^\d+$/.test(String(postId))) {
-          throw new Error('잘못된 게시글 ID입니다.')
-        }
+          try {
+              setIsLoading(true)
+              setNoticeMessage('')
+              if (!/^\d+$/.test(String(postId))) {
+                  throw new Error('잘못된 게시글 ID입니다.')
+              }
 
-        const postResponse = await boardAPI.getPostDetail(postId, userId)
-        const normalizedPost = normalizePost(postResponse)
+              const postResponse = await boardAPI.getPostDetail(postId, userId)
+              const normalizedPost = normalizePost(postResponse)
+              let normalizedComments = []
 
-        let normalizedComments = []
+              try {
+                  const commentsResponse = await boardAPI.getComments(postId, userId)
+                  if (Array.isArray(commentsResponse)) {
+                      normalizedComments = commentsResponse.map(normalizeComment)
+                  }
+              } catch (error) {
+                  console.warn('댓글 조회 실패:', error)
+              }
 
-        try {
-          const commentsResponse = await boardAPI.getComments(postId, userId)
-          if (Array.isArray(commentsResponse)) {
-            normalizedComments = commentsResponse.map(normalizeComment)
-          }
-        } catch (error) {
-          console.warn('댓글 조회 실패:', error)
-        }
-
-        if (!ignore) {
-          setPost(normalizedPost)
-          setLiked(normalizedPost.liked)
-          setFavorite(normalizedPost.favorite)
-          setComments(normalizedComments)
-        }
-      } catch (error) {
-        console.error('게시글 상세 조회 실패:', error)
+              if (!ignore) {
+                  setPost(normalizedPost)
+                  setLiked(normalizedPost.liked)
+                  setFavorite(normalizedPost.favorite)
+                  setComments(normalizedComments)
+              }
+          } catch (error) {
+              console.error('게시글 상세 조회 실패:', error)
 
         if (!ignore) {
           setPost(null)
@@ -125,7 +128,7 @@ export default function BoardDetail() {
     return () => {
       ignore = true
     }
-  }, [postId, userId])
+  }, [postId])
 
   const handleAddComment = async () => {
     const trimmedComment = commentText.trim()
@@ -206,7 +209,7 @@ export default function BoardDetail() {
     if (!confirmed) return
 
     try {
-      await boardAPI.deletePost(postId)
+        await boardAPI.deletePost(postId, userId)
       navigate('/board', { replace: true })
     } catch (error) {
       console.error('게시글 삭제 실패:', error)
@@ -219,7 +222,7 @@ export default function BoardDetail() {
     if (!confirmed) return
 
     try {
-      await boardAPI.deleteComment(postId, commentId)
+        await boardAPI.deleteComment(postId, commentId, userId)
       setComments((prev) => prev.filter((comment) => comment.id !== commentId))
     } catch (error) {
       console.error('댓글 삭제 실패:', error)
@@ -376,16 +379,20 @@ export default function BoardDetail() {
               {favorite ? '★ 즐겨찾기 완료' : '☆ 즐겨찾기'}
             </button>
 
-            <button
-                onClick={() => navigate(`/board/${postId}/edit`)}
-                className="btn btn--secondary"
-            >
-              수정
-            </button>
+              {isOwner && (
+                  <>
+                      <button
+                          onClick={() => navigate(`/board/${postId}/edit`)}
+                          className="btn btn--secondary"
+                      >
+                          수정
+                      </button>
 
-            <button onClick={handleDeletePost} className="btn btn--danger">
-              삭제
-            </button>
+                      <button onClick={handleDeletePost} className="btn btn--danger">
+                          삭제
+                      </button>
+                  </>
+              )}
           </div>
         </article>
 
@@ -470,18 +477,20 @@ export default function BoardDetail() {
                           공감 {comment.likes}
                         </button>
 
-                        <button
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="btn btn--danger"
-                            style={{
-                              width: 'auto',
-                              minHeight: 32,
-                              padding: '6px 10px',
-                              fontSize: 12,
-                            }}
-                        >
-                          삭제
-                        </button>
+                          {String(comment.userId) === String(userId) && (
+                              <button
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="btn btn--danger"
+                                  style={{
+                                      width: 'auto',
+                                      minHeight: 32,
+                                      padding: '6px 10px',
+                                      fontSize: 12,
+                                  }}
+                              >
+                                  삭제
+                              </button>
+                          )}
                       </div>
                     </div>
                 ))
