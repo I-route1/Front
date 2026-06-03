@@ -346,7 +346,7 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
     setAncestorLoading(true)
     try {
       await gradesAPI.analyzeGrade({
-        studentId: user.id,
+        studentId: effectiveId,
         score: 72,
         allScores: [55, 60, 72, 80, 91, 88, 45],
         weakConceptTag: '분수 나눗셈',

@@ -11,8 +11,9 @@ import {
 } from './data/mockData'
 import { useAuth } from '@/context/AuthContext'
 
-export default function PredictTab() {
+export default function PredictTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
+  const effectiveId = propStudentId ?? user?.id
   const [goal, setGoal]               = useState('')
   const [targetScore, setTargetScore] = useState('')
   const [plan, setPlan]               = useState(INIT_DAILY_PLAN)
@@ -30,11 +31,11 @@ export default function PredictTab() {
 
   // 에빙하우스 복습 알림
   useEffect(() => {
-    if (!user?.id) return
+    if (!effectiveId) return
     const fetchReview = async () => {
       setReviewLoading(true)
       try {
-        const res = await reviewAPI.getToday(user.id)
+        const res = await reviewAPI.getToday(effectiveId)
         setReviewData(res)
       } catch (e) {
         console.error('복습 알림 조회 실패:', e)
@@ -44,11 +45,11 @@ export default function PredictTab() {
       }
     }
     fetchReview()
-  }, [user?.id])
+  }, [effectiveId])
 
   // AI 성적 예측 — 마운트 시 자동 호출
   useEffect(() => {
-    if (!user?.id) return
+    if (!effectiveId) return
     const fetchPrediction = async () => {
       setPredictionLoading(true)
       try {
@@ -67,7 +68,7 @@ export default function PredictTab() {
       }
     }
     fetchPrediction()
-  }, [user?.id])
+  }, [effectiveId])
 
   // 로드맵 생성
   const handleGenerateRoadmap = async () => {
@@ -78,7 +79,7 @@ export default function PredictTab() {
     setGenerating(true)
     setRoadmapError(null)
     try {
-      const res = await studyPlanAPI.generateRoadmap(user.id, {
+      const res = await studyPlanAPI.generateRoadmap(effectiveId, {
         targetKeyword: goal,
         targetDate: '2026-11-15',
         dailyStudyHours: 2,

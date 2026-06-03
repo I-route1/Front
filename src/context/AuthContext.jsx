@@ -153,7 +153,17 @@ export function AuthProvider({ children }) {
     }
 
     if (MOCK_USERS[normalizedUsername] && password === MOCK_PASSWORD) {
-      saveUser(MOCK_USERS[normalizedUsername])
+      const mockUser = MOCK_USERS[normalizedUsername]
+      if (normalizeRole(mockUser.role) === USER_ROLES.PARENT && mockUser.children) {
+        mockUser.children = mockUser.children.map(c => ({
+          ...c,
+          id: c.id || c.studentId,
+          name: c.name,
+          gradeStudentId: c.gradeStudentId,
+          grade: c.grade ?? '',
+        }))
+      }
+      saveUser(mockUser)
       return
     }
 
@@ -187,8 +197,12 @@ export function AuthProvider({ children }) {
               gradeStudentId: c.gradeStudentId,
               grade: c.grade ?? '',
             }))
+          } else {
+            userData.children = []
           }
-        } catch {}
+        } catch {
+          userData.children = []
+        }
       }
 
       saveUser(userData)
