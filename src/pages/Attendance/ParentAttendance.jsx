@@ -1,8 +1,8 @@
 // src/pages/Attendance/ParentAttendance.jsx
 import { useState, useEffect } from 'react'
-import { getAttendanceByParent, getChildren, MOCK_ATTENDANCE, MOCK_CHILDREN } from '@/api/attendance'
+import { getAttendanceByParent, getAttendanceByStudent, getChildren, MOCK_ATTENDANCE, MOCK_CHILDREN } from '@/api/attendance'
 
-const USE_MOCK = true // 백엔드 연동 시 false로 변경
+const USE_MOCK = false
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -27,11 +27,15 @@ export default function ParentAttendance({ user }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // 자녀 목록 로드
   useEffect(() => {
-    if (USE_MOCK) {
-      setChildren(MOCK_CHILDREN)
-      setSelectedChild(MOCK_CHILDREN[0])
+    if (user?.children?.length > 0) {
+      const mapped = user.children.map(c => ({
+        gpsStudentId: c.id,
+        gradeStudentId: c.gradeStudentId,
+        name: c.name,
+      }))
+      setChildren(mapped)
+      setSelectedChild(mapped[0])
       return
     }
     getChildren(user.id)
@@ -39,8 +43,11 @@ export default function ParentAttendance({ user }) {
         setChildren(data)
         if (data.length > 0) setSelectedChild(data[0])
       })
-      .catch(() => setError('자녀 목록을 불러오지 못했습니다.'))
-  }, [user.id])
+      .catch(() => {
+        setChildren(MOCK_CHILDREN)
+        setSelectedChild(MOCK_CHILDREN[0])
+      })
+  }, [user?.id])
 
   // 출결 이력 로드
   useEffect(() => {
@@ -56,7 +63,7 @@ export default function ParentAttendance({ user }) {
       return
     }
 
-    getAttendanceByParent(user.id, date)
+    getAttendanceByStudent(selectedChild.gpsStudentId, date)
       .then(data => setRecords(data))
       .catch(() => setError('출결 이력을 불러오지 못했습니다.'))
       .finally(() => setLoading(false))
