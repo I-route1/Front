@@ -68,7 +68,8 @@ export default function CounselingTab() {
   const [selectedSubject, setSelectedSubject] = useState({})
   const [subjectsWithGrades, setSubjectsWithGrades] = useState([])
   const [gradesLoading, setGradesLoading] = useState(true)
-  
+
+  // 성적 있는 과목 목록 조회
   useEffect(() => {
     if (!user?.id) return
     setGradesLoading(true)
@@ -81,7 +82,6 @@ export default function CounselingTab() {
       .catch(() => setSubjectsWithGrades([]))
       .finally(() => setGradesLoading(false))
   }, [user?.id])
-  
 
   useEffect(() => {
     paymentAPI.getCredits()
@@ -100,7 +100,6 @@ export default function CounselingTab() {
         navigate('/payment')
         return
       }
-      // 크레딧 차감
       try {
         const updated = await paymentAPI.useCredit()
         setCredits(updated.premiumCredits)
@@ -126,7 +125,6 @@ export default function CounselingTab() {
       setResults(prev => ({ ...prev, [id]: res }))
     } catch (e) {
       setErrors(prev => ({ ...prev, [id]: e.message }))
-      // 실패 시 크레딧 복구
       if (id === 'premium') setCredits(prev => (prev ?? 0) + 1)
     } finally {
       setLoading(prev => ({ ...prev, [id]: false }))
@@ -162,7 +160,6 @@ export default function CounselingTab() {
             {/* 생성 버튼 영역 */}
             <div style={{ padding: '0 16px 16px' }}>
 
-            <div style={{ padding:'0 16px 16px' }}>
               {/* 프리미엄 크레딧 표시 */}
               {r.id === 'premium' && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -199,14 +196,27 @@ export default function CounselingTab() {
                 </select>
               )}
 
+              {/* 버튼 — 과목별 성적 체크 + 크레딧 충전 통합 */}
               {(() => {
                 const currentSubject = selectedSubject[r.id] || '수학'
                 const hasGrade = !r.needsSubject || subjectsWithGrades.includes(currentSubject)
-                const isDisabled = loading[r.id] || (r.needsSubject && (gradesLoading || !hasGrade))
+                const noGrade = r.needsSubject && !gradesLoading && !hasGrade
+                const isDisabled = loading[r.id]
+                  || (r.needsSubject && (gradesLoading || !hasGrade))
+                  || (r.id === 'premium' && credits === null)
+
+                const btnColor = loading[r.id] ? 'var(--color-text-muted)'
+                  : noGrade ? '#94A3B8'
+                  : (r.id === 'premium' && credits === 0) ? '#FF6B35'
+                  : r.color
+
+                const btnLabel = loading[r.id] ? '🤖 AI 분석 중...'
+                  : (r.id === 'premium' && credits === 0) ? '💳 크레딧 충전하기'
+                  : `${r.emoji} 리포트 생성`
 
                 return (
                   <>
-                    {r.needsSubject && !gradesLoading && !hasGrade && (
+                    {noGrade && (
                       <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, background: '#FFF8E0', border: '1px solid #FFB80030' }}>
                         <p style={{ fontSize: 11, color: '#8A6500' }}>
                           ⚠️ {currentSubject} 성적 데이터가 없어요. 성적을 먼저 입력해주세요.
@@ -218,35 +228,18 @@ export default function CounselingTab() {
                       disabled={isDisabled}
                       style={{
                         width: '100%', padding: '11px', borderRadius: 10, border: 'none',
-                        background: isDisabled ? 'var(--color-text-muted)' : r.color,
+                        background: btnColor,
                         color: 'white', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
                         cursor: isDisabled ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s',
                         opacity: isDisabled ? 0.6 : 1,
                       }}
                     >
-                      {loading[r.id] ? '🤖 AI 분석 중...' : `${r.emoji} 리포트 생성`}
+                      {btnLabel}
                     </button>
                   </>
                 )
               })()}
-              <button
-                onClick={() => handleGenerate(r)}
-                disabled={loading[r.id] || (r.id === 'premium' && credits === null)}
-                style={{
-                  width:'100%', padding:'11px', borderRadius:10, border:'none',
-                  background: loading[r.id] ? 'var(--color-text-muted)'
-                    : (r.id === 'premium' && credits === 0) ? '#FF6B35'
-                    : r.color,
-                  color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit',
-                  cursor: loading[r.id] ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {loading[r.id] ? '🤖 AI 분석 중...'
-                  : (r.id === 'premium' && credits === 0) ? '💳 크레딧 충전하기'
-                  : `${r.emoji} 리포트 생성`}
-              </button>
 
               {/* 에러 */}
               {errors[r.id] && (
@@ -278,158 +271,87 @@ export default function CounselingTab() {
   )
 }
 
-// 결과 표시 컴포넌트
 function ResultBlock({ result, reportType }) {
-  const isReviewPaper       = reportType.id === 'reviewPaper'
-  const isSubjectRecommend  = reportType.id === 'subjectRecommend'
-
-  // 시험지 전용
-  const paperUrl  = result.paperUrl || result.url || result.downloadUrl || ''
-  const questions = result.questions || result.problems || []
-
-  // 일반 리포트
+  const isReviewPaper      = reportType.id === 'reviewPaper'
+  const isSubjectRecommend = reportType.id === 'subjectRecommend'
+  const paperUrl   = result.paperUrl || result.url || result.downloadUrl || ''
+  const questions  = result.questions || result.problems || []
   const title          = result.title || reportType.title
   const careerAnalysis = result.careerAnalysis || result.summary || result.analysis || ''
   const learningGuide  = result.learningGuide || result.guide || result.recommend || ''
 
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-      {/* ── AI 맞춤 문제 추천 결과 ── */}
       {isSubjectRecommend && (
         <>
           {result.targetConcept && (
-            <div style={{
-              padding: '10px 14px', borderRadius: 10,
-              background: '#0F346015', border: '1px solid #0F346030',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
+            <div style={{ padding: '10px 14px', borderRadius: 10, background: '#0F346015', border: '1px solid #0F346030', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 18 }}>🎯</span>
               <div>
                 <p style={{ fontSize: 11, color: '#0F3460', fontWeight: 600 }}>분석된 취약 개념</p>
-                <p style={{ fontSize: 14, fontWeight: 800, color: '#0F3460', marginTop: 2 }}>
-                  {result.targetConcept}
-                </p>
+                <p style={{ fontSize: 14, fontWeight: 800, color: '#0F3460', marginTop: 2 }}>{result.targetConcept}</p>
               </div>
             </div>
           )}
-
           {result.aiRecommendationReport && (
-            <div style={{
-              padding: '12px 14px', borderRadius: 10,
-              background: 'var(--color-surface-2)', border: '1px solid var(--color-border)',
-            }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#0F3460', marginBottom: 8 }}>
-                🤖 AI 추천 리포트
-              </p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                {result.aiRecommendationReport}
-              </p>
+            <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#0F3460', marginBottom: 8 }}>🤖 AI 추천 리포트</p>
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{result.aiRecommendationReport}</p>
             </div>
           )}
         </>
       )}
 
-      {/* ── 시험지 전용 ── */}
       {isReviewPaper && (
-        <div style={{
-          padding: '14px', borderRadius: 10,
-          background: `${reportType.color}15`, border: `1px solid ${reportType.color}30`,
-        }}>
+        <div style={{ padding: '14px', borderRadius: 10, background: `${reportType.color}15`, border: `1px solid ${reportType.color}30` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <span style={{ fontSize: 24 }}>📄</span>
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: reportType.color }}>시험지 생성 완료</p>
-              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                {questions?.length ? `총 ${questions.length}문제` : '약점 기반 맞춤 문제'}
-              </p>
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{questions?.length ? `총 ${questions.length}문제` : '약점 기반 맞춤 문제'}</p>
             </div>
           </div>
-
           {paperUrl ? (
-            <a
-              href={paperUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'block', width: '100%', padding: '10px', borderRadius: 8,
-                background: reportType.color, color: 'white', textAlign: 'center',
-                fontSize: 12, fontWeight: 700, textDecoration: 'none', boxSizing: 'border-box',
-              }}
-            >
+            <a href={paperUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 8, background: reportType.color, color: 'white', textAlign: 'center', fontSize: 12, fontWeight: 700, textDecoration: 'none', boxSizing: 'border-box' }}>
               📥 시험지 다운로드
             </a>
           ) : (
-            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center', padding: '8px' }}>
-              다운로드 링크가 없어요 (응답 확인 필요)
-            </p>
+            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center', padding: '8px' }}>다운로드 링크가 없어요 (응답 확인 필요)</p>
           )}
         </div>
       )}
 
-      {/* 시험지 문제 미리보기 */}
       {isReviewPaper && questions.length > 0 && (
         <div>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-            📋 문제 미리보기
-          </p>
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 6 }}>📋 문제 미리보기</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {questions.slice(0, 3).map((q, i) => (
               <div key={i} style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <span style={{
-                    width: 22, height: 22, flexShrink: 0, borderRadius: '50%',
-                    background: reportType.color, color: 'white',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 700,
-                  }}>
-                    {i + 1}
-                  </span>
+                  <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: '50%', background: reportType.color, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{i + 1}</span>
                   <div style={{ flex: 1 }}>
-                    {q.subject && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, color: reportType.color,
-                        padding: '2px 6px', borderRadius: 6, background: reportType.color + '18',
-                        marginBottom: 4, display: 'inline-block',
-                      }}>
-                        {q.subject}
-                      </span>
-                    )}
-                    <p style={{ fontSize: 11, color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
-                      {q.question || q.text || q.content || '(문제 내용)'}
-                    </p>
+                    {q.subject && <span style={{ fontSize: 10, fontWeight: 700, color: reportType.color, padding: '2px 6px', borderRadius: 6, background: reportType.color + '18', marginBottom: 4, display: 'inline-block' }}>{q.subject}</span>}
+                    <p style={{ fontSize: 11, color: 'var(--color-text-primary)', lineHeight: 1.5 }}>{q.question || q.text || q.content || '(문제 내용)'}</p>
                   </div>
                 </div>
               </div>
             ))}
-            {questions.length > 3 && (
-              <p style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 4 }}>
-                +{questions.length - 3}개 문제 더 있음
-              </p>
-            )}
+            {questions.length > 3 && <p style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 4 }}>+{questions.length - 3}개 문제 더 있음</p>}
           </div>
         </div>
       )}
 
-      {/* 일반 리포트 - careerAnalysis */}
       {!isReviewPaper && !isSubjectRecommend && careerAnalysis && (
         <div style={{ padding: '12px 14px', borderRadius: 10, background: reportType.color + '10', border: `1px solid ${reportType.color}30` }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: reportType.color, marginBottom: 6 }}>
-            📋 {title}
-          </p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-            {careerAnalysis}
-          </p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: reportType.color, marginBottom: 6 }}>📋 {title}</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>{careerAnalysis}</p>
         </div>
       )}
 
-      {/* 학습 가이드 */}
       {learningGuide && (
         <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-primary-light)', border: '1px solid #1A56DB20' }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', marginBottom: 4 }}>💡 학습 가이드</p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-            {learningGuide}
-          </p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.6 }}>{learningGuide}</p>
         </div>
       )}
     </div>
