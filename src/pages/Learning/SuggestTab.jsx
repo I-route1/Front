@@ -92,6 +92,11 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
   const [ancestorDone, setAncestorDone]           = useState(false)
 
   useEffect(() => {
+    setAncestorDone(false)
+    setAiSubject('수학')
+  }, [effectiveId])
+
+  useEffect(() => {
     if (!effectiveId) return
     setPeerContentLoading(true)
     recommendationsAPI.getPeerContent(String(effectiveId))
