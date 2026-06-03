@@ -106,9 +106,9 @@ function ChildSelector({ children, selectedIndex, onSelect }) {
 
 export default function Learning() {
   const { user } = useAuth()
-  const [searchParams] = useSearchParams()
-  const initialTab = VALID_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'grade'
-  const [active, setActive] = useState(initialTab)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const active = VALID_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'grade'
+  const setActive = (id) => setSearchParams({ tab: id }, { replace: true })
   const [selectedChildIndex, setSelectedChildIndex] = useState(0)
 
   const isParent = user?.role === 'PARENT' || user?.role === '학부모'
