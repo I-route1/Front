@@ -29,9 +29,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
   const [roadmapError, setRoadmapError] = useState(null)
   const [reviewData, setReviewData]   = useState(null)
   const [reviewLoading, setReviewLoading] = useState(false)
-  const [trendData, setTrendData] = useState(INIT_TREND)
-
-  // AI 예측 점수
+  const [trendData, setTrendData]     = useState(INIT_TREND)
   const [aiPrediction, setAiPrediction] = useState(null)
   const [predictionLoading, setPredictionLoading] = useState(false)
 
@@ -71,7 +69,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     fetchReview()
   }, [effectiveId])
 
-  // AI 성적 예측 — 마운트 시 자동 호출
+  // AI 성적 예측
   useEffect(() => {
     if (!effectiveId) return
     const fetchPrediction = async () => {
@@ -93,6 +91,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     fetchPrediction()
   }, [effectiveId])
 
+  // 성적 그래프
   useEffect(() => {
     if (!effectiveId) return
     gradesAPI.getGrades(effectiveId)
@@ -108,10 +107,16 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
         const trend = Object.values(grouped).sort((a,b) => a.date.localeCompare(b.date))
         if (trend.length > 0) setTrendData(trend)
       })
-      .catch(() => {}) // 실패 시 mock 유지
+      .catch(() => {})
   }, [effectiveId])
 
-  // 로드맵 생성
+  const handleDismissReview = (index) => {
+    setReviewData(prev => {
+      const newReviews = prev.reviews.filter((_, i) => i !== index)
+      return { ...prev, reviews: newReviews, hasReview: newReviews.length > 0 }
+    })
+  }
+
   const handleGenerateRoadmap = async () => {
     if (!goal.trim() || !targetScore) {
       alert('목표와 목표 점수를 입력해 주세요')
@@ -125,41 +130,17 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
         targetDate,
         dailyStudyHours: 2,
       })
-
-      // 응답 구조 유연하게 처리 (백엔드 응답 형태에 따라 자동 분기)
-      const milestones =
-        res.weeklyMilestones ||
-        res.weeks            ||
-        res.plan             ||
-        res.milestones       ||
-        []
-
-      if (milestones.length === 0) {
-        throw new Error('로드맵 데이터가 비어있습니다')
-      }
-
+      const milestones = res.weeklyMilestones || res.weeks || res.plan || res.milestones || []
+      if (milestones.length === 0) throw new Error('로드맵 데이터가 비어있습니다')
       setRoadmap({
         weeks: milestones.map((m, i) => {
           if (typeof m === 'string') {
             const parts = m.split(':')
-            return {
-              week:   parts[0]?.trim() || `${i + 1}주차`,
-              focus:  parts[1]?.trim() || m,
-              target: parts[2]?.trim() || '',
-            }
+            return { week: parts[0]?.trim() || `${i+1}주차`, focus: parts[1]?.trim() || m, target: parts[2]?.trim() || '' }
           }
-          return {
-            week:   m.week   || m.title  || `${i + 1}주차`,
-            focus:  m.focus  || m.content || m.description || '',
-            target: m.target || m.goal   || '',
-          }
+          return { week: m.week || m.title || `${i+1}주차`, focus: m.focus || m.content || m.description || '', target: m.target || m.goal || '' }
         }),
-        tip:
-          res.overallStrategy ||
-          res.tip             ||
-          res.summary         ||
-          res.advice          ||
-          '꾸준히 실천하는 것이 가장 중요합니다!',
+        tip: res.overallStrategy || res.tip || res.summary || res.advice || '꾸준히 실천하는 것이 가장 중요합니다!',
       })
     } catch (e) {
       console.error('로드맵 생성 실패:', e)
@@ -224,11 +205,10 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     return [...trendData, predictedPoint]
   })()
 
-  const latest    = PREDICT_DATA[PREDICT_DATA.length - 2]
+  const latest  = PREDICT_DATA[PREDICT_DATA.length - 2]
   const predicted = PREDICT_DATA[PREDICT_DATA.length - 1]
-  const avgNow    = Math.round(SUBJECTS.reduce((a, s) => a + (latest[s] || 0), 0) / SUBJECTS.length)
-  const avgPred   = aiPrediction?.expected_score
-    ?? Math.round(SUBJECTS.reduce((a, s) => a + (predicted[s] || 0), 0) / SUBJECTS.length)
+  const avgNow  = Math.round(SUBJECTS.reduce((a, s) => a + (latest[s] || 0), 0) / SUBJECTS.length)
+  const avgPred = aiPrediction?.expected_score ?? Math.round(SUBJECTS.reduce((a, s) => a + (predicted[s] || 0), 0) / SUBJECTS.length)
 
   return (
     <div>
@@ -242,32 +222,20 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
             <p style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{avgNow}점</p>
           </div>
           <div style={{ background: 'rgba(0,196,154,0.2)', borderRadius: 12, padding: '13px', border: '1px solid rgba(0,196,154,0.4)' }}>
-            <p style={{ fontSize: 11, opacity: 0.7 }}>
-              {predictionLoading ? 'AI 예측 중...' : 'AI 예측 다음 시험'}
-            </p>
+            <p style={{ fontSize: 11, opacity: 0.7 }}>{predictionLoading ? 'AI 예측 중...' : 'AI 예측 다음 시험'}</p>
             {predictionLoading ? (
-              <p style={{ fontSize: 16, fontWeight: 700, marginTop: 4, color: '#7FFFD4', opacity: 0.7 }}>
-                🤖 분석 중...
-              </p>
+              <p style={{ fontSize: 16, fontWeight: 700, marginTop: 4, color: '#7FFFD4', opacity: 0.7 }}>🤖 분석 중...</p>
             ) : (
               <>
-                <p style={{ fontSize: 22, fontWeight: 800, marginTop: 2, color: '#7FFFD4' }}>
-                  {avgPred}점
-                </p>
-                <p style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>
-                  {avgPred >= avgNow ? `▲${avgPred - avgNow}점 상승 예측` : `▼${avgNow - avgPred}점 하락 예측`}
-                </p>
+                <p style={{ fontSize: 22, fontWeight: 800, marginTop: 2, color: '#7FFFD4' }}>{avgPred}점</p>
+                <p style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>{avgPred >= avgNow ? `▲${avgPred - avgNow}점 상승 예측` : `▼${avgNow - avgPred}점 하락 예측`}</p>
               </>
             )}
           </div>
         </div>
-
-        {/* AI 예측 메시지 */}
         {aiPrediction?.message && !predictionLoading && (
           <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <p style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.5 }}>
-              {aiPrediction.message}
-            </p>
+            <p style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.5 }}>{aiPrediction.message}</p>
           </div>
         )}
       </div>
@@ -276,9 +244,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
       <div style={{ margin: '16px 16px 0' }}>
         <div style={{ background: 'var(--color-surface)', borderRadius: 16, border: '1px solid var(--color-border)', padding: 16 }}>
           <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>📈 성적 예측 그래프</p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            마지막 데이터가 AI 예측 값입니다
-          </p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>마지막 데이터가 AI 예측 값입니다</p>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={PREDICT_DATA} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0F3FA" />
@@ -323,7 +289,6 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
                 <button onClick={e => { e.stopPropagation(); removeTask(p.id) }} style={{ padding: '4px 8px', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--color-text-muted)', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>×</button>
               </div>
             ))}
-
             {showAdd ? (
               <div style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid var(--color-primary)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -331,14 +296,11 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
                     style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--color-border)', background: 'var(--color-surface)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}>
                     {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
-                  <input type="number" min={5} max={180} value={newTask.time}
-                    onChange={e => setNewTask(p => ({ ...p, time: e.target.value }))}
-                    style={{ width: 64, padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--color-border)', background: 'var(--color-surface)', fontSize: 13, fontFamily: 'inherit', outline: 'none', textAlign: 'center' }}
-                    placeholder="분" />
+                  <input type="number" min={5} max={180} value={newTask.time} onChange={e => setNewTask(p => ({ ...p, time: e.target.value }))}
+                    style={{ width: 64, padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--color-border)', background: 'var(--color-surface)', fontSize: 13, fontFamily: 'inherit', outline: 'none', textAlign: 'center' }} placeholder="분" />
                 </div>
                 <input value={newTask.task} onChange={e => setNewTask(p => ({ ...p, task: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && addTask()}
-                  placeholder="할 일을 입력하세요"
+                  onKeyDown={e => e.key === 'Enter' && addTask()} placeholder="할 일을 입력하세요"
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--color-border)', background: 'var(--color-surface)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setShowAdd(false)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1.5px solid var(--color-border)', background: 'transparent', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', color: 'var(--color-text-secondary)' }}>취소</button>
@@ -348,7 +310,6 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
             ) : (
               <button onClick={() => setShowAdd(true)} style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1.5px dashed var(--color-border)', background: 'transparent', fontSize: 13, fontWeight: 600, color: 'var(--color-text-muted)', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s' }}>+ 할 일 추가</button>
             )}
-
             {plan.length > 0 && doneCount === plan.length && (
               <div style={{ padding: '14px', borderRadius: 12, background: '#D1FAF0', border: '1px solid #00C49A50', textAlign: 'center' }}>
                 <p style={{ fontSize: 14, fontWeight: 800, color: '#007A5E' }}>🎉 오늘 계획을 모두 완료했어요!</p>
@@ -391,7 +352,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
           {!reviewLoading && reviewData?.hasReview && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {reviewData.reviews.map((r, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderRadius: 10, background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderRadius: 10, background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', position: 'relative' }}>
                   <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>📖</div>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 13, fontWeight: 700 }}>{r.title}</p>
@@ -400,6 +361,8 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: 'var(--color-primary-light)', color: 'var(--color-primary)', flexShrink: 0 }}>
                     {r.dayLabel}
                   </span>
+                  <button onClick={() => handleDismissReview(i)}
+                    style={{ position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: '50%', border: 'none', background: 'var(--color-border)', color: 'var(--color-text-muted)', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>✕</button>
                 </div>
               ))}
             </div>
@@ -439,32 +402,22 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
             >
               {generating ? '🤖 AI가 로드맵을 설계 중...' : 'AI 로드맵 생성'}
             </button>
-
-            {/* 에러 */}
             {roadmapError && (
               <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FFE9E9', border: '1px solid #FF3B3B30' }}>
                 <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>❌ {roadmapError}</p>
               </div>
             )}
-
-            {/* 로드맵 결과 */}
             {roadmap && (
               <div style={{ marginTop: 4, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: 'var(--color-primary)' }}>
-                  ✨ 맞춤 로드맵이 완성되었어요!
-                </p>
+                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: 'var(--color-primary)' }}>✨ 맞춤 로드맵이 완성되었어요!</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {roadmap.weeks.map((w, i) => (
                     <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 10, background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: 'var(--color-primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>
-                        {i + 1}
-                      </div>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: 'var(--color-primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>{i + 1}</div>
                       <div style={{ flex: 1 }}>
                         <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)' }}>{w.week}</p>
                         <p style={{ fontSize: 13, fontWeight: 600, marginTop: 3 }}>{w.focus}</p>
-                        {w.target && (
-                          <p style={{ fontSize: 11, color: 'var(--color-success)', marginTop: 3, fontWeight: 600 }}>🎯 {w.target}</p>
-                        )}
+                        {w.target && <p style={{ fontSize: 11, color: 'var(--color-success)', marginTop: 3, fontWeight: 600 }}>🎯 {w.target}</p>}
                       </div>
                     </div>
                   ))}

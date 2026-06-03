@@ -35,6 +35,11 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
   const gradeKey = selectedChild?.gradeStudentId ?? String(effectiveId ?? '')
 
   const [selfEval, setSelfEval]         = useState({ 이해도:0, 집중도:0 })
+
+  useEffect(() => {
+    setSelfEval({ 이해도: 0, 집중도: 0 })
+  }, [effectiveId])
+
   const [feedback, setFeedback]         = useState('')
   const [saved, setSaved]               = useState(false)
   const [metaResult, setMetaResult]     = useState(null)
@@ -131,7 +136,8 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
   const handleMetaAnalysis = async () => {
     setMetaLoading(true)
     try {
-      const res = await analysisAPI.getMetaCognition(effectiveId, '수학')
+      const gradeId = selectedChild?.gradeStudentId ?? effectiveId
+      const res = await analysisAPI.getMetaCognition(gradeId, '수학')
       setMetaResult(res)
     } catch (e) {
       console.error('메타인지 분석 실패:', e)
@@ -160,7 +166,7 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
       // 1. 학습 기록 먼저 생성
       const today = new Date().toISOString().split('T')[0]
       const activity = await activitiesAPI.postActivity({
-        studentId: effectiveId,
+        studentId: selectedChild?.gradeStudentId ?? effectiveId,
         subject: '수학',
         studyDate: today,
         studyStartTime: new Date().toTimeString().slice(0,8),
