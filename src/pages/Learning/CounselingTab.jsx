@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { counselingAPI, studyPlanAPI } from '@/api'
 import { paymentAPI } from '@/api/payment'
 import { RecommendRoadmapSection, AnalysisReportSection } from './RecommendRoadmap'
-import { counselingAPI, studyPlanAPI, aiReportAPI } from '@/api'
+import { counselingAPI, studyPlanAPI, aiReportAPI, gradesAPI } from '@/api'
 
 const SUBJECT_OPTIONS = ['수학', '영어', '국어', '한국사', '사회탐구', '과학탐구']
 
@@ -64,18 +63,30 @@ export default function CounselingTab() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState({})
   const [results, setResults] = useState({})
-  const [errors, setErrors]   = useState({})
+  const [errors, setErrors] = useState({})
   const [credits, setCredits] = useState(null)
-
+  const [selectedSubject, setSelectedSubject] = useState({})
+  const [subjectsWithGrades, setSubjectsWithGrades] = useState([])
+  const [gradesLoading, setGradesLoading] = useState(true)
+  
+  useEffect(() => {
+    if (!user?.id) return
+    setGradesLoading(true)
+    gradesAPI.getGrades(String(user.id))
+      .then(data => {
+        const list = Array.isArray(data) ? data : []
+        const subjects = [...new Set(list.map(g => g.subject).filter(Boolean))]
+        setSubjectsWithGrades(subjects)
+      })
+      .catch(() => setSubjectsWithGrades([]))
+      .finally(() => setGradesLoading(false))
+  }, [user?.id])
+  
   useEffect(() => {
     paymentAPI.getCredits()
       .then(data => setCredits(data.premiumCredits))
       .catch(() => setCredits(0))
   }, [])
-  const [loading, setLoading]         = useState({})
-  const [results, setResults]         = useState({})
-  const [errors, setErrors]           = useState({})
-  const [selectedSubject, setSelectedSubject] = useState({})
 
   const handleGenerate = async (reportType) => {
     const { id, api, apiSource } = reportType
@@ -102,8 +113,6 @@ export default function CounselingTab() {
     setErrors(prev => ({ ...prev, [id]: null }))
 
     try {
-      const apiClient = apiSource === 'studyPlan' ? studyPlanAPI : counselingAPI
-      const res = await apiClient[api](String(user.id))
       let res
       if (apiSource === 'aiReport') {
         const subject = selectedSubject[id] || '수학'
@@ -149,24 +158,23 @@ export default function CounselingTab() {
               </div>
             </div>
 
-            {/* 생성 버튼 */}
-            <div style={{ padding:'0 16px 16px' }}>
+            {/* 생성 버튼 영역 */}
+            <div style={{ padding: '0 16px 16px' }}>
+
               {/* 프리미엄 크레딧 표시 */}
               {r.id === 'premium' && (
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:12, color:'var(--color-text-muted)' }}>보유 크레딧</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>보유 크레딧</span>
                   <span style={{
-                    fontSize:13, fontWeight:700,
+                    fontSize: 13, fontWeight: 700,
                     color: credits > 0 ? '#1A56DB' : 'var(--color-danger)',
                     background: credits > 0 ? '#1A56DB18' : '#FF3B3B12',
-                    padding:'2px 10px', borderRadius:20,
+                    padding: '2px 10px', borderRadius: 20,
                   }}>
                     {credits === null ? '...' : `${credits}개`}
                   </span>
                 </div>
               )}
-            {/* 생성 버튼 영역 */}
-            <div style={{ padding: '0 16px 16px' }}>
 
               {/* 과목 선택 드롭다운 (AI 추천만) */}
               {r.needsSubject && (
@@ -189,26 +197,37 @@ export default function CounselingTab() {
                 </select>
               )}
 
-              <button
-                onClick={() => handleGenerate(r)}
-                disabled={loading[r.id] || (r.id === 'premium' && credits === null)}
-                style={{
-                  width:'100%', padding:'11px', borderRadius:10, border:'none',
-                  background: loading[r.id] ? 'var(--color-text-muted)'
-                    : (r.id === 'premium' && credits === 0) ? '#FF6B35'
-                    : r.color,
-                  color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit',
-                  width: '100%', padding: '11px', borderRadius: 10, border: 'none',
-                  background: loading[r.id] ? 'var(--color-text-muted)' : r.color,
-                  color: 'white', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-                  cursor: loading[r.id] ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {loading[r.id] ? '🤖 AI 분석 중...'
-                  : (r.id === 'premium' && credits === 0) ? '💳 크레딧 충전하기'
-                  : `${r.emoji} 리포트 생성`}
-              </button>
+              {(() => {
+                const currentSubject = selectedSubject[r.id] || '수학'
+                const hasGrade = !r.needsSubject || subjectsWithGrades.includes(currentSubject)
+                const isDisabled = loading[r.id] || (r.needsSubject && (gradesLoading || !hasGrade))
+
+                return (
+                  <>
+                    {r.needsSubject && !gradesLoading && !hasGrade && (
+                      <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, background: '#FFF8E0', border: '1px solid #FFB80030' }}>
+                        <p style={{ fontSize: 11, color: '#8A6500' }}>
+                          ⚠️ {currentSubject} 성적 데이터가 없어요. 성적을 먼저 입력해주세요.
+                        </p>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => !isDisabled && handleGenerate(r)}
+                      disabled={isDisabled}
+                      style={{
+                        width: '100%', padding: '11px', borderRadius: 10, border: 'none',
+                        background: isDisabled ? 'var(--color-text-muted)' : r.color,
+                        color: 'white', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: isDisabled ? 0.6 : 1,
+                      }}
+                    >
+                      {loading[r.id] ? '🤖 AI 분석 중...' : `${r.emoji} 리포트 생성`}
+                    </button>
+                  </>
+                )
+              })()}
 
               {/* 에러 */}
               {errors[r.id] && (
