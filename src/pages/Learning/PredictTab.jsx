@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { reviewAPI, studyPlanAPI, gradesAPI } from '@/api'
+import { reviewAPI, studyPlanAPI, gradesAPI, checklistAPI } from '@/api'
 import { aiReportAPI } from '@/api/aiReport'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -21,6 +21,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]
   })
   const [plan, setPlan]               = useState([])
+  const [planLoading, setPlanLoading] = useState(false)
   const [newTask, setNewTask]         = useState({ subject:'수학', task:'', time:30 })
   const [showAdd, setShowAdd]         = useState(false)
   const [generating, setGenerating]   = useState(false)
@@ -33,6 +34,24 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
   // AI 예측 점수
   const [aiPrediction, setAiPrediction] = useState(null)
   const [predictionLoading, setPredictionLoading] = useState(false)
+
+  // 오늘의 학습 계획 로드
+  useEffect(() => {
+    if (!effectiveId) return
+    const fetchPlan = async () => {
+      setPlanLoading(true)
+      try {
+        const today = new Date().toISOString().split('T')[0]
+        const items = await checklistAPI.getByDate(effectiveId, today)
+        setPlan(items.map(i => ({ id: i.id, subject: i.subject, task: i.task, time: i.estimatedMinutes, done: i.done })))
+      } catch (e) {
+        console.error('학습 계획 조회 실패:', e)
+      } finally {
+        setPlanLoading(false)
+      }
+    }
+    fetchPlan()
+  }, [effectiveId])
 
   // 에빙하우스 복습 알림
   useEffect(() => {
@@ -150,18 +169,43 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     }
   }
 
-  const toggleDone = (id) =>
+  const toggleDone = async (id) => {
     setPlan(prev => prev.map(p => p.id === id ? { ...p, done: !p.done } : p))
-
-  const addTask = () => {
-    if (!newTask.task.trim()) return
-    setPlan(prev => [...prev, { ...newTask, id: Date.now(), done: false, time: Number(newTask.time) || 30 }])
-    setNewTask({ subject: '수학', task: '', time: 30 })
-    setShowAdd(false)
+    try {
+      await checklistAPI.toggleDone(id)
+    } catch (e) {
+      console.error('완료 상태 변경 실패:', e)
+      setPlan(prev => prev.map(p => p.id === id ? { ...p, done: !p.done } : p))
+    }
   }
 
-  const removeTask = (id) =>
+  const addTask = async () => {
+    if (!newTask.task.trim()) return
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const res = await checklistAPI.addItem({
+        studentId: String(effectiveId),
+        subject: newTask.subject,
+        task: newTask.task,
+        estimatedMinutes: Number(newTask.time) || 30,
+        planDate: today,
+      })
+      setPlan(prev => [...prev, { id: res.id, subject: res.subject, task: res.task, time: res.estimatedMinutes, done: res.done }])
+      setNewTask({ subject: '수학', task: '', time: 30 })
+      setShowAdd(false)
+    } catch (e) {
+      console.error('항목 추가 실패:', e)
+    }
+  }
+
+  const removeTask = async (id) => {
     setPlan(prev => prev.filter(p => p.id !== id))
+    try {
+      await checklistAPI.deleteItem(id)
+    } catch (e) {
+      console.error('항목 삭제 실패:', e)
+    }
+  }
 
   const doneCount = plan.filter(p => p.done).length
 
