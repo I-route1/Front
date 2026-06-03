@@ -223,14 +223,19 @@ const isValidGrade = (grade) => {
   }
 
   return (
-    <div>
-      <section
-  style={{
-    padding: '16px 20px',
-    background: 'var(--color-surface)',
-    borderBottom: '1px solid var(--color-border)',
-  }}
->
+  <div
+    style={{
+      minHeight: '100vh',
+      paddingBottom: 120,
+    }}
+  >
+    <section
+      style={{
+        padding: '16px 20px',
+        background: 'var(--color-surface)',
+        borderBottom: '1px solid var(--color-border)',
+      }}
+    >
   <BackButton
     label="뒤로가기"
     style={{ color: 'var(--color-primary)' }}
