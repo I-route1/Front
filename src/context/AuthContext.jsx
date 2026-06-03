@@ -74,6 +74,15 @@ const MOCK_USERS = {
   academyName: '아이루트 학원',
   academyAddress: '대구광역시 달성군 현풍읍',
   academyCode: 'IROUTE123',
+  academies: [
+    {
+      id: 'academy-001',
+      academyName: '아이루트 학원',
+      academyAddress: '대구광역시 달성군 현풍읍',
+      businessNumber: '1234567890',
+      academyCode: 'IROUTE123',
+    },
+  ],
 },
   학원: {
   id: 'academy-001',
@@ -86,6 +95,15 @@ const MOCK_USERS = {
   academyName: '아이루트 학원',
   academyAddress: '대구광역시 달성군 현풍읍',
   academyCode: 'IROUTE123',
+  academies: [
+    {
+      id: 'academy-001',
+      academyName: '아이루트 학원',
+      academyAddress: '대구광역시 달성군 현풍읍',
+      businessNumber: '1234567890',
+      academyCode: 'IROUTE123',
+    },
+  ],
 },
   driver: {
     id: 'driver-001', name: '김기사', role: USER_ROLES.DRIVER,

@@ -260,19 +260,20 @@ export default function CounselingTab() {
               )}
 
               {/* 결과 */}
-              {results[r.id] && (
+                            {results[r.id] && (
                 <ResultBlock result={results[r.id]} reportType={r} />
               )}
             </div>
           </div>
+        </div>
         ))}
       </div>
 
       {/* 안내 */}
       <div style={{ margin: '0 16px 24px', padding: '12px 14px', borderRadius: 12, background: '#FFF8E0', border: '1px solid #FFB80040' }}>
-        <p style={{ fontSize: 12, color: '#8A6500', lineHeight: 1.6 }}>
-          ⚠️ AI 상담 리포트는 Python AI 서버가 실행 중일 때만 사용 가능합니다. 서버 오류 시 백엔드팀에 문의하세요.
-        </p>
+        <p style={{ fontSize: 12, color: '#8A6500', lineHeight: 1.5 }}>
+  ⚠️ AI 상담 리포트는 Python AI 서버가 실행 중일 때만 사용 가능합니다. 서버 오류 시 백엔드팀에 문의하세요.
+</p>
       </div>
     </div>
   )

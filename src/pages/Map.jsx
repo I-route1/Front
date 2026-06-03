@@ -48,7 +48,7 @@ export default function Map() {
   if (role === USER_ROLES.PARENT && (!user?.children || user.children.length === 0)) {
     return <NoChildScreen message={'자녀를 등록하면\n실시간 위치를 확인할 수 있어요'} />
   }
-  const [isChildOnBoard, setIsChildOnBoard] = useState(null); // null=미확인, true=탑승중, false=하차완료
+  
   const [portalContainer, setPortalContainer] = useState(null)
 
   useEffect(() => {
