@@ -295,43 +295,133 @@ export default function Profile() {
       )}
 
       {/* 학원 정보 카드 */}
-      {user?.role === USER_ROLES.ACADEMY && (
-        <div
+{user?.role === USER_ROLES.ACADEMY && (
+  <div
+    style={{
+      padding: '0 16px',
+      marginTop: -44,
+      marginBottom: 8,
+      position: 'relative',
+      zIndex: 10,
+    }}
+  >
+    <div className="card" style={{ padding: '16px' }}>
+      <p
+        style={{
+          fontSize: 12,
+          color: 'var(--color-text-muted)',
+          marginBottom: 10,
+          fontWeight: 600,
+        }}
+      >
+        🏫 학원 정보
+      </p>
+
+      <p style={{ fontSize: 15, fontWeight: 800 }}>
+        {user?.academyName ?? '학원 정보 없음'}
+      </p>
+
+      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+        {user?.academyAddress ?? '학원 주소가 등록되지 않았습니다.'}
+      </p>
+
+      <div
+        style={{
+          marginTop: 12,
+          padding: 12,
+          borderRadius: 12,
+          background: 'var(--color-primary-light)',
+          border: '1px solid var(--color-border)',
+        }}
+      >
+        <p
           style={{
-            padding: '0 16px',
-            marginTop: -44,
-            marginBottom: 8,
-            position: 'relative',
-            zIndex: 10,
+            fontSize: 12,
+            color: 'var(--color-primary)',
+            fontWeight: 800,
+            marginBottom: 6,
           }}
         >
-          <div className="card" style={{ padding: '16px' }}>
-            <p
-              style={{
-                fontSize: 12,
-                color: 'var(--color-text-muted)',
-                marginBottom: 10,
-                fontWeight: 600,
-              }}
-            >
-              🏫 학원 정보
-            </p>
-            <p style={{ fontSize: 15, fontWeight: 800 }}>
-              {user?.academyName ?? '학원 정보 없음'}
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-              {user?.academyAddress ?? '학원 주소가 등록되지 않았습니다.'}
-            </p>
-            <button
-              onClick={() => navigate('/profile/edit')}
-              className="btn btn--secondary btn--full"
-              style={{ marginTop: 12 }}
-            >
-              학원 정보 수정
-            </button>
-          </div>
+          학원 고유코드
+        </p>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}
+        >
+          <code
+            style={{
+              fontSize: 14,
+              fontWeight: 800,
+              color: 'var(--color-text-primary)',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 8,
+              padding: '8px 10px',
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {user?.academyCode ?? '발급 예정'}
+          </code>
+
+          <button
+  type="button"
+  onClick={async () => {
+    if (!user?.academyCode) {
+      alert('아직 발급된 학원 고유코드가 없습니다.')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(user.academyCode)
+      alert('학원 고유코드가 복사되었습니다.')
+    } catch {
+      alert('복사에 실패했습니다. 코드를 직접 선택해서 복사해 주세요.')
+    }
+  }}
+  style={{
+    padding: '8px 10px',
+    borderRadius: 8,
+    background: 'var(--color-primary)',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 700,
+    whiteSpace: 'nowrap',
+  }}
+>
+  복사
+</button>
         </div>
-      )}
+
+        <p
+          style={{
+            marginTop: 8,
+            fontSize: 11,
+            color: 'var(--color-text-muted)',
+            lineHeight: 1.5,
+          }}
+        >
+          학부모가 자녀를 학원에 연결할 때 사용하는 코드입니다.
+        </p>
+      </div>
+
+      <button
+        onClick={() => navigate('/profile/edit')}
+        className="btn btn--secondary btn--full"
+        style={{ marginTop: 12 }}
+      >
+        학원 정보 수정
+      </button>
+    </div>
+  </div>
+)}
 
             {/* 관리자 정보 카드 */}
       {user?.role === USER_ROLES.ADMIN && (
