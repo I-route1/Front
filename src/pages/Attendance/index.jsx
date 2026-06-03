@@ -1,5 +1,5 @@
-// src/pages/Attendance/index.jsx
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
+import NoChildScreen from '@/components/common/NoChildScreen'
 import ParentAttendance from './ParentAttendance'
 import AcademyAttendance from './AcademyAttendance'
 
@@ -13,12 +13,15 @@ export default function Attendance() {
     return <AcademyAttendance user={user} />
   }
 
-  // 학부모 → 자녀 출결 이력
+  // 학부모인데 자녀 없으면 빈 화면
   if (user.role === USER_ROLES.PARENT) {
+    const hasNoChildren = !user?.children || user.children.length === 0
+    if (hasNoChildren) {
+      return <NoChildScreen message={'자녀를 등록하면\n승하차 출결 현황을 확인할 수 있어요'} />
+    }
     return <ParentAttendance user={user} />
   }
 
-  // 기사님 — 현재 탑승 목록 (추후 구현 가능)
   return (
     <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>
       출결 기능 준비 중입니다
