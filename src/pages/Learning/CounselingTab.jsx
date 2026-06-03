@@ -82,7 +82,7 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
       })
       .catch(() => setSubjectsWithGrades([]))
       .finally(() => setGradesLoading(false))
-  }, [user?.id])
+    }, [gradeKey])
 
   useEffect(() => {
     paymentAPI.getCredits()
