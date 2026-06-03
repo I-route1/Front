@@ -55,6 +55,51 @@ const isValidGrade = (grade) => {
   )
 }
 
+const makeDefaultAcademy = () => ({
+  id: `academy-${Date.now()}`,
+  academyName: '',
+  academyAddress: '',
+  businessNumber: '',
+  academyCode: '발급 예정',
+})
+
+const normalizeAcademies = (user) => {
+  if (Array.isArray(user?.academies) && user.academies.length > 0) {
+    return user.academies.map((academy, index) => ({
+      id: academy.id ?? academy.academyId ?? `academy-${index}`,
+      academyName: academy.academyName ?? academy.name ?? '',
+      academyAddress: academy.academyAddress ?? academy.address ?? '',
+      businessNumber: academy.businessNumber ?? '',
+      academyCode: academy.academyCode ?? academy.code ?? '발급 예정',
+    }))
+  }
+
+  if (user?.role === USER_ROLES.ACADEMY) {
+    return [
+      {
+        id: user?.id ?? 'academy-001',
+        academyName: user?.academyName ?? '',
+        academyAddress: user?.academyAddress ?? '',
+        academyName: user?.academyName ?? '',
+        academyAddress: user?.academyAddress ?? '',
+        academies: normalizeAcademies(user),
+        businessNumber: user?.businessNumber ?? '',
+        academyCode: user?.academyCode ?? '발급 예정',
+      },
+    ]
+  }
+
+  return [makeDefaultAcademy()]
+}
+
+const formatBusinessNumber = (value) => {
+  const raw = String(value ?? '').replace(/\D/g, '').slice(0, 10)
+
+  if (raw.length <= 3) return raw
+  if (raw.length <= 5) return `${raw.slice(0, 3)}-${raw.slice(3)}`
+  return `${raw.slice(0, 3)}-${raw.slice(3, 5)}-${raw.slice(5)}`
+}
+
   const [form, setForm] = useState({
     name: user?.name ?? '',
     email: user?.email ?? '',
@@ -70,7 +115,8 @@ const isValidGrade = (grade) => {
       }))
     : [makeDefaultChild()],
     academyName: user?.academyName ?? '',
-    academyAddress: user?.academyAddress ?? '',
+academyAddress: user?.academyAddress ?? '',
+academies: normalizeAcademies(user),
   })
 
   const [errors, setErrors] = useState({})
@@ -206,6 +252,61 @@ const removeAcademyFromChild = (childId, academyId) => {
   }))
 }
 
+const updateManagedAcademy = (academyId, key, value) => {
+  setForm((prev) => ({
+    ...prev,
+    academies: prev.academies.map((academy) =>
+      academy.id === academyId
+        ? {
+            ...academy,
+            [key]: key === 'businessNumber' ? formatBusinessNumber(value) : value,
+          }
+        : academy,
+    ),
+  }))
+
+  setErrors((prev) => ({
+    ...prev,
+    [`${academyId}-${key}`]: '',
+    academies: '',
+  }))
+}
+
+const addManagedAcademy = () => {
+  setForm((prev) => ({
+    ...prev,
+    academies: [
+  ...(prev.academies ?? []),
+  makeDefaultAcademy(),
+],
+  }))
+
+  setErrors((prev) => ({
+    ...prev,
+    academies: '',
+  }))
+}
+
+const removeManagedAcademy = (academyId) => {
+  if ((form.academies ?? []).length <= 1) {
+    setErrors((prev) => ({
+      ...prev,
+      academies: '관리 학원은 최소 1개 이상 필요합니다',
+    }))
+    return
+  }
+
+  setForm((prev) => ({
+    ...prev,
+    academies: (prev.academies ?? []).filter((academy) => academy.id !== academyId),
+  }))
+
+  setErrors((prev) => ({
+    ...prev,
+    academies: '',
+  }))
+}
+
   const validate = () => {
     const nextErrors = {}
 
@@ -240,14 +341,30 @@ const removeAcademyFromChild = (childId, academyId) => {
     }
 
     if (user?.role === USER_ROLES.ACADEMY) {
-      if (!form.academyName.trim()) {
-        nextErrors.academyName = '학원명을 입력해 주세요'
-      }
+  const academyList = form.academies ?? []
 
-      if (!form.academyAddress.trim()) {
-        nextErrors.academyAddress = '학원 주소를 입력해 주세요'
-      }
+if (academyList.length < 1) {
+  nextErrors.academies = '관리 학원은 최소 1개 이상 필요합니다'
+}
+
+academyList.forEach((academy) => {
+    if (!academy.academyName.trim()) {
+      nextErrors[`${academy.id}-academyName`] = '학원명을 입력해 주세요'
     }
+
+    if (!academy.academyAddress.trim()) {
+      nextErrors[`${academy.id}-academyAddress`] = '학원 주소를 입력해 주세요'
+    }
+
+    const businessNumber = academy.businessNumber.replace(/\D/g, '')
+
+    if (!businessNumber) {
+      nextErrors[`${academy.id}-businessNumber`] = '사업자번호를 입력해 주세요'
+    } else if (businessNumber.length !== 10) {
+      nextErrors[`${academy.id}-businessNumber`] = '사업자번호 10자리를 입력해 주세요'
+    }
+  })
+}
 
     return nextErrors
   }
@@ -279,9 +396,20 @@ const removeAcademyFromChild = (childId, academyId) => {
 }
 
       if (user?.role === USER_ROLES.ACADEMY) {
-        updated.academyName = form.academyName.trim()
-        updated.academyAddress = form.academyAddress.trim()
-      }
+  const nextAcademies = (form.academies ?? []).map((academy) => ({
+    id: academy.id,
+    academyName: academy.academyName.trim(),
+    academyAddress: academy.academyAddress.trim(),
+    businessNumber: academy.businessNumber.replace(/\D/g, ''),
+    academyCode: academy.academyCode,
+  }))
+
+  updated.academies = nextAcademies
+  updated.academyName = nextAcademies[0]?.academyName ?? ''
+  updated.academyAddress = nextAcademies[0]?.academyAddress ?? ''
+  updated.businessNumber = nextAcademies[0]?.businessNumber ?? ''
+  updated.academyCode = nextAcademies[0]?.academyCode ?? '발급 예정'
+}
 
       await updateUser(updated)
       alert('프로필이 수정되었습니다.')
@@ -623,40 +751,183 @@ const removeAcademyFromChild = (childId, academyId) => {
           )}
 
           {user?.role === USER_ROLES.ACADEMY && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 16,
-                padding: 16,
-                borderRadius: 14,
-                background: 'var(--color-primary-light)',
-                border: '1px solid var(--color-border)',
-              }}
-            >
-              <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-primary)' }}>
-                학원 정보
-              </p>
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 16,
+      padding: 16,
+      borderRadius: 14,
+      background: 'var(--color-primary-light)',
+      border: '1px solid var(--color-border)',
+    }}
+  >
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+      }}
+    >
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-primary)' }}>
+          관리 학원 정보
+        </p>
+        <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+          학원별 정보와 고유코드를 확인하고 수정할 수 있습니다.
+        </p>
+      </div>
 
-              <Field label="학원명" error={errors.academyName}>
-                <input
-                  className="input-field"
-                  value={form.academyName}
-                  onChange={(e) => update('academyName', e.target.value)}
-                  placeholder="학원명을 입력해 주세요"
-                />
-              </Field>
+      <button
+        type="button"
+        onClick={addManagedAcademy}
+        style={{
+          minWidth: 82,
+          height: 40,
+          padding: '0 12px',
+          borderRadius: 12,
+          background: 'var(--color-primary)',
+          color: '#fff',
+          fontSize: 13,
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        + 추가
+      </button>
+    </div>
 
-              <Field label="학원 주소" error={errors.academyAddress}>
-                <input
-                  className="input-field"
-                  value={form.academyAddress}
-                  onChange={(e) => update('academyAddress', e.target.value)}
-                  placeholder="학원 주소를 입력해 주세요"
-                />
-              </Field>
-            </div>
-          )}
+    {errors.academies && (
+      <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+        {errors.academies}
+      </p>
+    )}
+
+    {(form.academies ?? []).map((academy, index) => (
+      <div
+        key={academy.id}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          padding: 14,
+          borderRadius: 12,
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <p style={{ fontSize: 13, fontWeight: 800 }}>
+            학원 {index + 1}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => removeManagedAcademy(academy.id)}
+            style={{
+              padding: '7px 10px',
+              borderRadius: 8,
+              background: '#FFE9E9',
+              color: 'var(--color-danger)',
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            삭제
+          </button>
+        </div>
+
+        <Field label="학원명" error={errors[`${academy.id}-academyName`]}>
+          <input
+            className="input-field"
+            value={academy.academyName}
+            onChange={(e) => updateManagedAcademy(academy.id, 'academyName', e.target.value)}
+            placeholder="학원명을 입력해 주세요"
+          />
+        </Field>
+
+        <Field label="학원 주소" error={errors[`${academy.id}-academyAddress`]}>
+          <input
+            className="input-field"
+            value={academy.academyAddress}
+            onChange={(e) => updateManagedAcademy(academy.id, 'academyAddress', e.target.value)}
+            placeholder="학원 주소를 입력해 주세요"
+          />
+        </Field>
+
+        <Field label="사업자번호" error={errors[`${academy.id}-businessNumber`]}>
+          <input
+            className="input-field"
+            value={formatBusinessNumber(academy.businessNumber)}
+            onChange={(e) => updateManagedAcademy(academy.id, 'businessNumber', e.target.value)}
+            placeholder="000-00-00000"
+          />
+        </Field>
+
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 12,
+            background: 'var(--color-primary-light)',
+            border: '1px solid var(--color-border)',
+          }}
+        >
+          <p
+            style={{
+              fontSize: 12,
+              color: 'var(--color-primary)',
+              fontWeight: 800,
+              marginBottom: 6,
+            }}
+          >
+            학원 고유코드
+          </p>
+
+          <code
+            style={{
+              display: 'block',
+              fontSize: 14,
+              fontWeight: 800,
+              color: 'var(--color-text-primary)',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 8,
+              padding: '9px 10px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {academy.academyCode ?? '발급 예정'}
+          </code>
+
+          <p
+            style={{
+              marginTop: 8,
+              fontSize: 11,
+              color: 'var(--color-text-muted)',
+              lineHeight: 1.5,
+            }}
+          >
+            현재는 UI 확인용입니다. 실제 고유코드 발급과 사업자번호 검증은 추후 백엔드 API 연동 후 처리됩니다.
+          </p>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
 
           {errors.submit && (
             <div
