@@ -40,16 +40,15 @@ export default function Map() {
   const [busLocation, setBusLocation] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
   const [busMarker, setBusMarker] = useState(null)
-  const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' });
-  const [studentEtas, setStudentEtas] = useState([]);
-  const [isChildOnBoard, setIsChildOnBoard] = useState(null);
+  const [routeData, setRouteData] = useState({ stations: [], currentStationId: null, routeName: '' })
+  const [studentEtas, setStudentEtas] = useState([])
+  const [isChildOnBoard, setIsChildOnBoard] = useState(null)
+  const [portalContainer, setPortalContainer] = useState(null)
 
   // 학부모인데 자녀 없으면 빈 화면
   if (role === USER_ROLES.PARENT && (!user?.children || user.children.length === 0)) {
     return <NoChildScreen message={'자녀를 등록하면\n실시간 위치를 확인할 수 있어요'} />
   }
-  const [isChildOnBoard, setIsChildOnBoard] = useState(null); // null=미확인, true=탑승중, false=하차완료
-  const [portalContainer, setPortalContainer] = useState(null)
 
   useEffect(() => {
     const topbar = document.querySelector('.topbar')
@@ -62,22 +61,17 @@ export default function Map() {
       btnContainer.style.display = 'flex'
       btnContainer.style.alignItems = 'center'
       btnContainer.style.marginRight = '8px'
-
       topbar.insertBefore(btnContainer, topbar.firstChild)
       setPortalContainer(btnContainer)
     }
 
-    if (titleEl) {
-      titleEl.style.marginRight = 'auto'
-    }
+    if (titleEl) titleEl.style.marginRight = 'auto'
 
     return () => {
       if (topbar && btnContainer && topbar.contains(btnContainer)) {
         topbar.removeChild(btnContainer)
       }
-      if (titleEl) {
-        titleEl.style.marginRight = ''
-      }
+      if (titleEl) titleEl.style.marginRight = ''
     }
   }, [])
 
@@ -88,11 +82,11 @@ export default function Map() {
       stationName: stop.name,
       sequence: i + 1,
       status: i < currentStopIndex ? 'PASSED' : (i === currentStopIndex ? 'ARRIVING' : 'NOT_YET')
-    }));
+    }))
 
-  const activeStationIndex = displayStations.findIndex(s => s.status === 'ARRIVING');
-  const activeIndex = activeStationIndex !== -1 ? activeStationIndex : currentStopIndex;
-  const globalEta = Math.max(12 - activeIndex * 3, 0) + (isDelayed ? 5 : 0);
+  const activeStationIndex = displayStations.findIndex(s => s.status === 'ARRIVING')
+  const activeIndex = activeStationIndex !== -1 ? activeStationIndex : currentStopIndex
+  const globalEta = Math.max(12 - activeIndex * 3, 0) + (isDelayed ? 5 : 0)
 
   useEffect(() => {
     setDriverInfo(mockVehicleInfo)
@@ -105,68 +99,64 @@ export default function Map() {
           getBusCurrentLocation(1),
           getBusRoute(1),
           getStudentEtas(1)
-        ]);
+        ])
 
         if (locRes.status === 'fulfilled' && locRes.value?.latitude) {
-          const { latitude, longitude, updatedAt: updatedTime, speed: currentSpeed } = locRes.value;
-          setBusLocation({ lat: latitude, lng: longitude });
-          setUpdatedAt(updatedTime);
-          if (currentSpeed !== undefined) setSpeed(currentSpeed);
-          setErrorMessage(null);
+          const { latitude, longitude, updatedAt: updatedTime, speed: currentSpeed } = locRes.value
+          setBusLocation({ lat: latitude, lng: longitude })
+          setUpdatedAt(updatedTime)
+          if (currentSpeed !== undefined) setSpeed(currentSpeed)
+          setErrorMessage(null)
         } else if (locRes.status === 'rejected' || !locRes.value) {
-          setErrorMessage("현재 운행 중인 셔틀버스가 없습니다");
+          setErrorMessage("현재 운행 중인 셔틀버스가 없습니다")
         }
 
         if (routeRes.status === 'fulfilled' && routeRes.value) {
-          const route = routeRes.value;
-          const stops = route.stops || [];
+          const route = routeRes.value
+          const stops = route.stops || []
           const stations = stops.map(s => ({
             stationId: s.stopId,
             stationName: s.stopName,
             sequence: s.stopOrder,
             status: s.status === 'ARRIVED' ? 'ARRIVING' : s.status === 'PASSED' ? 'PASSED' : 'NOT_YET',
             etaMinutes: s.etaMinutes,
-          }));
-          const currentStop = stops.find(s => s.status === 'ARRIVED');
-          setRouteData({
-            stations,
-            currentStationId: currentStop?.stopId ?? null,
-            routeName: route.routeName,
-          });
+          }))
+          const currentStop = stops.find(s => s.status === 'ARRIVED')
+          setRouteData({ stations, currentStationId: currentStop?.stopId ?? null, routeName: route.routeName })
           setDriverInfo(prev => ({
             ...(prev || mockVehicleInfo),
             vehicleNumber: route.busNumber || mockVehicleInfo.vehicleNumber,
             driverName: route.driverName || mockVehicleInfo.driverName,
             contact: route.driverPhoneNumber || mockVehicleInfo.contact,
-          }));
+          }))
         }
 
         if (etaRes.status === 'fulfilled' && Array.isArray(etaRes.value)) {
-          setStudentEtas(etaRes.value);
+          setStudentEtas(etaRes.value)
         }
 
         try {
-          const childStudentId = user?.children?.[0]?.id || 1;
-          const studentLoc = await getStudentCurrentLocation(childStudentId);
+          const childStudentId = user?.children?.[0]?.id || 1
+          const studentLoc = await getStudentCurrentLocation(childStudentId)
           if (studentLoc === null) {
-            setIsChildOnBoard(false);
-            setStatus('child_arrived');
+            setIsChildOnBoard(false)
+            setStatus('child_arrived')
           } else {
-            setIsChildOnBoard(true);
+            setIsChildOnBoard(true)
           }
         } catch {}
 
       } catch (err) {
-        setErrorMessage("데이터를 불러오는 중 오류가 발생했습니다.");
+        setErrorMessage("데이터를 불러오는 중 오류가 발생했습니다.")
       }
-    };
-    fetchData();
-  }, []);
+    }
+    fetchData()
+  }, [])
 
   useEffect(() => {
-    requestAndGetFCMToken();
-    initForegroundMessageListener();
-  }, []);
+    requestAndGetFCMToken()
+    initForegroundMessageListener()
+  }, [])
 
   useEffect(() => {
     const client = new Client({
@@ -178,94 +168,86 @@ export default function Map() {
         client.subscribe('/topic/bus/1', (message) => {
           if (message.body) {
             try {
-              const data = JSON.parse(message.body);
-              if (data.latitude && data.longitude) setBusLocation({ lat: data.latitude, lng: data.longitude });
-              if (data.speed !== undefined) setSpeed(data.speed);
-              if (data.updatedAt) setUpdatedAt(data.updatedAt);
+              const data = JSON.parse(message.body)
+              if (data.latitude && data.longitude) setBusLocation({ lat: data.latitude, lng: data.longitude })
+              if (data.speed !== undefined) setSpeed(data.speed)
+              if (data.updatedAt) setUpdatedAt(data.updatedAt)
               setDriverInfo(prev => ({
                 ...(prev || mockVehicleInfo),
                 vehicleNumber: data.busNumber || prev?.vehicleNumber || mockVehicleInfo.vehicleNumber,
                 driverName: data.driverName || prev?.driverName || mockVehicleInfo.driverName,
                 contact: data.driverPhoneNumber || prev?.contact || mockVehicleInfo.contact
-              }));
-              setErrorMessage(null);
+              }))
+              setErrorMessage(null)
             } catch (error) {
-              console.error('Error parsing WebSocket message:', error);
+              console.error('Error parsing WebSocket message:', error)
             }
           }
-        });
+        })
       },
-      onStompError: (frame) => {
-        setErrorMessage('실시간 데이터 서버에서 오류가 발생했습니다.');
-      },
-      onWebSocketError: () => {
-        setErrorMessage('실시간 데이터 서버와 연결이 끊어졌습니다. 재연결을 시도합니다.');
-      },
-    });
-    client.activate();
-    return () => { client.deactivate(); };
-  }, []);
+      onStompError: () => setErrorMessage('실시간 데이터 서버에서 오류가 발생했습니다.'),
+      onWebSocketError: () => setErrorMessage('실시간 데이터 서버와 연결이 끊어졌습니다. 재연결을 시도합니다.'),
+    })
+    client.activate()
+    return () => { client.deactivate() }
+  }, [])
 
   useEffect(() => {
     if (mapInstance && busMarker && busLocation) {
-      const loc = new window.kakao.maps.LatLng(busLocation.lat, busLocation.lng);
-      busMarker.setPosition(loc);
-      mapInstance.panTo(loc);
+      const loc = new window.kakao.maps.LatLng(busLocation.lat, busLocation.lng)
+      busMarker.setPosition(loc)
+      mapInstance.panTo(loc)
     }
-  }, [mapInstance, busMarker, busLocation]);
+  }, [mapInstance, busMarker, busLocation])
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true
     const initMap = () => {
       window.kakao.maps.load(() => {
-        if (!isMounted) return;
-        const container = mapRef.current;
-        if (!container) return;
-        container.style.width = '100%';
-        container.style.height = '100%';
-        const options = { center: new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng), level: 4 };
-        const map = new window.kakao.maps.Map(container, options);
-        setMapInstance(map);
-        const passedPolyline = new window.kakao.maps.Polyline({ path: [new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng)], strokeWeight: 5, strokeColor: '#9CA3AF', strokeOpacity: 0.8, strokeStyle: 'solid' });
-        passedPolyline.setMap(map);
-        const remainingPolyline = new window.kakao.maps.Polyline({ path: MOCK_ROUTE.map(pos => new window.kakao.maps.LatLng(pos.lat, pos.lng)), strokeWeight: 5, strokeColor: '#2563EB', strokeOpacity: 0.8, strokeStyle: 'solid' });
-        remainingPolyline.setMap(map);
-        MOCK_ROUTE.forEach((pos) => {
-          new window.kakao.maps.Marker({ position: new window.kakao.maps.LatLng(pos.lat, pos.lng), map, title: pos.name });
-        });
-        const busContent = document.createElement('div');
-        busContent.style.cssText = 'width:32px;height:32px;background:#FF3B3B;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;box-shadow:0 2px 4px rgba(0,0,0,0.3);border:2px solid white;';
-        busContent.innerHTML = '🚌';
-        const marker = new window.kakao.maps.CustomOverlay({ position: new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng), content: busContent, map, yAnchor: 0.5 });
-        setBusMarker(marker);
-      });
-    };
-    const scriptId = 'kakao-map-sdk-script';
-    let script = document.getElementById(scriptId);
+        if (!isMounted) return
+        const container = mapRef.current
+        if (!container) return
+        container.style.width = '100%'
+        container.style.height = '100%'
+        const options = { center: new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng), level: 4 }
+        const map = new window.kakao.maps.Map(container, options)
+        setMapInstance(map)
+        const passedPolyline = new window.kakao.maps.Polyline({ path: [new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng)], strokeWeight: 5, strokeColor: '#9CA3AF', strokeOpacity: 0.8, strokeStyle: 'solid' })
+        passedPolyline.setMap(map)
+        const remainingPolyline = new window.kakao.maps.Polyline({ path: MOCK_ROUTE.map(pos => new window.kakao.maps.LatLng(pos.lat, pos.lng)), strokeWeight: 5, strokeColor: '#2563EB', strokeOpacity: 0.8, strokeStyle: 'solid' })
+        remainingPolyline.setMap(map)
+        MOCK_ROUTE.forEach(pos => {
+          new window.kakao.maps.Marker({ position: new window.kakao.maps.LatLng(pos.lat, pos.lng), map, title: pos.name })
+        })
+        const busContent = document.createElement('div')
+        busContent.style.cssText = 'width:32px;height:32px;background:#FF3B3B;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;box-shadow:0 2px 4px rgba(0,0,0,0.3);border:2px solid white;'
+        busContent.innerHTML = '🚌'
+        const marker = new window.kakao.maps.CustomOverlay({ position: new window.kakao.maps.LatLng(MOCK_ROUTE[0].lat, MOCK_ROUTE[0].lng), content: busContent, map, yAnchor: 0.5 })
+        setBusMarker(marker)
+      })
+    }
+    const scriptId = 'kakao-map-sdk-script'
+    let script = document.getElementById(scriptId)
     if (!script) {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${import.meta.env.VITE_KAKAO_MAP_KEY}&autoload=false&libraries=services,clusterer`;
-      script.onload = initMap;
-      document.head.appendChild(script);
+      script = document.createElement('script')
+      script.id = scriptId
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${import.meta.env.VITE_KAKAO_MAP_KEY}&autoload=false&libraries=services,clusterer`
+      script.onload = initMap
+      document.head.appendChild(script)
     } else {
-      if (window.kakao && window.kakao.maps) initMap();
-      else script.addEventListener('load', initMap);
+      if (window.kakao && window.kakao.maps) initMap()
+      else script.addEventListener('load', initMap)
     }
     return () => {
-      isMounted = false;
-      if (script) script.removeEventListener('load', initMap);
-    };
-  }, []);
+      isMounted = false
+      if (script) script.removeEventListener('load', initMap)
+    }
+  }, [])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
       {portalContainer && createPortal(
-        <BackButton
-          to="/home"
-          label=""
-          style={{ color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center' }}
-        />,
+        <BackButton to="/home" label="" style={{ color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center' }} />,
         portalContainer
       )}
 
@@ -284,14 +266,14 @@ export default function Map() {
       )}
 
       {studentEtas.length > 0 && (() => {
-        const myChildEta = studentEtas[0];
+        const myChildEta = studentEtas[0]
         return (
           <div style={{ background: myChildEta.lateRisk ? '#FEF2F2' : '#EFF6FF', borderBottom: `1px solid ${myChildEta.lateRisk ? '#FCA5A5' : '#BFDBFE'}`, color: myChildEta.lateRisk ? '#DC2626' : '#1E3A8A', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
             <span>{myChildEta.lateRisk ? '🚨' : 'ℹ️'}</span>
             {myChildEta.studentName} 어린이의 {myChildEta.stopName} 하차까지 {myChildEta.etaMinutes}분 남았습니다.
             {myChildEta.lateRisk && ' (지각 위험)'}
           </div>
-        );
+        )
       })()}
 
       {isDelayed && (
@@ -325,8 +307,8 @@ export default function Map() {
       <div style={{ flex: 1, minHeight: 400, background: '#E8F0FE', position: 'relative' }}>
         <div ref={mapRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
         <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 10 }}>
-          <button onClick={() => { setIsSheetOpen(true); setIsRouteSheetOpen(false); }} style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}>기사 정보 🚍</button>
-          <button onClick={() => { setIsRouteSheetOpen(true); setIsSheetOpen(false); }} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>전체 경로 🗺️</button>
+          <button onClick={() => { setIsSheetOpen(true); setIsRouteSheetOpen(false) }} style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}>기사 정보 🚍</button>
+          <button onClick={() => { setIsRouteSheetOpen(true); setIsSheetOpen(false) }} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>전체 경로 🗺️</button>
         </div>
       </div>
 
@@ -345,21 +327,20 @@ export default function Map() {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', paddingBottom: '12px' }}>
             <div style={{ position: 'absolute', top: '7px', left: '10%', right: '10%', height: '3px', background: '#E5E7EB', zIndex: 0 }} />
             {displayStations.map((stop, index) => {
-              const isPassed = stop.status === 'PASSED';
-              const isCurrent = stop.status === 'ARRIVING';
-              const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID;
-              const dotColor = isPassed ? '#10B981' : isCurrent ? '#3B82F6' : '#D1D5DB';
-              let etaText = '';
-              let etaColor = '#9CA3AF';
-              if (isPassed) { etaText = '통과'; }
-              else if (isCurrent) { etaText = '도착예정'; etaColor = '#3B82F6'; }
+              const isPassed = stop.status === 'PASSED'
+              const isCurrent = stop.status === 'ARRIVING'
+              const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID
+              const dotColor = isPassed ? '#10B981' : isCurrent ? '#3B82F6' : '#D1D5DB'
+              let etaText = '', etaColor = '#9CA3AF'
+              if (isPassed) { etaText = '통과' }
+              else if (isCurrent) { etaText = '도착예정'; etaColor = '#3B82F6' }
               else {
-                let mins = Math.max((index - activeIndex) * 3, 3);
-                if (isDelayed) mins += 5;
-                etaText = `${mins}분 후`;
-                etaColor = isDelayed ? '#DC2626' : '#10B981';
-                const matchedEta = studentEtas.find(eta => eta.stopId === stop.stationId);
-                if (matchedEta) { etaText = `${matchedEta.etaMinutes}분 후`; if (matchedEta.lateRisk) { etaColor = '#DC2626'; etaText += ' 🚨'; } }
+                let mins = Math.max((index - activeIndex) * 3, 3)
+                if (isDelayed) mins += 5
+                etaText = `${mins}분 후`
+                etaColor = isDelayed ? '#DC2626' : '#10B981'
+                const matchedEta = studentEtas.find(eta => eta.stopId === stop.stationId)
+                if (matchedEta) { etaText = `${matchedEta.etaMinutes}분 후`; if (matchedEta.lateRisk) { etaColor = '#DC2626'; etaText += ' 🚨' } }
               }
               return (
                 <div key={stop.stationId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, zIndex: 1, width: '20%' }}>
@@ -411,10 +392,10 @@ export default function Map() {
         </div>
         <div style={{ flex: 1, overflowY: 'auto', paddingLeft: '8px', position: 'relative', paddingBottom: '20px' }}>
           <div style={{ position: 'absolute', top: '12px', bottom: '32px', left: '19px', width: '4px', background: '#E5E7EB', zIndex: 0 }} />
-          {displayStations.map((stop) => {
-            const isPassed = stop.status === 'PASSED';
-            const isCurrent = stop.status === 'ARRIVING';
-            const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID;
+          {displayStations.map(stop => {
+            const isPassed = stop.status === 'PASSED'
+            const isCurrent = stop.status === 'ARRIVING'
+            const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID
             return (
               <div key={stop.stationId} style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', position: 'relative', zIndex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', marginRight: '16px' }}>
@@ -434,7 +415,7 @@ export default function Map() {
                   {isCurrent ? '도착예정' : (isPassed ? '통과' : '대기')}
                 </div>
               </div>
-            );
+            )
           })}
         </div>
       </div>
