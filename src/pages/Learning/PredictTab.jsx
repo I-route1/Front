@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   SUBJECTS, SUBJECT_COLORS,
-  INIT_TREND, INIT_DAILY_PLAN,
+  INIT_TREND,
 } from './data/mockData'
 import { useAuth } from '@/context/AuthContext'
 
@@ -17,7 +17,10 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
 
   const [goal, setGoal]               = useState('')
   const [targetScore, setTargetScore] = useState('')
-  const [plan, setPlan]               = useState(INIT_DAILY_PLAN)
+  const [targetDate, setTargetDate]   = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]
+  })
+  const [plan, setPlan]               = useState([])
   const [newTask, setNewTask]         = useState({ subject:'수학', task:'', time:30 })
   const [showAdd, setShowAdd]         = useState(false)
   const [generating, setGenerating]   = useState(false)
@@ -100,7 +103,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     try {
       const res = await studyPlanAPI.generateRoadmap(effectiveId, {
         targetKeyword: goal,
-        targetDate: '2026-11-15',
+        targetDate,
         dailyStudyHours: 2,
       })
 
@@ -162,19 +165,20 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
 
   const doneCount = plan.filter(p => p.done).length
 
-  const PREDICT_DATA = [...trendData,
-    aiPrediction
-      ? {
-          date: '25.06',
-          국어:  aiPrediction.expected_score,
-          수학:  aiPrediction.expected_score,
-          영어:  aiPrediction.expected_score,
-          사회:  aiPrediction.expected_score,
-          과학:  aiPrediction.expected_score,
-          predicted: true,
-        }
-      : { date: '25.06', 국어: 87, 수학: 81, 영어: 93, 사회: 85, 과학: 86, predicted: true },
-  ]
+  const PREDICT_DATA = (() => {
+    const last = trendData[trendData.length - 1]
+    const currentAvg = last
+      ? Math.round(SUBJECTS.reduce((a, s) => a + (last[s] || 0), 0) / SUBJECTS.length)
+      : 0
+    const delta = aiPrediction ? (aiPrediction.expected_score - currentAvg) : 0
+    const predictedPoint = { date: '25.06', predicted: true }
+    SUBJECTS.forEach(s => {
+      predictedPoint[s] = last
+        ? Math.min(100, Math.max(0, Math.round((last[s] || 0) + delta)))
+        : (aiPrediction?.expected_score ?? 80)
+    })
+    return [...trendData, predictedPoint]
+  })()
 
   const latest    = PREDICT_DATA[PREDICT_DATA.length - 2]
   const predicted = PREDICT_DATA[PREDICT_DATA.length - 1]
@@ -240,7 +244,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
                 contentStyle={{ borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 12 }}
                 formatter={(v, n) => [`${v}점`, n]}
               />
-              {['수학', '영어'].map(s => (
+              {SUBJECTS.map(s => (
                 <Line
                   key={s} type="monotone" dataKey={s}
                   stroke={SUBJECT_COLORS[s]} strokeWidth={2.5}
@@ -372,6 +376,10 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
             <div className="input-group">
               <label className="input-label">목표 평균 점수</label>
               <input className="input-field" type="number" placeholder="예: 90" value={targetScore} onChange={e => setTargetScore(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">목표 날짜</label>
+              <input className="input-field" type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} />
             </div>
             <button
               onClick={handleGenerateRoadmap}

@@ -139,17 +139,20 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
   }, [effectiveId])
 
   useEffect(() => {
-    if (!effectiveId) return
+    if (!effectiveId || patternLoading) return
+    const subjects = (studyPattern?.subjectStudyMinutes && Object.keys(studyPattern.subjectStudyMinutes).length > 0)
+      ? Object.keys(studyPattern.subjectStudyMinutes)
+      : ['수학', '영어', '국어', '사회', '과학']
     setPeerPathsLoading(true)
     Promise.all(
-      ['수학', '영어'].map(subject =>
+      subjects.map(subject =>
         recommendationsAPI.getPeerPath(effectiveId, subject)
           .then(data => ({ subject, ...data }))
           .catch(() => null)
       )
     ).then(results => setPeerPaths(results.filter(r => r !== null)))
      .finally(() => setPeerPathsLoading(false))
-  }, [effectiveId])
+  }, [effectiveId, studyPattern, patternLoading])
 
   const handleAncestorSearch = async () => {
     setAncestorLoading(true)

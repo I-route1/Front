@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 import {
-  GOLDEN_TIME_DATA, STUDY_TIME_DATA,
-  STRENGTH_AREAS, WEAK_AREAS,
+  SUBJECTS, GOLDEN_TIME_DATA, WEAK_AREAS,
 } from './data/mockData'
-import { activitiesAPI, analysisAPI } from '@/api'
+import { activitiesAPI, analysisAPI, gradesAPI } from '@/api'
 import { useAuth, isAcademy } from '@/context/AuthContext'
 
 // subjectId → 과목명 매핑 (백엔드 확인 후 보정 필요)
@@ -33,6 +32,8 @@ const SUBJECT_BADGE_COLOR = {
 export default function PatternTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
   const effectiveId = propStudentId ?? user?.id
+  const gradeKey = selectedChild?.gradeStudentId ?? String(effectiveId ?? '')
+
   const [selfEval, setSelfEval]         = useState({ 이해도:0, 집중도:0 })
   const [feedback, setFeedback]         = useState('')
   const [saved, setSaved]               = useState(false)
@@ -43,18 +44,80 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
   const [strengths, setStrengths] = useState(null)
   const [strengthsLoading, setStrengthsLoading] = useState(true)
 
+  // 학습 패턴 (실데이터)
+  const [studyPatternData, setStudyPatternData] = useState(null)
+
+  // 교사 피드백 (실데이터)
+  const [feedbackList, setFeedbackList] = useState([])
+
+  // 성적 데이터 (약점 계산용)
+  const [gradesData, setGradesData] = useState([])
+
   useEffect(() => {
     if (!effectiveId) return
-
     setStrengthsLoading(true)
     analysisAPI.getStrengths(effectiveId)
       .then(data => setStrengths(data))
-      .catch(e => {
-        console.error('강점 분석 조회 실패:', e)
-        setStrengths(null)
-      })
+      .catch(() => setStrengths(null))
       .finally(() => setStrengthsLoading(false))
   }, [effectiveId])
+
+  useEffect(() => {
+    if (!effectiveId) return
+    analysisAPI.getStudyPatternV2(effectiveId)
+      .then(data => setStudyPatternData(data))
+      .catch(() => setStudyPatternData(null))
+  }, [effectiveId])
+
+  useEffect(() => {
+    if (!effectiveId) return
+    activitiesAPI.getActivities(effectiveId)
+      .then(data => {
+        const list = Array.isArray(data) ? data : []
+        const withFeedback = list
+          .filter(a => a.instructorFeedback)
+          .sort((a, b) => new Date(b.studyDate || b.createdAt || 0) - new Date(a.studyDate || a.createdAt || 0))
+          .slice(0, 5)
+        setFeedbackList(withFeedback)
+      })
+      .catch(() => setFeedbackList([]))
+  }, [effectiveId])
+
+  useEffect(() => {
+    if (!gradeKey) return
+    gradesAPI.getGrades(gradeKey)
+      .then(data => setGradesData(Array.isArray(data) ? data : []))
+      .catch(() => setGradesData([]))
+  }, [gradeKey])
+
+  // 실데이터 기반 골든타임 / 과목별 학습시간
+  const displayGoldenHour = studyPatternData?.goldenTime
+    || GOLDEN_TIME_DATA.reduce((a, b) => a.focus > b.focus ? a : b).time
+
+  const displayStudyTimeData = useMemo(() => {
+    if (studyPatternData?.subjectStudyMinutes && Object.keys(studyPatternData.subjectStudyMinutes).length > 0) {
+      return Object.entries(studyPatternData.subjectStudyMinutes)
+        .map(([subject, minutes]) => ({ subject, minutes, color: SUBJECT_BADGE_COLOR[subject] || '#1A56DB' }))
+        .sort((a, b) => b.minutes - a.minutes)
+    }
+    return null // null이면 API 데이터 없음
+  }, [studyPatternData])
+
+  // 성적 기반 약점 과목 계산 (실데이터 우선, 없으면 mock)
+  const weakSubjects = useMemo(() => {
+    if (gradesData.length === 0) return WEAK_AREAS
+    const avgBySubject = {}
+    SUBJECTS.forEach(s => {
+      const scores = gradesData.filter(g => g.subject === s).map(g => g.score)
+      if (scores.length > 0)
+        avgBySubject[s] = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    })
+    const strongIds = new Set(strengths?.strongSubjectIds ?? [])
+    const sorted = Object.entries(avgBySubject).sort((a, b) => a[1] - b[1])
+    return sorted.slice(0, 3).map(([subject, avg]) => ({
+      unit: subject, subject, accuracy: avg, trend: '▼',
+    }))
+  }, [gradesData, strengths])
 
   const goldenHour = GOLDEN_TIME_DATA.reduce((a,b) => a.focus>b.focus ? a : b)
 
@@ -118,7 +181,7 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
           <span style={{ fontSize:32 }}>⚡</span>
           <div>
             <p style={{ fontSize:12, opacity:0.7 }}>골든타임 (집중력 최고조)</p>
-            <p style={{ fontSize:20, fontWeight:800, marginTop:2 }}>{goldenHour.time} 대</p>
+            <p style={{ fontSize:20, fontWeight:800, marginTop:2 }}>{displayGoldenHour}</p>
             <p style={{ fontSize:11, opacity:0.65, marginTop:2 }}>이 시간대에 중요한 과목을 배치하세요</p>
           </div>
         </div>
@@ -149,22 +212,30 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>⏱️ 과목별 학습 시간 (이번 주)</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {STUDY_TIME_DATA.map(d => (
-              <div key={d.subject} style={{ display:'flex', alignItems:'center', gap:12 }}>
-                <span style={{ width:32, height:32, borderRadius:8, flexShrink:0, background:d.color+'18', color:d.color, fontSize:11, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{d.subject}</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                    <span style={{ fontSize:12, fontWeight:600 }}>{d.subject}</span>
-                    <span style={{ fontSize:12, color:d.color, fontWeight:700 }}>{d.minutes}분</span>
-                  </div>
-                  <div style={{ height:7, background:'var(--color-surface-2)', borderRadius:4, overflow:'hidden' }}>
-                    <div style={{ height:'100%', borderRadius:4, background:d.color, width:`${(d.minutes/STUDY_TIME_DATA[0].minutes)*100}%` }} />
+          {displayStudyTimeData ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {displayStudyTimeData.map((d, idx) => (
+                <div key={d.subject} style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <span style={{ width:32, height:32, borderRadius:8, flexShrink:0, background:d.color+'18', color:d.color, fontSize:11, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{d.subject}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                      <span style={{ fontSize:12, fontWeight:600 }}>{d.subject}</span>
+                      <span style={{ fontSize:12, color:d.color, fontWeight:700 }}>{d.minutes}분</span>
+                    </div>
+                    <div style={{ height:7, background:'var(--color-surface-2)', borderRadius:4, overflow:'hidden' }}>
+                      <div style={{ height:'100%', borderRadius:4, background:d.color, width:`${(d.minutes / (displayStudyTimeData[0]?.minutes || 1)) * 100}%` }} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding:'24px 0', textAlign:'center', color:'var(--color-text-muted)', fontSize:13 }}>
+              <p style={{ fontSize:20, marginBottom:8 }}>📚</p>
+              <p>아직 학습 기록이 없어요</p>
+              <p style={{ fontSize:11, marginTop:4 }}>학습 활동을 기록하면 과목별 통계가 나타납니다</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -258,18 +329,26 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📝 강사 피드백</p>
           <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>담당 강사가 직접 기록하는 정성적 평가</p>
           <div style={{ marginBottom:12, display:'flex', flexDirection:'column', gap:8 }}>
-            {[
-              { teacher:'김수학 선생님', date:'5.8', text:'오늘 분수 단원 집중도 매우 좋았음. 계산 실수가 줄어드는 추세.' },
-              { teacher:'이영어 선생님', date:'5.7', text:'발표력이 향상됨. 독해 속도는 아직 개선 필요.' },
-            ].map((f,i) => (
-              <div key={i} style={{ padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>{f.teacher}</span>
-                  <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{f.date}</span>
+            {feedbackList.length > 0 ? feedbackList.map((a, i) => {
+              const dateStr = a.studyDate
+                ? new Date(a.studyDate).toLocaleDateString('ko-KR', { month:'numeric', day:'numeric' })
+                : ''
+              return (
+                <div key={i} style={{ padding:'11px 13px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:'var(--color-primary)' }}>
+                      {a.instructorName || a.teacherName || '강사'}
+                    </span>
+                    <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{dateStr}</span>
+                  </div>
+                  <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>{a.instructorFeedback}</p>
                 </div>
-                <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>{f.text}</p>
+              )
+            }) : (
+              <div style={{ padding:'20px 16px', textAlign:'center', background:'var(--color-surface-2)', borderRadius:10, border:'1px dashed var(--color-border)' }}>
+                <p style={{ fontSize:13, color:'var(--color-text-muted)' }}>아직 강사 피드백이 없어요</p>
               </div>
-            ))}
+            )}
           </div>
 
           {isAcademy(user?.role) && (
@@ -356,21 +435,27 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
           )}
         </div>
 
-        {/* 집중 보완 필요 영역 - mock 그대로 유지 */}
+        {/* 집중 보완 필요 영역 - 성적 기반 실데이터 */}
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>🎯 집중 보완 필요 영역</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {WEAK_AREAS.map(w => (
-              <div key={w.unit} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'#FFE9E915', border:'1px solid #FF3B3B30', borderRadius:10 }}>
-                <span style={{ fontSize:18 }}>📌</span>
-                <div style={{ flex:1 }}>
-                  <p style={{ fontSize:13, fontWeight:700 }}>{w.unit} <span style={{ fontSize:11, color:'var(--color-text-muted)', fontWeight:500 }}>{w.subject}</span></p>
-                  <p style={{ fontSize:11, color:'var(--color-danger)', marginTop:2 }}>정답률 {w.accuracy}% {w.trend}</p>
+          {weakSubjects.length > 0 ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {weakSubjects.map(w => (
+                <div key={w.unit} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'#FFE9E915', border:'1px solid #FF3B3B30', borderRadius:10 }}>
+                  <span style={{ fontSize:18 }}>📌</span>
+                  <div style={{ flex:1 }}>
+                    <p style={{ fontSize:13, fontWeight:700 }}>{w.unit}</p>
+                    <p style={{ fontSize:11, color:'var(--color-danger)', marginTop:2 }}>평균 {w.accuracy}점 {w.trend}</p>
+                  </div>
+                  <div style={{ width:42, height:42, borderRadius:10, background:'var(--color-danger)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:12, fontWeight:800 }}>{w.accuracy}</div>
                 </div>
-                <div style={{ width:42, height:42, borderRadius:10, background:'var(--color-danger)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:12, fontWeight:800 }}>{w.accuracy}%</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding:'20px 16px', textAlign:'center', background:'var(--color-surface-2)', borderRadius:10, border:'1px dashed var(--color-border)' }}>
+              <p style={{ fontSize:13, color:'var(--color-text-muted)' }}>성적 데이터가 쌓이면 약점 과목을 분석해드릴게요</p>
+            </div>
+          )}
         </div>
 
       </div>
