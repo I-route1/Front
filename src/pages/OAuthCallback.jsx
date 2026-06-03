@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { authAPI } from '@/api'
+import axios from 'axios'
+import { API_BASE_URL } from '@/api'
 import { getDefaultRoute, useAuth, USER_ROLES } from '@/context/AuthContext'
 
 export default function OAuthCallback() {
@@ -28,7 +29,9 @@ export default function OAuthCallback() {
                     throw new Error('소셜 로그인 인증 code가 없습니다.')
                 }
 
-                const data = await authAPI.getSocialToken(provider, code)
+                const { data } = await axios.post(`${API_BASE_URL}/api/oauth/kakao/login`, {
+                    code,
+                })
 
                 if (!data?.accessToken) {
                     throw new Error('소셜 로그인 토큰 발급에 실패했습니다.')

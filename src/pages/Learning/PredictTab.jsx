@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { reviewAPI, studyPlanAPI } from '@/api'
+import { reviewAPI, studyPlanAPI, gradesAPI } from '@/api'
 import { aiReportAPI } from '@/api/aiReport'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext'
 export default function PredictTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
   const effectiveId = propStudentId ?? user?.id
+
   const [goal, setGoal]               = useState('')
   const [targetScore, setTargetScore] = useState('')
   const [plan, setPlan]               = useState(INIT_DAILY_PLAN)
@@ -24,6 +25,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
   const [roadmapError, setRoadmapError] = useState(null)
   const [reviewData, setReviewData]   = useState(null)
   const [reviewLoading, setReviewLoading] = useState(false)
+  const [trendData, setTrendData] = useState(INIT_TREND)
 
   // AI 예측 점수
   const [aiPrediction, setAiPrediction] = useState(null)
@@ -53,12 +55,11 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     const fetchPrediction = async () => {
       setPredictionLoading(true)
       try {
-        // 현재 평균 점수 계산 (mock 데이터 기반)
-        const latest = INIT_TREND[INIT_TREND.length - 1]
-        const avg = Math.round(
-          SUBJECTS.reduce((a, s) => a + (latest[s] || 0), 0) / SUBJECTS.length
-        )
-        const res = await aiReportAPI.predictScore(avg, 2) // 하루 2시간 학습 기본값
+        const gradesData = await gradesAPI.getGrades(effectiveId).catch(() => [])
+        const avg = gradesData.length > 0
+          ? Math.round(gradesData.reduce((a, g) => a + (g.score || 0), 0) / gradesData.length)
+          : 0
+        const res = await aiReportAPI.predictScore(avg, 2)
         setAiPrediction(res)
       } catch (e) {
         console.error('AI 예측 실패:', e)
@@ -68,6 +69,24 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
       }
     }
     fetchPrediction()
+  }, [effectiveId])
+
+  useEffect(() => {
+    if (!effectiveId) return
+    gradesAPI.getGrades(effectiveId)
+      .then(data => {
+        if (!data || data.length === 0) return
+        const grouped = {}
+        data.forEach(g => {
+          const d = new Date(g.examDate)
+          const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`
+          if (!grouped[label]) grouped[label] = { date: label, 국어:0, 수학:0, 영어:0, 사회:0, 과학:0 }
+          grouped[label][g.subject] = g.score
+        })
+        const trend = Object.values(grouped).sort((a,b) => a.date.localeCompare(b.date))
+        if (trend.length > 0) setTrendData(trend)
+      })
+      .catch(() => {}) // 실패 시 mock 유지
   }, [effectiveId])
 
   // 로드맵 생성
@@ -143,9 +162,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
 
   const doneCount = plan.filter(p => p.done).length
 
-  // 그래프 데이터 — AI 예측값 있으면 반영
-  const PREDICT_DATA = [
-    ...INIT_TREND,
+  const PREDICT_DATA = [...trendData,
     aiPrediction
       ? {
           date: '25.06',
