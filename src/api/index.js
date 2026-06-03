@@ -1,4 +1,5 @@
-﻿export { gradesAPI }          from './grades'
+﻿export { checklistAPI }       from './checklist'
+export { gradesAPI }          from './grades'
 export { activitiesAPI }      from './activities'
 export { counselingAPI }      from './counseling'
 export { analysisAPI }        from './analysis'

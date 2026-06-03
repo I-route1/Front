@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { reviewAPI, studyPlanAPI, gradesAPI } from '@/api'
+import { reviewAPI, studyPlanAPI, gradesAPI, checklistAPI } from '@/api'
 import { aiReportAPI } from '@/api/aiReport'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   SUBJECTS, SUBJECT_COLORS,
-  INIT_TREND, INIT_DAILY_PLAN,
+  INIT_TREND,
 } from './data/mockData'
 import { useAuth } from '@/context/AuthContext'
 
@@ -17,7 +17,11 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
 
   const [goal, setGoal]               = useState('')
   const [targetScore, setTargetScore] = useState('')
-  const [plan, setPlan]               = useState(INIT_DAILY_PLAN)
+  const [targetDate, setTargetDate]   = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]
+  })
+  const [plan, setPlan]               = useState([])
+  const [planLoading, setPlanLoading] = useState(false)
   const [newTask, setNewTask]         = useState({ subject:'수학', task:'', time:30 })
   const [showAdd, setShowAdd]         = useState(false)
   const [generating, setGenerating]   = useState(false)
@@ -28,6 +32,24 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
   const [trendData, setTrendData]     = useState(INIT_TREND)
   const [aiPrediction, setAiPrediction] = useState(null)
   const [predictionLoading, setPredictionLoading] = useState(false)
+
+  // 오늘의 학습 계획 로드
+  useEffect(() => {
+    if (!effectiveId) return
+    const fetchPlan = async () => {
+      setPlanLoading(true)
+      try {
+        const today = new Date().toISOString().split('T')[0]
+        const items = await checklistAPI.getByDate(effectiveId, today)
+        setPlan(items.map(i => ({ id: i.id, subject: i.subject, task: i.task, time: i.estimatedMinutes, done: i.done })))
+      } catch (e) {
+        console.error('학습 계획 조회 실패:', e)
+      } finally {
+        setPlanLoading(false)
+      }
+    }
+    fetchPlan()
+  }, [effectiveId])
 
   // 에빙하우스 복습 알림
   useEffect(() => {
@@ -105,7 +127,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     try {
       const res = await studyPlanAPI.generateRoadmap(effectiveId, {
         targetKeyword: goal,
-        targetDate: '2026-11-15',
+        targetDate,
         dailyStudyHours: 2,
       })
       const milestones = res.weeklyMilestones || res.weeks || res.plan || res.milestones || []
@@ -128,24 +150,60 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     }
   }
 
-  const toggleDone = (id) => setPlan(prev => prev.map(p => p.id === id ? { ...p, done: !p.done } : p))
-
-  const addTask = () => {
-    if (!newTask.task.trim()) return
-    setPlan(prev => [...prev, { ...newTask, id: Date.now(), done: false, time: Number(newTask.time) || 30 }])
-    setNewTask({ subject: '수학', task: '', time: 30 })
-    setShowAdd(false)
+  const toggleDone = async (id) => {
+    setPlan(prev => prev.map(p => p.id === id ? { ...p, done: !p.done } : p))
+    try {
+      await checklistAPI.toggleDone(id)
+    } catch (e) {
+      console.error('완료 상태 변경 실패:', e)
+      setPlan(prev => prev.map(p => p.id === id ? { ...p, done: !p.done } : p))
+    }
   }
 
-  const removeTask = (id) => setPlan(prev => prev.filter(p => p.id !== id))
+  const addTask = async () => {
+    if (!newTask.task.trim()) return
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const res = await checklistAPI.addItem({
+        studentId: String(effectiveId),
+        subject: newTask.subject,
+        task: newTask.task,
+        estimatedMinutes: Number(newTask.time) || 30,
+        planDate: today,
+      })
+      setPlan(prev => [...prev, { id: res.id, subject: res.subject, task: res.task, time: res.estimatedMinutes, done: res.done }])
+      setNewTask({ subject: '수학', task: '', time: 30 })
+      setShowAdd(false)
+    } catch (e) {
+      console.error('항목 추가 실패:', e)
+    }
+  }
+
+  const removeTask = async (id) => {
+    setPlan(prev => prev.filter(p => p.id !== id))
+    try {
+      await checklistAPI.deleteItem(id)
+    } catch (e) {
+      console.error('항목 삭제 실패:', e)
+    }
+  }
+
   const doneCount = plan.filter(p => p.done).length
 
-  const PREDICT_DATA = [
-    ...trendData,
-    aiPrediction
-      ? { date: '25.06', 국어: aiPrediction.expected_score, 수학: aiPrediction.expected_score, 영어: aiPrediction.expected_score, 사회: aiPrediction.expected_score, 과학: aiPrediction.expected_score, predicted: true }
-      : { date: '25.06', 국어: 87, 수학: 81, 영어: 93, 사회: 85, 과학: 86, predicted: true },
-  ]
+  const PREDICT_DATA = (() => {
+    const last = trendData[trendData.length - 1]
+    const currentAvg = last
+      ? Math.round(SUBJECTS.reduce((a, s) => a + (last[s] || 0), 0) / SUBJECTS.length)
+      : 0
+    const delta = aiPrediction ? (aiPrediction.expected_score - currentAvg) : 0
+    const predictedPoint = { date: '25.06', predicted: true }
+    SUBJECTS.forEach(s => {
+      predictedPoint[s] = last
+        ? Math.min(100, Math.max(0, Math.round((last[s] || 0) + delta)))
+        : (aiPrediction?.expected_score ?? 80)
+    })
+    return [...trendData, predictedPoint]
+  })()
 
   const latest  = PREDICT_DATA[PREDICT_DATA.length - 2]
   const predicted = PREDICT_DATA[PREDICT_DATA.length - 1]
@@ -192,9 +250,16 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
               <CartesianGrid strokeDasharray="3 3" stroke="#F0F3FA" />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94A3B8' }} />
               <YAxis domain={[40, 100]} tick={{ fontSize: 11, fill: '#94A3B8' }} />
-              <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 12 }} formatter={(v, n) => [`${v}점`, n]} />
-              {['수학', '영어'].map(s => (
-                <Line key={s} type="monotone" dataKey={s} stroke={SUBJECT_COLORS[s]} strokeWidth={2.5} dot={{ r: 4, fill: SUBJECT_COLORS[s] }} activeDot={{ r: 6 }} />
+              <Tooltip
+                contentStyle={{ borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 12 }}
+                formatter={(v, n) => [`${v}점`, n]}
+              />
+              {SUBJECTS.map(s => (
+                <Line
+                  key={s} type="monotone" dataKey={s}
+                  stroke={SUBJECT_COLORS[s]} strokeWidth={2.5}
+                  dot={{ r: 4, fill: SUBJECT_COLORS[s] }} activeDot={{ r: 6 }}
+                />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -319,8 +384,22 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
               <label className="input-label">목표 평균 점수</label>
               <input className="input-field" type="number" placeholder="예: 90" value={targetScore} onChange={e => setTargetScore(e.target.value)} />
             </div>
-            <button onClick={handleGenerateRoadmap} disabled={generating}
-              style={{ width: '100%', padding: '13px', borderRadius: 12, border: 'none', background: generating ? 'var(--color-text-muted)' : 'linear-gradient(90deg, #1A56DB, #00C49A)', color: 'white', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', cursor: generating ? 'not-allowed' : 'pointer', boxShadow: '0 4px 16px rgba(26,86,219,0.3)', transition: 'all 0.2s' }}>
+            <div className="input-group">
+              <label className="input-label">목표 날짜</label>
+              <input className="input-field" type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} />
+            </div>
+            <button
+              onClick={handleGenerateRoadmap}
+              disabled={generating}
+              style={{
+                width: '100%', padding: '13px', borderRadius: 12, border: 'none',
+                background: generating ? 'var(--color-text-muted)' : 'linear-gradient(90deg, #1A56DB, #00C49A)',
+                color: 'white', fontSize: 15, fontWeight: 700, fontFamily: 'inherit',
+                cursor: generating ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 16px rgba(26,86,219,0.3)',
+                transition: 'all 0.2s',
+              }}
+            >
               {generating ? '🤖 AI가 로드맵을 설계 중...' : 'AI 로드맵 생성'}
             </button>
             {roadmapError && (

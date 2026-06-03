@@ -45,6 +45,14 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
   const [activeSubs, setActiveSubs] = useState(['국어','수학','영어'])
   const [saveMsg, setSaveMsg]     = useState('')
 
+  useEffect(() => {
+    setShowForm(false)
+    setScores({ 국어:'', 수학:'', 영어:'', 사회:'', 과학:'' })
+    setExamDate('')
+    setSaveMsg('')
+    setTrendData(INIT_TREND)
+  }, [gradeKey])
+
   const latest = trendData[trendData.length - 1]
   const prev   = trendData[trendData.length - 2] ?? latest
   const isLatestMock = latest.examType === EXAM_TYPE_MOCK
@@ -84,9 +92,13 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
     }
   }), [latest, prev])
 
-  const radarData = useMemo(() => SUBJECTS.map(s => ({
-    subject: s, score: latest[s], avg: 72,
-  })), [latest])
+  const radarData = useMemo(() => SUBJECTS.map(s => {
+    const vals = trendData.map(d => d[s]).filter(v => v && v > 0)
+    const subjectAvg = vals.length > 0
+      ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+      : 72
+    return { subject: s, score: latest[s], avg: subjectAvg }
+  }), [latest, trendData])
 
   const totalAvg  = Math.round(SUBJECTS.reduce((a,s) => a + latest[s], 0) / SUBJECTS.length)
   const mockAvgStandard = isLatestMock && latest.mockMeta
@@ -140,7 +152,7 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
             score: examType === EXAM_TYPE_MOCK
               ? Number(scores[s])
               : Number(scores[s]),
-            gradeLevel: 6,
+            gradeLevel: (() => { const m = (selectedChild?.grade ?? '').match(/(\d+)/); return m ? Number(m[1]) : 1 })(),
             examType: examType === '중간고사' ? '중간'
               : examType === '기말고사' ? '기말'
               : '모의고사',
