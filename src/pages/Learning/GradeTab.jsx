@@ -183,7 +183,7 @@ export default function GradeTab() {
       <div style={{ background:'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)', padding:'24px 20px', color:'white' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
-            <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>홍민준 · 초등 6학년</p>
+          <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>{user?.children?.[0]?.name ?? user?.name ?? '학생'} · {user?.children?.[0]?.grade ?? ''}</p>
             <h2 style={{ fontSize:20, fontWeight:800 }}>성적 관리</h2>
           </div>
           <button onClick={() => setShowForm(p=>!p)} style={{
