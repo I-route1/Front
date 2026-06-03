@@ -90,9 +90,11 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
   const [peerContentLoading, setPeerContentLoading] = useState(true)
   const [ancestorLoading, setAncestorLoading]     = useState(false)
   const [ancestorDone, setAncestorDone]           = useState(false)
+  const [ancestorResults, setAncestorResults]     = useState([])
 
   useEffect(() => {
     setAncestorDone(false)
+    setAncestorResults([])
     setAiSubject('수학')
   }, [effectiveId])
 
@@ -165,15 +167,17 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
       const gradesData = await gradesAPI.getGrades(effectiveId).catch(() => [])
       const scores = gradesData.map(g => g.score).filter(Boolean)
       const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
-      await gradesAPI.analyzeGrade({
+      const res = await gradesAPI.analyzeGrade({
         studentId: effectiveId,
         score: avgScore,
         allScores: scores.length > 0 ? scores : [avgScore],
         weakConceptTag: aiSubject,
       })
+      setAncestorResults(res?.results ?? [])
       setAncestorDone(true)
     } catch (e) {
       console.error('족보 탐색 실패:', e)
+      setAncestorResults([])
       setAncestorDone(true)
     } finally {
       setAncestorLoading(false)
@@ -245,16 +249,29 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
               <span style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, background:'var(--color-primary-light)', color:'var(--color-primary)', border:'1px solid #1A56DB30' }}>#{aiSubject}</span>
             </div>
           </div>
-          {!ancestorDone ? (
-            <button onClick={handleAncestorSearch} disabled={ancestorLoading}
-              style={{ width:'100%', padding:'12px', borderRadius:10, border:'none', background:ancestorLoading ? 'var(--color-text-muted)' : 'linear-gradient(90deg, #1A56DB, #9B59B6)', color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit', cursor:ancestorLoading ? 'not-allowed' : 'pointer' }}>
-              {ancestorLoading ? '🔍 족보 탐색 중...' : '🔍 AI 맞춤 족보 탐색 시작'}
-            </button>
-          ) : (
-            <div style={{ padding:'12px 14px', borderRadius:10, background:'#D1FAF0', border:'1px solid #00C49A50' }}>
-              <p style={{ fontSize:13, fontWeight:700, color:'#007A5E' }}>✓ 족보 탐색 요청 완료!</p>
-              <p style={{ fontSize:12, color:'#007A5E', marginTop:4, opacity:0.85 }}>AI가 백그라운드에서 분석 중이에요. 결과는 알림으로 안내드릴게요.</p>
-            </div>
+          <button onClick={handleAncestorSearch} disabled={ancestorLoading}
+            style={{ width:'100%', padding:'12px', borderRadius:10, border:'none', background:ancestorLoading ? 'var(--color-text-muted)' : 'linear-gradient(90deg, #1A56DB, #9B59B6)', color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit', cursor:ancestorLoading ? 'not-allowed' : 'pointer', marginBottom: ancestorDone ? 12 : 0 }}>
+            {ancestorLoading ? '🔍 족보 탐색 중...' : ancestorDone ? '🔄 다시 탐색' : '🔍 AI 맞춤 족보 탐색 시작'}
+          </button>
+
+          {ancestorDone && (
+            ancestorResults.length > 0 ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <p style={{ fontSize:12, fontWeight:700, color:'var(--color-text-secondary)', marginBottom:2 }}>
+                  📋 탐색 결과 {ancestorResults.length}건
+                </p>
+                {ancestorResults.map((text, i) => (
+                  <div key={i} style={{ padding:'12px 14px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid #1A56DB30' }}>
+                    <p style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{text}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding:'12px 14px', borderRadius:10, background:'#FFF8E0', border:'1px solid #FFB80040' }}>
+                <p style={{ fontSize:13, fontWeight:700, color:'#8A6500' }}>⚠️ 탐색 결과가 없어요</p>
+                <p style={{ fontSize:12, color:'#8A6500', marginTop:4, opacity:0.85 }}>AI 서버가 응답하지 않거나 관련 자료가 없습니다.</p>
+              </div>
+            )
           )}
         </div>
       </div>
