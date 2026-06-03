@@ -45,6 +45,14 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
   const [activeSubs, setActiveSubs] = useState(['국어','수학','영어'])
   const [saveMsg, setSaveMsg]     = useState('')
 
+  useEffect(() => {
+    setShowForm(false)
+    setScores({ 국어:'', 수학:'', 영어:'', 사회:'', 과학:'' })
+    setExamDate('')
+    setSaveMsg('')
+    setTrendData(INIT_TREND)
+  }, [gradeKey])
+
   const latest = trendData[trendData.length - 1]
   const prev   = trendData[trendData.length - 2] ?? latest
   const isLatestMock = latest.examType === EXAM_TYPE_MOCK

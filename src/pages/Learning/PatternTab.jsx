@@ -40,6 +40,13 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
   const [metaResult, setMetaResult]     = useState(null)
   const [metaLoading, setMetaLoading]   = useState(false)
 
+  useEffect(() => {
+    setSelfEval({ 이해도:0, 집중도:0 })
+    setFeedback('')
+    setSaved(false)
+    setMetaResult(null)
+  }, [effectiveId])
+
   // 강점 분석
   const [strengths, setStrengths] = useState(null)
   const [strengthsLoading, setStrengthsLoading] = useState(true)

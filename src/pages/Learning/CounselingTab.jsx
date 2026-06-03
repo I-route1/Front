@@ -80,6 +80,13 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
   const [subjectsWithGrades, setSubjectsWithGrades] = useState([])
   const [gradesLoading, setGradesLoading] = useState(true)
 
+  useEffect(() => {
+    try { setResults(JSON.parse(sessionStorage.getItem(storageKey)) ?? {}) } catch { setResults({}) }
+    try { setCollapsed(JSON.parse(sessionStorage.getItem(collapsedKey)) ?? {}) } catch { setCollapsed({}) }
+    setErrors({})
+    setSelectedSubject({})
+  }, [gradeKey])
+
   // results 변경 시 sessionStorage 동기화
   useEffect(() => {
     if (Object.keys(results).length > 0)
