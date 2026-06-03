@@ -65,11 +65,15 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
   const gradeKey = selectedChild?.gradeStudentId ?? String(effectiveId ?? '')
   const storageKey = `counseling-results-${gradeKey}`
 
+  const collapsedKey = `counseling-collapsed-${gradeKey}`
+
   const [loading, setLoading] = useState({})
   const [results, setResults] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem(storageKey)) ?? {} } catch { return {} }
   })
-  const [collapsed, setCollapsed] = useState({})
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(collapsedKey)) ?? {} } catch { return {} }
+  })
   const [errors, setErrors] = useState({})
   const [credits, setCredits] = useState(null)
   const [selectedSubject, setSelectedSubject] = useState({})
@@ -81,6 +85,11 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
     if (Object.keys(results).length > 0)
       sessionStorage.setItem(storageKey, JSON.stringify(results))
   }, [results, storageKey])
+
+  // collapsed 변경 시 sessionStorage 동기화
+  useEffect(() => {
+    sessionStorage.setItem(collapsedKey, JSON.stringify(collapsed))
+  }, [collapsed, collapsedKey])
 
   useEffect(() => {
     if (!gradeKey) return
