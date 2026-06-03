@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { studentAPI } from '@/api'
 
 const ROLE_LABEL = {
   [USER_ROLES.PARENT]: '학부모',
@@ -48,8 +49,16 @@ function normalizeAcademyList(user) {
 export default function Profile() {
   const { user, logout, updateUser } = useAuth()
   const navigate = useNavigate()
+  const [fetchedChildren, setFetchedChildren] = useState(null)
 
-  const children = user?.children ?? []
+  useEffect(() => {
+    if (user?.role !== USER_ROLES.PARENT) return
+    studentAPI.getMyChildren()
+      .then((data) => setFetchedChildren(data ?? []))
+      .catch(() => setFetchedChildren(null))
+  }, [user?.role])
+
+  const children = fetchedChildren ?? user?.children ?? []
 
   const [managedAcademies, setManagedAcademies] = useState(() => normalizeAcademyList(user))
   const [isAcademyFormOpen, setIsAcademyFormOpen] = useState(false)
@@ -282,7 +291,7 @@ const handleAddAcademy = async () => {
       marginTop: 2,
     }}
   >
-    {child.grade || '학년 정보 없음'}
+    {child.grade || (child.gradeStudentId ? `학생 ID: ${child.gradeStudentId}` : '학년 정보 없음')}
   </p>
 
   {Array.isArray(child.academies) && child.academies.length > 0 ? (
