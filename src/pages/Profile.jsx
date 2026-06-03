@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { studentAPI } from '@/api'
 
 const ROLE_LABEL = {
   [USER_ROLES.PARENT]: '학부모',
@@ -13,8 +15,16 @@ const ROLE_LABEL = {
 export default function Profile() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [fetchedChildren, setFetchedChildren] = useState(null)
 
-  const children = user?.children ?? []
+  useEffect(() => {
+    if (user?.role !== USER_ROLES.PARENT) return
+    studentAPI.getMyChildren()
+      .then((data) => setFetchedChildren(data ?? []))
+      .catch(() => setFetchedChildren(null))
+  }, [user?.role])
+
+  const children = fetchedChildren ?? user?.children ?? []
 
   const handleLogout = async () => {
   await logout()
@@ -164,7 +174,7 @@ export default function Profile() {
       marginTop: 2,
     }}
   >
-    {child.grade || '학년 정보 없음'}
+    {child.grade || (child.gradeStudentId ? `학생 ID: ${child.gradeStudentId}` : '학년 정보 없음')}
   </p>
 
   {Array.isArray(child.academies) && child.academies.length > 0 ? (
