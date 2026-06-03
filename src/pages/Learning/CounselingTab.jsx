@@ -58,9 +58,11 @@ const REPORT_TYPES = [
 
 const RETURN_TO = '/learning?tab=counseling'
 
-export default function CounselingTab() {
+export default function CounselingTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const effectiveId = propStudentId ?? user?.id
+  const gradeKey = selectedChild?.gradeStudentId ?? String(effectiveId ?? '')
   const [loading, setLoading] = useState({})
   const [results, setResults] = useState({})
   const [errors, setErrors] = useState({})
@@ -70,9 +72,9 @@ export default function CounselingTab() {
   const [gradesLoading, setGradesLoading] = useState(true)
 
   useEffect(() => {
-    if (!user?.id) return
+    if (!gradeKey) return
     setGradesLoading(true)
-    gradesAPI.getGrades(String(user.id))
+    gradesAPI.getGrades(gradeKey)
       .then(data => {
         const list = Array.isArray(data) ? data : []
         const subjects = [...new Set(list.map(g => g.subject).filter(Boolean))]
@@ -116,11 +118,11 @@ export default function CounselingTab() {
       let res
       if (apiSource === 'aiReport') {
         const subject = selectedSubject[id] || '수학'
-        res = await aiReportAPI[api](String(user.id), subject)
+        res = await aiReportAPI[api](gradeKey, subject)
       } else if (apiSource === 'studyPlan') {
-        res = await studyPlanAPI[api](String(user.id))
+        res = await studyPlanAPI[api](String(effectiveId))
       } else {
-        res = await counselingAPI[api](String(user.id))
+        res = await counselingAPI[api](gradeKey)
       }
       setResults(prev => ({ ...prev, [id]: res }))
     } catch (e) {
@@ -245,7 +247,6 @@ export default function CounselingTab() {
               )}
             </div>
           </div>
-        </div>
         ))}
       </div>
 

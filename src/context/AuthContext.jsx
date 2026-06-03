@@ -163,7 +163,7 @@ export function AuthProvider({ children }) {
         password,
       })
 
-      saveUser({
+      const userData = {
         id: data.userId,
         name: data.nickname,
         nickname: data.nickname,
@@ -172,7 +172,26 @@ export function AuthProvider({ children }) {
         refreshToken: data.refreshToken,
         username: normalizedUsername,
         email: normalizedUsername,
-      })
+      }
+
+      if (normalizeRole(userData.role) === USER_ROLES.PARENT) {
+        try {
+          const childrenRes = await fetch(`${BASE_URL}/api/students/my-children`, {
+            headers: { Authorization: `Bearer ${data.accessToken}` },
+          })
+          if (childrenRes.ok) {
+            const childrenData = await childrenRes.json()
+            userData.children = (Array.isArray(childrenData) ? childrenData : []).map(c => ({
+              id: c.studentId,
+              name: c.name,
+              gradeStudentId: c.gradeStudentId,
+              grade: c.grade ?? '',
+            }))
+          }
+        } catch {}
+      }
+
+      saveUser(userData)
     } catch (e) {
       throw new Error(e.message || '아이디 또는 비밀번호가 올바르지 않습니다')
     }

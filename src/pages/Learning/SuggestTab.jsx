@@ -61,8 +61,9 @@ function getMaterialIcon(type) {
   return MATERIAL_TYPE_ICON[type?.toUpperCase()] || MATERIAL_TYPE_ICON.DEFAULT
 }
 
-export default function SuggestTab() {
+export default function SuggestTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
+  const effectiveId = propStudentId ?? user?.id
   const [solving, setSolving]                 = useState(false)
   const [showAnswer, setShowAnswer]           = useState(false)
   const [answer, setAnswer]                   = useState('')
@@ -89,10 +90,10 @@ export default function SuggestTab() {
 
   // 🆕 또래 콘텐츠 조회
   useEffect(() => {
-    if (!user?.id) return
-    
+    if (!effectiveId) return
+
     setPeerContentLoading(true)
-    recommendationsAPI.getPeerContent(String(user.id))
+    recommendationsAPI.getPeerContent(String(effectiveId))
       .then(data => setPeerContent(data))
       .catch(e => {
         console.error('또래 콘텐츠 조회 실패:', e)
@@ -103,10 +104,10 @@ export default function SuggestTab() {
 
   // 학습 패턴 v2 조회
   useEffect(() => {
-    if (!user?.id) return
-    
+    if (!effectiveId) return
+
     setPatternLoading(true)
-    analysisAPI.getStudyPatternV2(user.id)
+    analysisAPI.getStudyPatternV2(effectiveId)
       .then(data => setStudyPattern(data))
       .catch(e => {
         console.error('학습 패턴 조회 실패:', e)
@@ -117,19 +118,19 @@ export default function SuggestTab() {
 
   // 학습 패턴 받은 후 → 각 과목별 학습 방법 조회
   useEffect(() => {
-    if (!user?.id || !studyPattern?.subjectStudyMinutes) return
-    
+    if (!effectiveId || !studyPattern?.subjectStudyMinutes) return
+
     const subjects = Object.keys(studyPattern.subjectStudyMinutes)
     if (subjects.length === 0) return
-    
+
     setStudyMethodsLoading(true)
-    
+
     Promise.all(
       subjects.map(subject => {
         const subjectId = SUBJECT_ID_BY_NAME[subject]
         if (!subjectId) return Promise.resolve([subject, null])
-        
-        return recommendationsAPI.getStudyMethod(user.id, subjectId)
+
+        return recommendationsAPI.getStudyMethod(effectiveId, subjectId)
           .then(data => [subject, data])
           .catch(() => [subject, null])
       })
@@ -141,14 +142,14 @@ export default function SuggestTab() {
       setStudyMethods(map)
     })
     .finally(() => setStudyMethodsLoading(false))
-  }, [user?.id, studyPattern])
+  }, [effectiveId, studyPattern])
 
   // 학습 자료 추천 조회
   useEffect(() => {
-    if (!user?.id) return
-    
+    if (!effectiveId) return
+
     setMaterialsLoading(true)
-    recommendationsAPI.getMaterials(user.id)
+    recommendationsAPI.getMaterials(effectiveId)
       .then(data => {
         const list = Array.isArray(data) ? data : (data?.materials || [])
         setMaterials(list)
@@ -296,14 +297,14 @@ export default function SuggestTab() {
 
   // 선배 학습 경로 조회 (과목별)
   useEffect(() => {
-    if (!user?.id) return
-    
+    if (!effectiveId) return
+
     const subjects = ['수학', '영어']
-    
+
     setPeerPathsLoading(true)
     Promise.all(
       subjects.map(subject =>
-        recommendationsAPI.getPeerPath(user.id, subject)
+        recommendationsAPI.getPeerPath(effectiveId, subject)
           .then(data => ({ subject, ...data }))
           .catch(() => null)
       )
@@ -313,7 +314,7 @@ export default function SuggestTab() {
         setPeerPaths(valid)
       })
       .finally(() => setPeerPathsLoading(false))
-  }, [user?.id])
+  }, [effectiveId])
 
   const handleSolve = async () => {
     if (!answer.trim()) {
@@ -326,7 +327,7 @@ export default function SuggestTab() {
     try {
       // 오답 기록 API 호출
       await wrongAnswerAPI.record({
-        studentId: user.id,
+        studentId: effectiveId,
         subject: '수학',
         questionId: 'Q-FRAC-001',
         conceptTag: '분수 나눗셈',

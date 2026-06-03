@@ -13,11 +13,12 @@ import {
 } from './data/mockData'
 import { calcMockExamScores } from './utils/mockExamScoring'
 
-export default function GradeTab() {
+export default function GradeTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
+  const gradeKey = selectedChild?.gradeStudentId ?? String(propStudentId ?? user?.id ?? '')
   useEffect(() => {
-    if (!user?.id) return
-    gradesAPI.getGrades(user.id)
+    if (!gradeKey) return
+    gradesAPI.getGrades(gradeKey)
       .then(data => {
         if (!data || data.length === 0) return
         // 날짜별로 그룹핑해서 trendData 형식으로 변환
@@ -134,7 +135,7 @@ export default function GradeTab() {
       try {
         for (const s of filled) {
           await gradesAPI.postGrade({
-            studentId: user.id,
+            studentId: gradeKey,
             subject: s,
             score: examType === EXAM_TYPE_MOCK
               ? Number(scores[s])

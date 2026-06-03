@@ -30,8 +30,9 @@ const SUBJECT_BADGE_COLOR = {
   '과학탐구': '#4ECDC4',
 }
 
-export default function PatternTab() {
+export default function PatternTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
+  const effectiveId = propStudentId ?? user?.id
   const [selfEval, setSelfEval]         = useState({ 이해도:0, 집중도:0 })
   const [feedback, setFeedback]         = useState('')
   const [saved, setSaved]               = useState(false)
@@ -43,24 +44,24 @@ export default function PatternTab() {
   const [strengthsLoading, setStrengthsLoading] = useState(true)
 
   useEffect(() => {
-    if (!user?.id) return
-    
+    if (!effectiveId) return
+
     setStrengthsLoading(true)
-    analysisAPI.getStrengths(user.id)
+    analysisAPI.getStrengths(effectiveId)
       .then(data => setStrengths(data))
       .catch(e => {
         console.error('강점 분석 조회 실패:', e)
         setStrengths(null)
       })
       .finally(() => setStrengthsLoading(false))
-  }, [user?.id])
+  }, [effectiveId])
 
   const goldenHour = GOLDEN_TIME_DATA.reduce((a,b) => a.focus>b.focus ? a : b)
 
   const handleMetaAnalysis = async () => {
     setMetaLoading(true)
     try {
-      const res = await analysisAPI.getMetaCognition(user.id, '수학')
+      const res = await analysisAPI.getMetaCognition(effectiveId, '수학')
       setMetaResult(res)
     } catch (e) {
       console.error('메타인지 분석 실패:', e)
@@ -89,7 +90,7 @@ export default function PatternTab() {
       // 1. 학습 기록 먼저 생성
       const today = new Date().toISOString().split('T')[0]
       const activity = await activitiesAPI.postActivity({
-        studentId: user.id,
+        studentId: effectiveId,
         subject: '수학',
         studyDate: today,
         studyStartTime: new Date().toTimeString().slice(0,8),
