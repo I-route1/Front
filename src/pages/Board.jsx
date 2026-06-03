@@ -10,6 +10,12 @@ const SORT_OPTIONS = [
     { key: 'likes', label: '공감순' },
 ]
 
+const TEMP_ACADEMIES = [
+    { id: 'academy-001', name: '아이루트 학원' },
+    { id: 'academy-002', name: '수학나라 학원' },
+    { id: 'academy-003', name: '영어마을 학원' },
+]
+
 function normalizeBoard(rawBoard) {
     return {
         id: rawBoard.id ?? rawBoard.boardId,
@@ -127,11 +133,15 @@ export default function Board() {
 
     const [activeTab, setActiveTab] = useState('전체')
     const [sortType, setSortType] = useState('latest')
+    const [selectedAcademyId, setSelectedAcademyId] = useState(TEMP_ACADEMIES[0]?.id ?? '')
     const [keyword, setKeyword] = useState('')
     const [boards, setBoards] = useState([])
     const [posts, setPosts] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [noticeMessage, setNoticeMessage] = useState('')
+    const selectedAcademy = TEMP_ACADEMIES.find(
+        (academy) => academy.id === selectedAcademyId,
+    )
 
     useEffect(() => {
         let ignore = false
@@ -258,6 +268,64 @@ export default function Board() {
                         placeholder="제목, 내용, 작성자 검색"
                     />
                 </div>
+                <div
+    style={{
+        marginTop: 14,
+        padding: 14,
+        borderRadius: 14,
+        background: 'var(--color-primary-light)',
+        border: '1px solid var(--color-border)',
+    }}
+>
+    <label
+        htmlFor="academy-select"
+        style={{
+            display: 'block',
+            fontSize: 12,
+            fontWeight: 800,
+            color: 'var(--color-primary)',
+            marginBottom: 8,
+        }}
+    >
+        학원 선택
+    </label>
+
+    <select
+        id="academy-select"
+        value={selectedAcademyId}
+        onChange={(e) => setSelectedAcademyId(e.target.value)}
+        style={{
+            width: '100%',
+            height: 44,
+            padding: '0 12px',
+            borderRadius: 12,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-surface)',
+            color: 'var(--color-text-primary)',
+            fontSize: 14,
+            fontWeight: 700,
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+        }}
+    >
+        {TEMP_ACADEMIES.map((academy) => (
+            <option key={academy.id} value={academy.id}>
+                {academy.name}
+            </option>
+        ))}
+    </select>
+
+    <p
+        style={{
+            marginTop: 8,
+            fontSize: 12,
+            color: 'var(--color-text-muted)',
+            lineHeight: 1.5,
+        }}
+    >
+        현재는 UI 확인용 임시 학원 목록입니다. 추후 백엔드 API 연동 후 연결된 학원 목록으로 변경됩니다.
+    </p>
+</div>
             </section>
 
             <div
@@ -291,25 +359,62 @@ export default function Board() {
             </div>
 
             <div
+    style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        padding: '12px 16px',
+        background: 'var(--color-bg)',
+    }}
+>
+    <div
+        style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+        }}
+    >
+        <div>
+            <p
                 style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    padding: '12px 16px',
-                    background: 'var(--color-bg)',
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: 'var(--color-text-primary)',
                 }}
             >
-                <span
-                    style={{
-                        fontSize: 13,
-                        fontWeight: 800,
-                        color: 'var(--color-text-primary)',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    정렬
-                </span>
+                {selectedAcademy?.name ?? '선택된 학원'}
+            </p>
+            <p
+                style={{
+                    marginTop: 2,
+                    fontSize: 11,
+                    color: 'var(--color-text-muted)',
+                }}
+            >
+                선택한 학원의 게시글을 확인하는 영역입니다.
+            </p>
+        </div>
+    </div>
+
+    <div
+        style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+        }}
+    >
+        <span
+            style={{
+                fontSize: 13,
+                fontWeight: 800,
+                color: 'var(--color-text-primary)',
+                whiteSpace: 'nowrap',
+            }}
+        >
+            정렬
+        </span>
 
                 <div
                     style={{
@@ -318,7 +423,7 @@ export default function Board() {
                         overflowX: 'auto',
                     }}
                 >
-                    {SORT_OPTIONS.map((option) => (
+                                        {SORT_OPTIONS.map((option) => (
                         <button
                             key={option.key}
                             type="button"
@@ -346,6 +451,7 @@ export default function Board() {
                     ))}
                 </div>
             </div>
+</div>
 
             {noticeMessage && (
                 <div
