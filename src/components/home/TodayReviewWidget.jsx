@@ -8,18 +8,18 @@ const SUBJECT_COLORS = {
 }
 
 const TABS = [
-  { id: 'review',  label: '복습',     emoji: '📚', desc: '에빙하우스 망각곡선 기반 복습' },
   { id: 'daily',   label: '데일리 학습', emoji: '🎯', desc: 'AI 추천 오늘의 학습' },
+  { id: 'review',  label: '복습',     emoji: '📚', desc: '에빙하우스 망각곡선 기반 복습' },
 ]
 
 export default function TodayReviewWidget({ studentId }) {
-  const [activeTab, setActiveTab] = useState('review')
+  const [activeTab, setActiveTab] = useState('daily')
   
   // 복습 탭 상태
   const [reviewItems, setReviewItems] = useState([])
   const [reviewLoading, setReviewLoading] = useState(true)
   
-  // 🆕 데일리 학습 탭 상태
+  // 데일리 학습 탭 상태
   const [dailyItems, setDailyItems] = useState([])
   const [dailyLoading, setDailyLoading] = useState(true)
   
@@ -44,12 +44,12 @@ export default function TodayReviewWidget({ studentId }) {
       .finally(() => setReviewLoading(false))
   }, [studentId])
   
-  // 🆕 데일리 학습 데이터 조회
+  // 데일리 학습 데이터 조회
   useEffect(() => {
     if (!studentId) return
     
     setDailyLoading(true)
-    recommendationsAPI.getDailyReview(String(studentId))
+    recommendationsAPI.getMaterials(String(studentId))
       .then(data => {
         const items = Array.isArray(data) 
           ? data 
