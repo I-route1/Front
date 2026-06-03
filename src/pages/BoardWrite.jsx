@@ -68,7 +68,7 @@ export default function BoardWrite() {
         userId,
       }
 
-      const response = await boardAPI.createPost(DEFAULT_BOARD_ID, payload, userId)
+      const response = await boardAPI.createPost(payload, userId)
 
       const createdPostId =
           response?.id ??
@@ -77,7 +77,7 @@ export default function BoardWrite() {
           response?.data?.id ??
           response?.data?.postId
 
-      if (createdPostId && /^\d+$/.test(String(createdPostId))) {
+      if (createdPostId) {
         navigate(`/board/${createdPostId}`, { replace: true })
         return
       }

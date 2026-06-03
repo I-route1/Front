@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { counselingAPI, studyPlanAPI } from '@/api'
 import { paymentAPI } from '@/api/payment'
 import { RecommendRoadmapSection, AnalysisReportSection } from './RecommendRoadmap'
 import { counselingAPI, studyPlanAPI, aiReportAPI } from '@/api'
@@ -66,16 +65,13 @@ export default function CounselingTab() {
   const [results, setResults] = useState({})
   const [errors, setErrors]   = useState({})
   const [credits, setCredits] = useState(null)
+  const [selectedSubject, setSelectedSubject] = useState({})
 
   useEffect(() => {
     paymentAPI.getCredits()
       .then(data => setCredits(data.premiumCredits))
       .catch(() => setCredits(0))
   }, [])
-  const [loading, setLoading]         = useState({})
-  const [results, setResults]         = useState({})
-  const [errors, setErrors]           = useState({})
-  const [selectedSubject, setSelectedSubject] = useState({})
 
   const handleGenerate = async (reportType) => {
     const { id, api, apiSource } = reportType
@@ -102,8 +98,6 @@ export default function CounselingTab() {
     setErrors(prev => ({ ...prev, [id]: null }))
 
     try {
-      const apiClient = apiSource === 'studyPlan' ? studyPlanAPI : counselingAPI
-      const res = await apiClient[api](String(user.id))
       let res
       if (apiSource === 'aiReport') {
         const subject = selectedSubject[id] || '수학'
@@ -149,7 +143,7 @@ export default function CounselingTab() {
               </div>
             </div>
 
-            {/* 생성 버튼 */}
+            {/* 생성 버튼 영역 */}
             <div style={{ padding:'0 16px 16px' }}>
               {/* 프리미엄 크레딧 표시 */}
               {r.id === 'premium' && (
@@ -165,8 +159,6 @@ export default function CounselingTab() {
                   </span>
                 </div>
               )}
-            {/* 생성 버튼 영역 */}
-            <div style={{ padding: '0 16px 16px' }}>
 
               {/* 과목 선택 드롭다운 (AI 추천만) */}
               {r.needsSubject && (
@@ -198,9 +190,6 @@ export default function CounselingTab() {
                     : (r.id === 'premium' && credits === 0) ? '#FF6B35'
                     : r.color,
                   color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit',
-                  width: '100%', padding: '11px', borderRadius: 10, border: 'none',
-                  background: loading[r.id] ? 'var(--color-text-muted)' : r.color,
-                  color: 'white', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
                   cursor: loading[r.id] ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
                 }}

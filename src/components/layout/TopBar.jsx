@@ -84,22 +84,23 @@ export default function TopBar() {
         </button>
         
         {/* 아바타 */}
-        <button
-          type="button"
-          aria-label="프로필"
-          onClick={() => navigate('/profile')}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            background: 'var(--color-primary-light)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            cursor: 'pointer',
-          }}
-        >
+<button
+  type="button"
+  aria-label="프로필 수정"
+  title="프로필 수정"
+  onClick={() => navigate('/profile/edit')}
+  style={{
+    width: 32,
+    height: 32,
+    borderRadius: '50%',
+    background: 'var(--color-primary-light)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    cursor: 'pointer',
+  }}
+>
           {user?.avatar ? (
             <img
               src={user.avatar}

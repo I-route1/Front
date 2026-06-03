@@ -8,10 +8,12 @@ export default function EditProfile() {
   const { user, updateUser } = useAuth()
 
   const makeDefaultChild = () => ({
-    id: `child-${Date.now()}`,
-    name: '',
-    grade: '',
-  })
+  id: `child-${Date.now()}`,
+  name: '',
+  grade: '',
+  academyCodeInput: '',
+  academies: [],
+})
 
   const normalizeGrade = (grade) => {
   const trimmedGrade = grade.trim().replace(/\s/g, '')
@@ -58,13 +60,15 @@ const isValidGrade = (grade) => {
     email: user?.email ?? '',
     phone: user?.phone ?? '',
     children:
-      user?.children && user.children.length > 0
-        ? user.children.map((child, index) => ({
-            id: child.id ?? `child-${Date.now()}-${index}`,
-            name: child.name ?? '',
-            grade: child.grade ?? '',
-          }))
-        : [makeDefaultChild()],
+  user?.children && user.children.length > 0
+    ? user.children.map((child, index) => ({
+        id: child.id ?? `child-${Date.now()}-${index}`,
+        name: child.name ?? '',
+        grade: child.grade ?? '',
+        academyCodeInput: '',
+        academies: Array.isArray(child.academies) ? child.academies : [],
+      }))
+    : [makeDefaultChild()],
     academyName: user?.academyName ?? '',
     academyAddress: user?.academyAddress ?? '',
   })
@@ -103,10 +107,12 @@ const isValidGrade = (grade) => {
       children: [
         ...prev.children,
         {
-          id: `child-${Date.now()}-${prev.children.length}`,
-          name: '',
-          grade: '',
-        },
+  id: `child-${Date.now()}-${prev.children.length}`,
+  name: '',
+  grade: '',
+  academyCodeInput: '',
+  academies: [],
+},
       ],
     }))
 
@@ -135,6 +141,70 @@ const isValidGrade = (grade) => {
       children: '',
     }))
   }
+
+  const addAcademyToChild = (childId) => {
+  const targetChild = form.children.find((child) => child.id === childId)
+  const academyCode = targetChild?.academyCodeInput?.trim()
+
+  if (!academyCode) {
+    setErrors((prev) => ({
+      ...prev,
+      [`${childId}-academyCode`]: '학원 코드를 입력해 주세요',
+    }))
+    return
+  }
+
+  const alreadyConnected = targetChild?.academies?.some(
+  (academy) => academy.code.toLowerCase() === academyCode.toLowerCase(),
+)
+
+  if (alreadyConnected) {
+    setErrors((prev) => ({
+      ...prev,
+      [`${childId}-academyCode`]: '이미 추가된 학원 코드입니다',
+    }))
+    return
+  }
+
+  setForm((prev) => ({
+    ...prev,
+    children: prev.children.map((child) =>
+      child.id === childId
+        ? {
+            ...child,
+            academyCodeInput: '',
+            academies: [
+              ...child.academies,
+              {
+  id: `academy-${Date.now()}`,
+  code: academyCode,
+  name: '학원명 확인 예정',
+},
+            ],
+          }
+        : child,
+    ),
+  }))
+
+  setErrors((prev) => ({
+    ...prev,
+    [`${childId}-academyCode`]: '',
+  }))
+}
+
+const removeAcademyFromChild = (childId, academyId) => {
+  setForm((prev) => ({
+    ...prev,
+    children: prev.children.map((child) =>
+      child.id === childId
+        ? {
+            ...child,
+            academies: child.academies.filter((academy) => academy.id !== academyId),
+          }
+        : child,
+    ),
+  }))
+}
 
   const validate = () => {
     const nextErrors = {}
@@ -200,12 +270,13 @@ const isValidGrade = (grade) => {
       }
 
       if (user?.role === USER_ROLES.PARENT) {
-        updated.children = form.children.map((child) => ({
-  id: child.id,
-  name: child.name.trim(),
-  grade: normalizeGrade(child.grade),
-}))
-      }
+  updated.children = form.children.map((child) => ({
+    id: child.id,
+    name: child.name.trim(),
+    grade: normalizeGrade(child.grade),
+    academies: child.academies,
+  }))
+}
 
       if (user?.role === USER_ROLES.ACADEMY) {
         updated.academyName = form.academyName.trim()
@@ -223,14 +294,19 @@ const isValidGrade = (grade) => {
   }
 
   return (
-    <div>
-      <section
-  style={{
-    padding: '16px 20px',
-    background: 'var(--color-surface)',
-    borderBottom: '1px solid var(--color-border)',
-  }}
->
+  <div
+    style={{
+      minHeight: '100vh',
+      paddingBottom: 120,
+    }}
+  >
+    <section
+      style={{
+        padding: '16px 20px',
+        background: 'var(--color-surface)',
+        borderBottom: '1px solid var(--color-border)',
+      }}
+    >
   <BackButton
     label="뒤로가기"
     style={{ color: 'var(--color-primary)' }}
@@ -389,6 +465,158 @@ const isValidGrade = (grade) => {
                       placeholder="예: 미취학 또는 초6"
                     />
                   </Field>
+
+                  <div
+  style={{
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    background: 'var(--color-primary-light)',
+    border: '1px solid var(--color-border)',
+  }}
+>
+  <div>
+    <p
+      style={{
+        fontSize: 13,
+        fontWeight: 800,
+        color: 'var(--color-primary)',
+      }}
+    >
+      연결된 학원
+    </p>
+    <p
+      style={{
+        marginTop: 3,
+        fontSize: 11,
+        color: 'var(--color-text-muted)',
+        lineHeight: 1.5,
+      }}
+    >
+      학원에서 받은 코드를 입력해 자녀와 학원을 연결할 수 있습니다.
+    </p>
+  </div>
+
+  {child.academies.length > 0 ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {child.academies.map((academy) => (
+        <div
+          key={academy.id}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+          }}
+        >
+          <div>
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              {academy.name}
+            </p>
+            <p
+              style={{
+                marginTop: 2,
+                fontSize: 11,
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              코드 {academy.code}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => removeAcademyFromChild(child.id, academy.id)}
+            style={{
+              padding: '6px 9px',
+              borderRadius: 8,
+              background: '#FFE9E9',
+              color: 'var(--color-danger)',
+              fontSize: 11,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            해제
+          </button>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div
+      style={{
+        padding: '12px',
+        borderRadius: 10,
+        background: 'var(--color-surface)',
+        border: '1px dashed var(--color-border)',
+        textAlign: 'center',
+      }}
+    >
+      <p
+        style={{
+          fontSize: 12,
+          color: 'var(--color-text-muted)',
+          lineHeight: 1.5,
+        }}
+      >
+        아직 연결된 학원이 없습니다.
+      </p>
+    </div>
+  )}
+
+  <div style={{ display: 'flex', gap: 8 }}>
+    <input
+      className="input-field"
+      value={child.academyCodeInput}
+      onChange={(e) => updateChild(child.id, 'academyCodeInput', e.target.value)}
+      placeholder="학원 코드 입력"
+    />
+
+    <button
+      type="button"
+      onClick={() => addAcademyToChild(child.id)}
+      style={{
+        width: 72,
+        flexShrink: 0,
+        borderRadius: 12,
+        background: 'var(--color-primary)',
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      추가
+    </button>
+  </div>
+
+  {errors[`${child.id}-academyCode`] && (
+    <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+      {errors[`${child.id}-academyCode`]}
+    </p>
+  )}
+
+  <p
+    style={{
+      fontSize: 11,
+      color: 'var(--color-text-muted)',
+      lineHeight: 1.5,
+    }}
+  >
+    현재는 UI 확인용으로 입력한 코드가 임시 추가됩니다. 실제 등록된 학원 코드 여부는 추후 백엔드 API 연동 후 검증됩니다.
+  </p>
+</div>
                 </div>
               ))}
             </div>
