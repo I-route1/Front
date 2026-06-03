@@ -79,6 +79,7 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
   const [studyMethods, setStudyMethods]           = useState({})
   const [studyMethodsLoading, setStudyMethodsLoading] = useState(false)
   const [aiSubject, setAiSubject]                 = useState('수학')
+  const [aiConcept, setAiConcept]                 = useState('')
   const [studyPattern, setStudyPattern]           = useState(null)
   const [patternLoading, setPatternLoading]       = useState(true)
   const [materials, setMaterials]                 = useState([])
@@ -96,6 +97,7 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
     setAncestorDone(false)
     setAncestorResults([])
     setAiSubject('수학')
+    setAiConcept('')
   }, [effectiveId])
 
   useEffect(() => {
@@ -167,11 +169,14 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
       const gradesData = await gradesAPI.getGrades(effectiveId).catch(() => [])
       const scores = gradesData.map(g => g.score).filter(Boolean)
       const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
+      const weakConceptTag = aiConcept.trim()
+        ? `${aiSubject} ${aiConcept.trim()}`
+        : aiSubject
       const res = await gradesAPI.analyzeGrade({
         studentId: effectiveId,
         score: avgScore,
         allScores: scores.length > 0 ? scores : [avgScore],
-        weakConceptTag: aiSubject,
+        weakConceptTag,
       })
       setAncestorResults(res?.results ?? [])
       setAncestorDone(true)
@@ -239,15 +244,28 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🔍 AI 맞춤 족보 탐색</p>
           <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>취약 개념 기반으로 유사 문제를 자동으로 찾아드려요</p>
-          <select value={aiSubject} onChange={e => { setAiSubject(e.target.value); setAncestorDone(false) }}
-            style={{ width:'100%', padding:'9px 12px', borderRadius:8, marginBottom:10, border:'1px solid var(--color-border)', background:'var(--color-surface-2)', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)' }}>
-            {['수학','영어','국어','한국사','사회탐구','과학탐구'].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <div style={{ padding:'12px 14px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)', marginBottom:12 }}>
-            <p style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>분석 대상 취약 개념</p>
+          <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+            <select value={aiSubject} onChange={e => { setAiSubject(e.target.value); setAncestorDone(false); setAncestorResults([]) }}
+              style={{ flex:'0 0 90px', padding:'9px 8px', borderRadius:8, border:'1px solid var(--color-border)', background:'var(--color-surface-2)', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)' }}>
+              {['수학','영어','국어','한국사','사회탐구','과학탐구'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input
+              value={aiConcept}
+              onChange={e => { setAiConcept(e.target.value); setAncestorDone(false); setAncestorResults([]) }}
+              placeholder="취약 개념 입력 (예: 이차방정식)"
+              style={{ flex:1, padding:'9px 12px', borderRadius:8, border:'1px solid var(--color-border)', background:'var(--color-surface-2)', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)', outline:'none' }}
+            />
+          </div>
+          <div style={{ padding:'10px 14px', borderRadius:10, background:'var(--color-surface-2)', border:'1px solid var(--color-border)', marginBottom:12 }}>
+            <p style={{ fontSize:11, fontWeight:600, marginBottom:6, color:'var(--color-text-secondary)' }}>분석 대상 취약 개념</p>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-              <span style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, background:'var(--color-primary-light)', color:'var(--color-primary)', border:'1px solid #1A56DB30' }}>#{aiSubject}</span>
+              <span style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, background:'var(--color-primary-light)', color:'var(--color-primary)', border:'1px solid #1A56DB30' }}>
+                #{aiSubject}{aiConcept.trim() ? ` · ${aiConcept.trim()}` : ''}
+              </span>
             </div>
+            {!aiConcept.trim() && (
+              <p style={{ fontSize:10, color:'var(--color-text-muted)', marginTop:6 }}>💡 취약 개념을 직접 입력하면 더 정확한 결과를 얻을 수 있어요</p>
+            )}
           </div>
           <button onClick={handleAncestorSearch} disabled={ancestorLoading}
             style={{ width:'100%', padding:'12px', borderRadius:10, border:'none', background:ancestorLoading ? 'var(--color-text-muted)' : 'linear-gradient(90deg, #1A56DB, #9B59B6)', color:'white', fontSize:13, fontWeight:700, fontFamily:'inherit', cursor:ancestorLoading ? 'not-allowed' : 'pointer', marginBottom: ancestorDone ? 12 : 0 }}>
