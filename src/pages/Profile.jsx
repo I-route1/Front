@@ -152,20 +152,78 @@ export default function Profile() {
                       👦
                     </div>
 
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 14, fontWeight: 700 }}>
-                        {child.name || `자녀 ${index + 1}`}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: 'var(--color-text-muted)',
-                          marginTop: 2,
-                        }}
-                      >
-                        {child.grade || '학년 정보 없음'}
-                      </p>
-                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+  <p style={{ fontSize: 14, fontWeight: 700 }}>
+    {child.name || `자녀 ${index + 1}`}
+  </p>
+
+  <p
+    style={{
+      fontSize: 12,
+      color: 'var(--color-text-muted)',
+      marginTop: 2,
+    }}
+  >
+    {child.grade || '학년 정보 없음'}
+  </p>
+
+  {Array.isArray(child.academies) && child.academies.length > 0 ? (
+    <div
+      style={{
+        display: 'flex',
+        gap: 6,
+        flexWrap: 'wrap',
+        marginTop: 7,
+      }}
+    >
+      {child.academies.slice(0, 2).map((academy) => (
+        <span
+          key={academy.id ?? academy.code ?? academy.name}
+          style={{
+            maxWidth: 112,
+            padding: '4px 7px',
+            borderRadius: 999,
+            background: 'var(--color-primary-light)',
+            color: 'var(--color-primary)',
+            fontSize: 10,
+            fontWeight: 700,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {academy.name ?? academy.academyName ?? academy.code ?? '학원'}
+        </span>
+      ))}
+
+      {child.academies.length > 2 && (
+        <span
+          style={{
+            padding: '4px 7px',
+            borderRadius: 999,
+            background: 'var(--color-surface)',
+            color: 'var(--color-text-muted)',
+            fontSize: 10,
+            fontWeight: 700,
+            border: '1px solid var(--color-border)',
+          }}
+        >
+          +{child.academies.length - 2}
+        </span>
+      )}
+    </div>
+  ) : (
+    <p
+      style={{
+        fontSize: 11,
+        color: 'var(--color-text-muted)',
+        marginTop: 6,
+      }}
+    >
+      연결된 학원 없음
+    </p>
+  )}
+</div>
 
                     <span
                       style={{

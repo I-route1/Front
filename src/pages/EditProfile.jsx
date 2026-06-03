@@ -176,10 +176,10 @@ const isValidGrade = (grade) => {
             academies: [
               ...child.academies,
               {
-                id: `academy-${Date.now()}`,
-                code: academyCode,
-                name: `학원 코드 ${academyCode}`,
-              },
+  id: `academy-${Date.now()}`,
+  code: academyCode,
+  name: '학원명 확인 예정',
+},
             ],
           }
         : child,
