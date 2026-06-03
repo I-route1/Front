@@ -35,7 +35,7 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
         if (trend.length > 0) setTrendData(trend)
       })
       .catch(e => console.error('성적 조회 실패:', e))
-  }, [user?.id])
+    }, [gradeKey])
 
   const [trendData, setTrendData] = useState(INIT_TREND)
   const [showForm, setShowForm]   = useState(false)
@@ -152,7 +152,6 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
         setSaveMsg('❌ 저장 실패: ' + e.message)
         return
       }
-      // ──────────────────────────────────────────
     
       setTrendData(prev => {
         const idx = prev.findIndex(d => d.date === label)
@@ -184,7 +183,7 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
       <div style={{ background:'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)', padding:'24px 20px', color:'white' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
-          <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>{user?.children?.[0]?.name ?? user?.name ?? '학생'} · {user?.children?.[0]?.grade ?? ''}</p>
+          <p style={{ fontSize:12, opacity:0.65, marginBottom:4 }}>{selectedChild?.name ?? user?.name ?? '학생'} · {selectedChild?.grade ?? ''}</p>
             <h2 style={{ fontSize:20, fontWeight:800 }}>성적 관리</h2>
           </div>
           <button onClick={() => setShowForm(p=>!p)} style={{
