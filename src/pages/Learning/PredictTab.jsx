@@ -33,6 +33,14 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
   const [aiPrediction, setAiPrediction] = useState(null)
   const [predictionLoading, setPredictionLoading] = useState(false)
 
+  useEffect(() => {
+    setGoal('')
+    setTargetScore('')
+    setRoadmap(null)
+    setRoadmapError(null)
+    setShowAdd(false)
+  }, [effectiveId])
+
   // 오늘의 학습 계획 로드
   useEffect(() => {
     if (!effectiveId) return
