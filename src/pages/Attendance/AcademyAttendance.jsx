@@ -1,8 +1,9 @@
 // src/pages/Attendance/AcademyAttendance.jsx
 import { useState, useEffect } from 'react'
 import { getAttendanceByBus, registerNfcCard } from '@/api/attendance'
+import { studentAPI } from '@/api/student'
 
-const USE_MOCK = true
+const USE_MOCK = false
 
 const MOCK_BUS_LIST = [
   { busId: 1, label: '1호차' },
@@ -41,6 +42,10 @@ export default function AcademyAttendance({ user }) {
   const [nfcLoading, setNfcLoading] = useState(false)
   const [nfcMsg, setNfcMsg] = useState(null) // { type: 'success'|'error', text }
 
+  // 학원 학생 목록
+  const [students, setStudents] = useState([])
+  const [studentsLoading, setStudentsLoading] = useState(false)
+
   // 버스 출결 로드
   useEffect(() => {
     if (tab !== 'records') return
@@ -60,6 +65,25 @@ export default function AcademyAttendance({ user }) {
       .catch(() => setError('출결 정보를 불러오지 못했습니다.'))
       .finally(() => setLoading(false))
   }, [selectedBus, tab])
+
+  // 학원 학생 목록 로드
+  useEffect(() => {
+    if (tab !== 'nfc') return
+    setStudentsLoading(true)
+
+    if (USE_MOCK) {
+      setTimeout(() => {
+        setStudents(MOCK_STUDENTS)
+        setStudentsLoading(false)
+      }, 400)
+      return
+    }
+
+    studentAPI.getAcademyStudents()
+      .then(data => setStudents(data || []))
+      .catch(err => console.error('학생 목록 로드 실패:', err))
+      .finally(() => setStudentsLoading(false))
+  }, [tab])
 
   // 학생별 마지막 상태 계산
   const studentStatus = {}
@@ -197,10 +221,11 @@ export default function AcademyAttendance({ user }) {
               value={nfcStudentId}
               onChange={e => setNfcStudentId(e.target.value)}
               style={styles.select}
+              disabled={studentsLoading}
             >
-              <option value="">-- 학생을 선택하세요 --</option>
-              {MOCK_STUDENTS.map(s => (
-                <option key={s.gpsStudentId} value={s.gpsStudentId}>
+              <option value="">{studentsLoading ? '로딩 중...' : '-- 학생을 선택하세요 --'}</option>
+              {students.map(s => (
+                <option key={s.studentId} value={s.studentId}>
                   {s.name}
                 </option>
               ))}
