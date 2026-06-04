@@ -1,10 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
-import DriverBoardingList from '@/pages/DriverBoardingList'
 import TodayReviewWidget from '@/components/home/TodayReviewWidget'
 import NoChildScreen from '@/components/common/NoChildScreen'
 import { notificationsAPI } from '@/api'
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const POLL_INTERVAL = 10000
+
+function getAuthHeader() {
+  const saved = sessionStorage.getItem('i-route-user')
+  const user = saved ? JSON.parse(saved) : null
+  const token = user?.token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+async function getMyBusAttendance() {
+  const res = await fetch(`${BASE_URL}/api/gps/drivers/my-bus/attendance`, {
+    headers: getAuthHeader(),
+  })
+  if (!res.ok) throw new Error('탑승 명단 조회 실패')
+  return res.json()
+}
+
+async function postAttendance({ studentId, eventType }) {
+  const res = await fetch(`${BASE_URL}/api/gps/attendance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ studentId, eventType }),
+  })
+  if (!res.ok) throw new Error('처리 실패')
+  return res.json()
+}
+
+const STATUS_LABEL = { WAITING: '대기 중', BOARDED: '승차 완료', EXITED: '하차 완료' }
+const STATUS_STYLE = {
+  WAITING: { background: '#fef3c7', color: '#92400e' },
+  BOARDED: { background: '#dcfce7', color: '#166534' },
+  EXITED:  { background: '#f1f5f9', color: '#475569' },
+}
 
 export default function Home() {
   const { user, role } = useAuth()
@@ -15,14 +49,13 @@ export default function Home() {
   const childName = user?.children?.[0]?.name ?? '자녀'
   const studentId = user?.children?.[0]?.id ?? user?.id
 
-  // 알림 조회
   useEffect(() => {
     if (!user?.id) return
     setNotiLoading(true)
     notificationsAPI.getAll(String(user.id))
       .then(data => {
         const list = Array.isArray(data) ? data : (data?.notifications || data?.content || [])
-        setNotifications(list.slice(0, 3)) // 최근 3개만
+        setNotifications(list.slice(0, 3))
       })
       .catch(() => setNotifications([]))
       .finally(() => setNotiLoading(false))
@@ -42,7 +75,6 @@ export default function Home() {
   if (role === USER_ROLES.ACADEMY) return <AcademyHome user={user} />
   if (role === USER_ROLES.ADMIN)   return <AdminHome user={user} navigate={navigate} />
 
-  // 학부모인데 자녀 없으면 빈 화면
   const isParent = role === USER_ROLES.PARENT
   const hasNoChildren = isParent && (!user?.children || user.children.length === 0)
   if (hasNoChildren) {
@@ -51,15 +83,12 @@ export default function Home() {
 
   return (
     <div>
-      {/* 인사 배너 */}
       <div style={{ background: 'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)', padding: '24px 20px 28px', color: 'white' }}>
         <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 4 }}>안녕하세요 👋</p>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px' }}>
           {user?.name ?? '사용자'}님
         </h2>
         <p style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>오늘도 안전한 하루 되세요</p>
-
-        {/* 현재 상태 카드 */}
         <div style={{ marginTop: 20, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#00C49A', boxShadow: '0 0 0 4px rgba(0,196,154,0.3)', flexShrink: 0 }} />
           <div>
@@ -75,7 +104,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 빠른 실행 */}
       <section className="section">
         <div className="section__header">
           <h3 className="section__title">빠른 실행</h3>
@@ -102,12 +130,10 @@ export default function Home() {
 
       <div className="divider" />
 
-      {/* 오늘의 복습 */}
       <TodayReviewWidget studentId={studentId} />
 
       <div className="divider" />
 
-      {/* 최근 알림 — 실제 API 연동 */}
       <section className="section">
         <div className="section__header">
           <h3 className="section__title">최근 알림</h3>
@@ -172,6 +198,214 @@ export default function Home() {
   )
 }
 
+function DriverHome({ user }) {
+  const [passengers, setPassengers] = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState(null)
+  const [actionLoading, setActionLoading] = useState({})
+  const [toastMsg, setToastMsg]     = useState(null)
+  const [filter, setFilter]         = useState('ALL')
+  const [lastUpdated, setLastUpdated] = useState(null)
+
+  const buildPassengers = (data) => {
+    const latest = {}
+    ;[...(Array.isArray(data) ? data : [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+      .forEach(e => {
+        latest[e.studentId] = {
+          studentId: e.studentId,
+          name: e.studentName ?? e.name,
+          stopName: e.stopName ?? '',
+          profileImage: e.profileImage ?? null,
+          status: e.eventType === 'BOARD' ? 'BOARDED' : e.eventType === 'EXIT' ? 'EXITED' : 'WAITING',
+        }
+      })
+    return Object.values(latest)
+  }
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
+    try {
+      const data = await getMyBusAttendance()
+      setPassengers(buildPassengers(data))
+      setLastUpdated(new Date())
+    } catch (e) {
+      if (!silent) setError(e.message)
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const t = setInterval(() => load(true), POLL_INTERVAL)
+    return () => clearInterval(t)
+  }, [load])
+
+  async function handleAction(student, eventType) {
+    setActionLoading(p => ({ ...p, [student.studentId]: true }))
+    try {
+      await postAttendance({ studentId: student.studentId, eventType })
+      setPassengers(p => p.map(s =>
+        s.studentId === student.studentId
+          ? { ...s, status: eventType === 'BOARD' ? 'BOARDED' : 'EXITED' }
+          : s
+      ))
+      showToast(`${student.name} ${eventType === 'BOARD' ? '승차' : '하차'} 처리 완료`)
+    } catch (e) {
+      showToast(`처리 실패: ${e.message}`, 'error')
+    } finally {
+      setActionLoading(p => ({ ...p, [student.studentId]: false }))
+    }
+  }
+
+  function showToast(text, type = 'success') {
+    setToastMsg({ text, type })
+    setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  function formatTime(ts) {
+    if (!ts) return ''
+    return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: true })
+  }
+
+  const filtered = passengers.filter(p => filter === 'ALL' || p.status === filter)
+  const stats = {
+    total:   passengers.length,
+    waiting: passengers.filter(p => p.status === 'WAITING').length,
+    boarded: passengers.filter(p => p.status === 'BOARDED').length,
+    exited:  passengers.filter(p => p.status === 'EXITED').length,
+  }
+
+  const grouped = filtered.reduce((acc, p) => {
+    if (!acc[p.stopName]) acc[p.stopName] = []
+    acc[p.stopName].push(p)
+    return acc
+  }, {})
+
+  return (
+    <div style={{ minHeight: '100dvh', paddingBottom: 96, background: '#F3F4F6' }}>
+      <div style={{ background: 'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)', padding: '24px 20px 28px', color: 'white' }}>
+        <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 4 }}>기사님 홈</p>
+        <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px' }}>{user?.name ?? '기사님'}님</h2>
+        <p style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>오늘의 운행 및 탑승 명단을 확인해 보세요</p>
+        <div style={{ marginTop: 20, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.18)' }}>
+          <p style={{ fontSize: 13, fontWeight: 700 }}>배정 차량</p>
+          <p style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{user?.vehicleNumber ?? '차량 정보가 등록되지 않았습니다.'}</p>
+          <p style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{user?.academyName ?? '배정 학원 정보가 등록되지 않았습니다.'}</p>
+        </div>
+      </div>
+
+      <div style={{ padding: '20px 16px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>오늘의 탑승 명단</h2>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>오늘의 탑승 예정 학생 리스트를 조회하세요.</p>
+          </div>
+          {lastUpdated && <span style={{ fontSize: 11, color: '#94a3b8', paddingTop: 4 }}>{formatTime(lastUpdated)} 기준</span>}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          {[
+            { label: '전체', value: stats.total,   color: '#1A56DB' },
+            { label: '대기', value: stats.waiting, color: '#92400e' },
+            { label: '승차', value: stats.boarded, color: '#166534' },
+            { label: '하차', value: stats.exited,  color: '#475569' },
+          ].map(s => (
+            <div key={s.label} style={{ flex: 1, background: '#fff', borderRadius: 12, padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <span style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>정류장 선택</span>
+          <select
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #1A56DB', fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none', appearance: 'none' }}
+          >
+            <option value="ALL">전체 노선</option>
+            <option value="WAITING">대기 중</option>
+            <option value="BOARDED">승차 완료</option>
+            <option value="EXITED">하차 완료</option>
+          </select>
+        </div>
+
+        {loading && <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 14, padding: '40px 0' }}>불러오는 중...</p>}
+        {error   && <p style={{ textAlign: 'center', color: '#ef4444', fontSize: 14, padding: '20px 0' }}>{error}</p>}
+
+        {!loading && !error && Object.entries(grouped).map(([stopName, list]) => (
+          <div key={stopName}>
+            {filter === 'ALL' && (
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', margin: '16px 0 8px 4px', letterSpacing: '0.05em' }}>{stopName}</p>
+            )}
+            {list.map(student => {
+              const status = student.status || 'WAITING'
+              return (
+                <div key={student.studentId} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', borderRadius: 16, padding: '14px 16px', marginBottom: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                    {student.profileImage
+                      ? <img src={student.profileImage} alt={student.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <div style={{ width: '100%', height: '100%', background: '#e0e7ff', color: '#1A56DB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800 }}>{student.name?.[0]}</div>
+                    }
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 12, color: '#94a3b8', display: 'block' }}>{student.stopName}</span>
+                    <span style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>{student.name}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, ...STATUS_STYLE[status] }}>
+                      {STATUS_LABEL[status]}
+                    </span>
+                    {status === 'WAITING' && (
+                      <button
+                        style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#1A56DB', color: '#fff', cursor: 'pointer' }}
+                        onClick={() => handleAction(student, 'BOARD')}
+                        disabled={!!actionLoading[student.studentId]}
+                      >
+                        {actionLoading[student.studentId] ? '...' : '승차'}
+                      </button>
+                    )}
+                    {status === 'BOARDED' && (
+                      <button
+                        style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer' }}
+                        onClick={() => handleAction(student, 'EXIT')}
+                        disabled={!!actionLoading[student.studentId]}
+                      >
+                        {actionLoading[student.studentId] ? '...' : '하차'}
+                      </button>
+                    )}
+                    {status === 'EXITED' && (
+                      <button
+                        style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#e2e8f0', color: '#64748b', cursor: 'pointer' }}
+                        onClick={() => handleAction(student, 'BOARD')}
+                        disabled={!!actionLoading[student.studentId]}
+                      >
+                        {actionLoading[student.studentId] ? '...' : '재승차'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+
+        {!loading && !error && filtered.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: 14 }}>해당 학생이 없습니다.</div>
+        )}
+      </div>
+
+      {toastMsg && (
+        <div style={{ position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)', padding: '12px 24px', borderRadius: 12, color: '#fff', fontSize: 14, fontWeight: 600, zIndex: 9999, whiteSpace: 'nowrap', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', background: toastMsg.type === 'error' ? '#ef4444' : '#1A56DB' }}>
+          {toastMsg.text}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AcademyHome({ user }) {
   return (
     <div style={{ minHeight: 'calc(100vh - 120px)', paddingBottom: 96, background: 'var(--color-bg)' }}>
@@ -224,28 +458,10 @@ function AdminHome({ user, navigate }) {
   )
 }
 
-function DriverHome({ user }) {
-  return (
-    <div style={{ minHeight: '100dvh', paddingBottom: 96, background: '#F3F4F6' }}>
-      <div style={{ background: 'linear-gradient(135deg, #0A1628 0%, #1A56DB 100%)', padding: '24px 20px 28px', color: 'white' }}>
-        <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 4 }}>기사님 홈</p>
-        <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px' }}>{user?.name ?? '기사님'}님</h2>
-        <p style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>오늘의 운행 및 탑승 명단을 확인해 보세요</p>
-        <div style={{ marginTop: 20, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.18)' }}>
-          <p style={{ fontSize: 13, fontWeight: 700 }}>배정 차량</p>
-          <p style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{user?.vehicleNumber ?? '차량 정보가 등록되지 않았습니다.'}</p>
-          <p style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{user?.academyName ?? '배정 학원 정보가 등록되지 않았습니다.'}</p>
-        </div>
-      </div>
-      <DriverBoardingList />
-    </div>
-  )
-}
-
 const QUICK_ACTIONS = [
-  { icon: '📍', label: '위치\n확인',  color: '#1A56DB', to: '/map' },
-  { icon: '📞', label: '기사\n연락',  color: '#00C49A', to: null },
-  { icon: '📋', label: '공지사항',    color: '#FF6B35', to: '/notice' },
+  { icon: '📍', label: '위치\n확인',   color: '#1A56DB', to: '/map' },
+  { icon: '📞', label: '기사\n연락',   color: '#00C49A', to: null },
+  { icon: '📋', label: '공지사항',     color: '#FF6B35', to: '/notice' },
   { icon: '📊', label: '학습\n리포트', color: '#9B59B6', to: '/learning' },
 ]
 

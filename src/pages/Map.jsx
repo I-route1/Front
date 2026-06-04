@@ -147,8 +147,8 @@ export default function Map() {
 
         try {
           const child = user?.children?.[0];
-          // DB의 숫자형 student_id를 우선으로 가져옵니다. (없을 경우 fallback으로 id 또는 1)
-          let childStudentId = child?.student_id || child?.studentId || child?.id || 1;
+          // DB의 숫자형 studentId를 우선으로 가져옵니다. (없을 경우 fallback으로 id 또는 1)
+          let childStudentId = child?.studentId || child?.studentId || child?.id || 1;
 
           // 방어 코드: 만약 식별자가 'child-1780556222654'와 같은 문자열 형태인 경우
           // 백엔드 오류 방지를 위해 숫자 1로 대체합니다. (실제 운영 시에는 백엔드에서 부여받은 DB PK 사용)
