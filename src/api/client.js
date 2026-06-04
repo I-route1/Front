@@ -5,7 +5,7 @@ function getToken() {
     const saved = sessionStorage.getItem('i-route-user')
     if (!saved) return null
     const user = JSON.parse(saved)
-    return user?.token ?? null
+    return user?.token || user?.accessToken || null
   } catch {
     return null
   }

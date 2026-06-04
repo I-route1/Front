@@ -280,17 +280,12 @@ export function AuthProvider({ children }) {
   }
 
   const deleteAccount = async () => {
-    await new Promise(resolve => setTimeout(resolve, 700))
-    if (user) {
-      const deleted = JSON.parse(localStorage.getItem('i-route-deleted-users') || '[]')
-      localStorage.setItem('i-route-deleted-users', JSON.stringify([
-        ...deleted,
-        { id: user.id, username: user.username, name: user.name, deletedAt: new Date().toISOString() },
-      ]))
-    }
-    setUser(null)
+    await authAPI.deleteMyAccount()
+
     sessionStorage.removeItem('i-route-user')
-    return true
+    localStorage.removeItem('i-route-user')
+
+    setUser(null)
   }
 
   const logout = async () => {
