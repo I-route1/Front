@@ -42,6 +42,7 @@ import Help from '@/pages/Help'
 import Terms from '@/pages/Terms'
 import PushNotificationSettings from '@/pages/PushNotificationSettings'
 
+
 export const router = createBrowserRouter([
   // 비로그인 페이지
   { path: '/login', element: <Login /> },
@@ -106,12 +107,12 @@ export const router = createBrowserRouter([
       {
         path: 'attendance',
         element: (
-            <ProtectedRoute allowedRoles={[USER_ROLES.PARENT, USER_ROLES.ACADEMY, USER_ROLES.ADMIN]}>
-              <Attendance />
-            </ProtectedRoute>
+          <ProtectedRoute allowedRoles={[USER_ROLES.PARENT, USER_ROLES.ACADEMY, USER_ROLES.ADMIN, USER_ROLES.DRIVER]}>
+            <Attendance />
+          </ProtectedRoute>
         ),
       },
-    ],
+    ,]
   },
 
   // 없는 주소는 로그인으로

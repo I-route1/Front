@@ -192,8 +192,8 @@ export function AuthProvider({ children }) {
           if (childrenRes.ok) {
             const childrenData = await childrenRes.json()
             userData.children = (Array.isArray(childrenData) ? childrenData : []).map(c => ({
-              id: c.studentId || c.student_id || c.id,
-              student_id: c.studentId || c.student_id || c.id,
+              id: c.studentId || c.studentId || c.id,
+              studentId: c.studentId || c.studentId || c.id,
               name: c.name,
               gradeStudentId: c.gradeStudentId,
               grade: c.grade ?? '',

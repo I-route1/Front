@@ -2,18 +2,24 @@ import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import NoChildScreen from '@/components/common/NoChildScreen'
 import ParentAttendance from './ParentAttendance'
 import AcademyAttendance from './AcademyAttendance'
+import DriverAttendance from './DriverAttendance'
 
 export default function Attendance() {
   const { user } = useAuth()
 
   if (!user) return null
 
+  // 기사 → 오늘 탑승 명단 + 승하차 처리
+  if (user.role === USER_ROLES.DRIVER) {
+    return <DriverAttendance user={user} />
+  }
+
   // 학원/관리자 → 버스 출결 + NFC 등록
   if (user.role === USER_ROLES.ACADEMY || user.role === USER_ROLES.ADMIN) {
     return <AcademyAttendance user={user} />
   }
 
-  // 학부모인데 자녀 없으면 빈 화면
+  // 학부모 → 자녀 출결 이력
   if (user.role === USER_ROLES.PARENT) {
     const hasNoChildren = !user?.children || user.children.length === 0
     if (hasNoChildren) {

@@ -118,11 +118,26 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
       .catch(() => {})
   }, [effectiveId])
 
-  const handleDismissReview = (index) => {
+  const handleDismissReview = async (index) => {
+    const review = reviewData.reviews[index]
+    
     setReviewData(prev => {
       const newReviews = prev.reviews.filter((_, i) => i !== index)
       return { ...prev, reviews: newReviews, hasReview: newReviews.length > 0 }
     })
+  
+    // API 호출
+    try {
+      await reviewAPI.dismiss(review.id)
+    } catch (e) {
+      console.error('복습 항목 삭제 실패:', e)
+      // 실패 시 롤백
+      setReviewData(prev => ({
+        ...prev,
+        reviews: [...prev.reviews.slice(0, index), review, ...prev.reviews.slice(index)],
+        hasReview: true,
+      }))
+    }
   }
 
   const handleGenerateRoadmap = async () => {
@@ -195,6 +210,7 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
       console.error('항목 삭제 실패:', e)
     }
   }
+  
 
   const doneCount = plan.filter(p => p.done).length
 

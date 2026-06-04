@@ -30,6 +30,7 @@ const ADMIN_NAV = [
 const DRIVER_NAV = [
   { to: '/home',    label: '홈',   icon: HomeIcon },
   { to: '/map',     label: '지도', icon: MapIcon },
+  { to: '/attendance', label: '출결', icon: CalendarCheck },
   { to: '/profile', label: '마이', icon: ProfileIcon },
 ]
 
@@ -40,7 +41,7 @@ export default function BottomNav() {
   useEffect(() => {
     // 학부모인 경우 첫 번째 자녀의 ID를, 그 외(학생 등)에는 본인 ID를 사용
     const targetStudentId = (user?.role === 'PARENT' || user?.role === '학부모')
-      ? (user?.children?.[0]?.student_id || user?.children?.[0]?.studentId || user?.children?.[0]?.id)
+      ? (user?.children?.[0]?.studentId || user?.children?.[0]?.studentId || user?.children?.[0]?.id)
       : user?.id;
 
     if (!targetStudentId) return;
