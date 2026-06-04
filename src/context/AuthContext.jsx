@@ -152,6 +152,13 @@ export function AuthProvider({ children }) {
                   name: c.name,
                   gradeStudentId: c.gradeStudentId,
                   grade: c.grade ?? '',
+                  academyId: c.academyId,
+                  academyName: c.academyName,
+                  academies: Array.isArray(c.academies) ? c.academies.map(a => ({
+                    id: a.id,
+                    code: a.code,
+                    name: a.name,
+                  })) : [],
                 })),
               }
               setUser(updatedUser)
@@ -217,11 +224,18 @@ export function AuthProvider({ children }) {
           if (childrenRes.ok) {
             const childrenData = await childrenRes.json()
             userData.children = (Array.isArray(childrenData) ? childrenData : []).map(c => ({
-              id: c.studentId || c.studentId || c.id,
-              studentId: c.studentId || c.studentId || c.id,
+              id: c.studentId,
+              studentId: c.studentId,
               name: c.name,
               gradeStudentId: c.gradeStudentId,
               grade: c.grade ?? '',
+              academyId: c.academyId,
+              academyName: c.academyName,
+              academies: Array.isArray(c.academies) ? c.academies.map(a => ({
+                id: a.id,
+                code: a.code,
+                name: a.name,
+              })) : [],
             }))
           } else {
             userData.children = []
