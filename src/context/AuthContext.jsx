@@ -134,7 +134,32 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const saved = sessionStorage.getItem('i-route-user')
     if (saved) {
-      try { setUser(JSON.parse(saved)) } catch { sessionStorage.removeItem('i-route-user') }
+      try {
+        const parsed = JSON.parse(saved)
+        setUser(parsed)
+        // 학부모 계정이면 자녀 목록을 최신 데이터로 갱신
+        if (normalizeRole(parsed.role) === USER_ROLES.PARENT && parsed.token) {
+          fetch(`${BASE_URL}/api/students/my-children`, {
+            headers: { Authorization: `Bearer ${parsed.token}` },
+          })
+            .then(res => res.ok ? res.json() : [])
+            .then(childrenData => {
+              const updatedUser = {
+                ...parsed,
+                children: (Array.isArray(childrenData) ? childrenData : []).map(c => ({
+                  id: c.studentId,
+                  studentId: c.studentId,
+                  name: c.name,
+                  gradeStudentId: c.gradeStudentId,
+                  grade: c.grade ?? '',
+                })),
+              }
+              setUser(updatedUser)
+              sessionStorage.setItem('i-route-user', JSON.stringify(updatedUser))
+            })
+            .catch(() => {})
+        }
+      } catch { sessionStorage.removeItem('i-route-user') }
     }
     setLoading(false)
   }, [])

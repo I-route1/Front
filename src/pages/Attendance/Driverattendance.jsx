@@ -37,18 +37,8 @@ export default function DriverAttendance({ user }) {
     setLoading(true)
     getMyBusAttendance()
       .then(data => {
-        // 학생별 마지막 이벤트로 status 계산
-        const latest = {}
-        ;[...(Array.isArray(data) ? data : [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-          .forEach(e => {
-            latest[e.studentId] = {
-              studentId: e.studentId,
-              name: e.studentName ?? e.name,
-              stopName: e.stopName ?? '',
-              status: e.eventType === 'BOARD' ? 'BOARDED' : e.eventType === 'EXIT' ? 'EXITED' : 'WAITING',
-            }
-          })
-        setStudents(Object.values(latest))
+        // 백엔드에서 이미 status를 포함해서 반환
+        setStudents(Array.isArray(data) ? data : [])
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))

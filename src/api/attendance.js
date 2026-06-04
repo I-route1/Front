@@ -1,6 +1,12 @@
 // src/api/attendance.js
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
+function getAuthHeader() {
+  const saved = sessionStorage.getItem('i-route-user')
+  const user = saved ? JSON.parse(saved) : null
+  return user?.token ? { Authorization: `Bearer ${user.token}` } : {}
+}
+
 /**
  * 1. NFC 태그 — 승/하차 처리 (라즈베리파이에서 호출, 프론트 직접 사용 X)
  * POST /api/gps/attendance
@@ -55,7 +61,9 @@ export async function getAttendanceByStudent(studentId, date) {
  * GET /api/gps/attendance/buses/{busId}
  */
 export async function getAttendanceByBus(busId) {
-  const res = await fetch(`${BASE_URL}/api/gps/attendance/buses/${busId}`)
+  const res = await fetch(`${BASE_URL}/api/gps/attendance/buses/${busId}`, {
+    headers: { ...getAuthHeader() },
+  })
   if (!res.ok) throw new Error('버스 출결 조회 실패')
   return res.json()
 }
@@ -67,7 +75,7 @@ export async function getAttendanceByBus(busId) {
 export async function registerNfcCard(studentId, nfcCardId) {
   const res = await fetch(`${BASE_URL}/api/gps/students/${studentId}/nfc`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ nfcCardId }),
   })
   if (res.status === 404) throw new Error('학생을 찾을 수 없습니다.')
