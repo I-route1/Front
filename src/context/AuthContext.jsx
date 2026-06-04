@@ -64,47 +64,47 @@ const MOCK_USERS = {
     avatar: null, children: [{ id: 'child-001', name: '홍민준', grade: '초6' }],
   },
   academy: {
-  id: 'academy-001',
-  name: '아이루트 학원',
-  role: USER_ROLES.ACADEMY,
-  username: 'academy',
-  email: 'academy@iroute.com',
-  phone: '053-000-0000',
-  avatar: null,
-  academyName: '아이루트 학원',
-  academyAddress: '대구광역시 달성군 현풍읍',
-  academyCode: 'IROUTE123',
-  academies: [
-    {
-      id: 'academy-001',
-      academyName: '아이루트 학원',
-      academyAddress: '대구광역시 달성군 현풍읍',
-      businessNumber: '1234567890',
-      academyCode: 'IROUTE123',
-    },
-  ],
-},
+    id: 'academy-001',
+    name: '아이루트 학원',
+    role: USER_ROLES.ACADEMY,
+    username: 'academy',
+    email: 'academy@iroute.com',
+    phone: '053-000-0000',
+    avatar: null,
+    academyName: '아이루트 학원',
+    academyAddress: '대구광역시 달성군 현풍읍',
+    academyCode: 'IROUTE123',
+    academies: [
+      {
+        id: 'academy-001',
+        academyName: '아이루트 학원',
+        academyAddress: '대구광역시 달성군 현풍읍',
+        businessNumber: '1234567890',
+        academyCode: 'IROUTE123',
+      },
+    ],
+  },
   학원: {
-  id: 'academy-001',
-  name: '아이루트 학원',
-  role: USER_ROLES.ACADEMY,
-  username: '학원',
-  email: 'academy@iroute.com',
-  phone: '053-000-0000',
-  avatar: null,
-  academyName: '아이루트 학원',
-  academyAddress: '대구광역시 달성군 현풍읍',
-  academyCode: 'IROUTE123',
-  academies: [
-    {
-      id: 'academy-001',
-      academyName: '아이루트 학원',
-      academyAddress: '대구광역시 달성군 현풍읍',
-      businessNumber: '1234567890',
-      academyCode: 'IROUTE123',
-    },
-  ],
-},
+    id: 'academy-001',
+    name: '아이루트 학원',
+    role: USER_ROLES.ACADEMY,
+    username: '학원',
+    email: 'academy@iroute.com',
+    phone: '053-000-0000',
+    avatar: null,
+    academyName: '아이루트 학원',
+    academyAddress: '대구광역시 달성군 현풍읍',
+    academyCode: 'IROUTE123',
+    academies: [
+      {
+        id: 'academy-001',
+        academyName: '아이루트 학원',
+        academyAddress: '대구광역시 달성군 현풍읍',
+        businessNumber: '1234567890',
+        academyCode: 'IROUTE123',
+      },
+    ],
+  },
   driver: {
     id: 'driver-001', name: '김기사', role: USER_ROLES.DRIVER,
     username: 'driver', email: 'driver@iroute.com', phone: '010-1111-2222',
@@ -168,8 +168,8 @@ export function AuthProvider({ children }) {
     }
 
     try {
-            const data = await authAPI.login({
-            username: normalizedUsername,
+      const data = await authAPI.login({
+        username: normalizedUsername,
         password,
       })
 
@@ -192,7 +192,8 @@ export function AuthProvider({ children }) {
           if (childrenRes.ok) {
             const childrenData = await childrenRes.json()
             userData.children = (Array.isArray(childrenData) ? childrenData : []).map(c => ({
-              id: c.studentId,
+              id: c.studentId || c.student_id || c.id,
+              student_id: c.studentId || c.student_id || c.id,
               name: c.name,
               gradeStudentId: c.gradeStudentId,
               grade: c.grade ?? '',
@@ -211,7 +212,7 @@ export function AuthProvider({ children }) {
     }
   }
 
-    const loginWithKakao = async () => {
+  const loginWithKakao = async () => {
     window.location.href = authAPI.getSocialLoginUrl('kakao')
   }
 
@@ -289,26 +290,26 @@ export function AuthProvider({ children }) {
   }
 
   const logout = async () => {
-  const refreshToken = user?.refreshToken
+    const refreshToken = user?.refreshToken
 
-  try {
-    if (refreshToken) {
-      await authAPI.logout(refreshToken)
+    try {
+      if (refreshToken) {
+        await authAPI.logout(refreshToken)
+      }
+    } catch (error) {
+      console.warn('로그아웃 API 호출에 실패했지만 프론트 로그아웃은 진행합니다.', error)
+    } finally {
+      setUser(null)
+      sessionStorage.removeItem('i-route-user')
     }
-  } catch (error) {
-    console.warn('로그아웃 API 호출에 실패했지만 프론트 로그아웃은 진행합니다.', error)
-  } finally {
-    setUser(null)
-    sessionStorage.removeItem('i-route-user')
   }
-}
 
   return (
     <AuthContext.Provider value={{
       user, loading,
       isLoggedIn: !!user,
       role: user?.role ?? null,
-            loginWithCredentials,
+      loginWithCredentials,
       loginWithKakao,
       loginWithSocialToken,
       updateUser,

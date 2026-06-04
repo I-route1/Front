@@ -27,15 +27,20 @@ export default function TopBar() {
   
   // 안 읽은 알림 확인
   useEffect(() => {
-    if (!user?.id) return
+    // 학부모인 경우 첫 번째 자녀의 ID를, 그 외(학생 등)에는 본인 ID를 사용
+    const targetStudentId = (user?.role === 'PARENT' || user?.role === '학부모')
+      ? (user?.children?.[0]?.student_id || user?.children?.[0]?.studentId || user?.children?.[0]?.id)
+      : user?.id;
+
+    if (!targetStudentId) return;
     
-    notificationsAPI.getUnread(user.id)
+    notificationsAPI.getUnread(targetStudentId)
       .then(data => {
         const count = Array.isArray(data) ? data.length : (data?.count ?? 0)
         setHasUnread(count > 0)
       })
       .catch(() => setHasUnread(false))
-  }, [user?.id, pathname])  // pathname 의존성 추가 — 페이지 이동 시마다 재확인
+  }, [user?.id, user?.children])  // pathname 의존성 제거: 페이지 이동 시마다 무의미한 API 반복 호출(스팸) 방지
   
   const title = getPageTitle(pathname)
   
