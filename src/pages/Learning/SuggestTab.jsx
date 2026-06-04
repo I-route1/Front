@@ -246,7 +246,7 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
           <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>취약 개념 기반으로 유사 문제를 자동으로 찾아드려요</p>
           <div style={{ display:'flex', gap:8, marginBottom:8 }}>
             <select value={aiSubject} onChange={e => { setAiSubject(e.target.value); setAncestorDone(false); setAncestorResults([]) }}
-              style={{ flex:'0 0 90px', padding:'9px 8px', borderRadius:8, border:'1px solid var(--color-border)', background:'var(--color-surface-2)', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)' }}>
+              style={{ flex:'0 0 auto', padding:'9px 8px', borderRadius:8, border:'1px solid var(--color-border)', background:'var(--color-surface-2)', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)' }}>
               {['수학','영어','국어','한국사','사회탐구','과학탐구'].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <input
