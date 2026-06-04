@@ -8,4 +8,8 @@ export const studentAPI = {
   getAcademyStudents() {
     return apiCall('/api/students/academy/students')
   },
+
+  getAcademies() {
+    return apiCall('/api/academies')
+  },
 }
