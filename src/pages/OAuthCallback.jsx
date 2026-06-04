@@ -1,78 +1,48 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import axios from 'axios'
-import { API_BASE_URL } from '@/api'
-import { getDefaultRoute, useAuth, USER_ROLES } from '@/context/AuthContext'
+import { Link, useNavigate } from 'react-router-dom'
+import { authAPI } from '../api/auth'
+import { getDefaultRoute, useAuth } from '../context/AuthContext'
 
-export default function OAuthCallback() {
+function OAuthCallback() {
     const navigate = useNavigate()
-    const { provider: routeProvider } = useParams()
-    const [searchParams] = useSearchParams()
     const { loginWithSocialToken } = useAuth()
-    const requestedRef = useRef(false)
+    const hasRun = useRef(false)
 
     const [status, setStatus] = useState('processing')
-    const [message, setMessage] = useState('소셜 로그인 정보를 확인하는 중입니다.')
+    const [message, setMessage] = useState('카카오 로그인 정보를 확인하고 있습니다.')
 
     useEffect(() => {
-        let ignore = false
+        if (hasRun.current) return
+        hasRun.current = true
 
-        async function handleOAuthCallback() {
-            if (requestedRef.current) return
-            requestedRef.current = true
-
+        const handleOAuth = async () => {
             try {
-                const provider = routeProvider || searchParams.get('provider') || 'kakao'
-                const code = searchParams.get('code')
+                const code = new URLSearchParams(window.location.search).get('code')
 
                 if (!code) {
-                    throw new Error('소셜 로그인 인증 code가 없습니다.')
+                    throw new Error('카카오 인증 code가 없습니다.')
                 }
 
-                const { data } = await axios.post(`${API_BASE_URL}/api/oauth/kakao/login`, {
-                    code,
-                })
+                const result = await authAPI.getSocialToken('kakao', code)
+                const loginData = result.data ?? result
 
-                if (!data?.accessToken) {
-                    throw new Error('소셜 로그인 토큰 발급에 실패했습니다.')
-                }
+                await loginWithSocialToken(loginData, 'kakao')
 
-                const loginData = {
-                    accessToken: data.accessToken,
-                    refreshToken: data.refreshToken,
-                    userId: data.userId,
-                    role: data.role || USER_ROLES.PARENT,
-                    nickname: data.nickname,
-                    email: data.email,
-                    isNewUser: data.isNewUser === true,
-                }
+                setStatus('success')
+                setMessage('로그인이 완료되었습니다.')
 
-                await loginWithSocialToken(loginData, provider)
-
-                if (!ignore) {
-                    setStatus('success')
-                    setMessage('소셜 로그인이 완료되었습니다.')
-                }
-
-                navigate(getDefaultRoute(loginData.role), { replace: true })
+                setTimeout(() => {
+                    navigate(getDefaultRoute(loginData.role), { replace: true })
+                }, 700)
             } catch (error) {
                 console.error('OAuth callback error:', error)
-
-                requestedRef.current = false
-
-                if (!ignore) {
-                    setStatus('error')
-                    setMessage(error.message || '소셜 로그인 처리 중 오류가 발생했습니다.')
-                }
+                setStatus('error')
+                setMessage('카카오 로그인에 실패했습니다.')
             }
         }
 
-        handleOAuthCallback()
-
-        return () => {
-            ignore = true
-        }
-    }, [routeProvider, searchParams, loginWithSocialToken, navigate])
+        handleOAuth()
+    }, [navigate, loginWithSocialToken])
 
     return (
         <div
@@ -100,27 +70,13 @@ export default function OAuthCallback() {
                     {status === 'error' && '⚠️'}
                 </div>
 
-                <h1
-                    style={{
-                        fontSize: 22,
-                        fontWeight: 800,
-                        color: 'var(--color-text-primary)',
-                        marginBottom: 10,
-                    }}
-                >
+                <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 10 }}>
                     {status === 'processing' && '소셜 로그인 처리 중'}
                     {status === 'success' && '로그인 완료'}
                     {status === 'error' && '로그인 실패'}
                 </h1>
 
-                <p
-                    style={{
-                        fontSize: 14,
-                        color: 'var(--color-text-secondary)',
-                        lineHeight: 1.6,
-                        marginBottom: status === 'error' ? 18 : 0,
-                    }}
-                >
+                <p style={{ fontSize: 14, lineHeight: 1.6 }}>
                     {message}
                 </p>
 
@@ -133,3 +89,5 @@ export default function OAuthCallback() {
         </div>
     )
 }
+
+export default OAuthCallback

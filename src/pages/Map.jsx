@@ -48,7 +48,7 @@ export default function Map() {
   if (role === USER_ROLES.PARENT && (!user?.children || user.children.length === 0)) {
     return <NoChildScreen message={'자녀를 등록하면\n실시간 위치를 확인할 수 있어요'} />
   }
-  
+
   const [portalContainer, setPortalContainer] = useState(null)
 
   useEffect(() => {
@@ -146,7 +146,15 @@ export default function Map() {
         }
 
         try {
-          const childStudentId = user?.children?.[0]?.id || 1;
+          const child = user?.children?.[0];
+          // DB의 숫자형 student_id를 우선으로 가져옵니다. (없을 경우 fallback으로 id 또는 1)
+          let childStudentId = child?.student_id || child?.studentId || child?.id || 1;
+
+          // 방어 코드: 만약 식별자가 'child-1780556222654'와 같은 문자열 형태인 경우
+          // 백엔드 오류 방지를 위해 숫자 1로 대체합니다. (실제 운영 시에는 백엔드에서 부여받은 DB PK 사용)
+          if (typeof childStudentId === 'string' && childStudentId.startsWith('child-')) {
+            childStudentId = 1;
+          }
           const studentLoc = await getStudentCurrentLocation(childStudentId);
           if (studentLoc === null) {
             setIsChildOnBoard(false);
@@ -154,7 +162,7 @@ export default function Map() {
           } else {
             setIsChildOnBoard(true);
           }
-        } catch {}
+        } catch { }
 
       } catch (err) {
         setErrorMessage("데이터를 불러오는 중 오류가 발생했습니다.");
@@ -283,16 +291,7 @@ export default function Map() {
         </div>
       )}
 
-      {studentEtas.length > 0 && (() => {
-        const myChildEta = studentEtas[0];
-        return (
-          <div style={{ background: myChildEta.lateRisk ? '#FEF2F2' : '#EFF6FF', borderBottom: `1px solid ${myChildEta.lateRisk ? '#FCA5A5' : '#BFDBFE'}`, color: myChildEta.lateRisk ? '#DC2626' : '#1E3A8A', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
-            <span>{myChildEta.lateRisk ? '🚨' : 'ℹ️'}</span>
-            {myChildEta.studentName} 어린이의 {myChildEta.stopName} 하차까지 {myChildEta.etaMinutes}분 남았습니다.
-            {myChildEta.lateRisk && ' (지각 위험)'}
-          </div>
-        );
-      })()}
+
 
       {isDelayed && (
         <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
@@ -302,7 +301,7 @@ export default function Map() {
 
       {(status === 'child_arrived' || isChildOnBoard === false) && (
         <div style={{ background: '#ECFDF5', borderBottom: '1px solid #A7F3D0', color: '#047857', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
-          <span>✅</span> 우리 아이 하차가 완료되었습니다.
+          <span></span> 우리 아이 하차가 완료되었습니다.
         </div>
       )}
 

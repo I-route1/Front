@@ -163,16 +163,26 @@ export const authAPI = {
     })
   },
 
-  checkEmailVerified(email) {
+  checkEmailVerified: async (email) => {
     return apiCall(`/api/auth/email/status?email=${encodeURIComponent(email)}`, {
       method: 'GET',
     })
   },
 
-  changePassword(payload) {
+  changePassword(oldPassword, newPassword) {
     return apiCall('/api/auth/password/change', {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        oldPassword,
+        newPassword,
+      }),
     })
   },
+
+  deleteMyAccount() {
+    return apiCall('/api/auth/me/delete', {
+      method: 'DELETE',
+    })
+  },
+
 }

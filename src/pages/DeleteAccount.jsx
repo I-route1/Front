@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { authAPI } from '@/api/auth'
 import BackButton from '../components/common/BackButton'
 
 export default function DeleteAccount() {
@@ -13,19 +14,19 @@ export default function DeleteAccount() {
 
   const handleDelete = async () => {
     if (confirmText !== '탈퇴합니다') {
-      setError('정확히 "탈퇴합니다"를 입력해 주세요')
+      setError('탈퇴합니다를 정확히 입력해주세요.')
       return
     }
-
-    const confirmed = window.confirm('정말로 계정을 탈퇴하시겠습니까?')
-    if (!confirmed) return
 
     setLoading(true)
 
     try {
       await deleteAccount()
+
       alert('회원 탈퇴가 완료되었습니다.')
-      navigate('/login', { replace: true })
+      navigate('/login')
+    } catch (err) {
+      setError(err.message || '회원 탈퇴에 실패했습니다.')
     } finally {
       setLoading(false)
     }
