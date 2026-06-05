@@ -15,7 +15,7 @@ import { calcMockExamScores } from './utils/mockExamScoring'
 
 export default function GradeTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
-  const gradeKey = selectedChild?.gradeStudentId ?? String(propStudentId ?? user?.id ?? '')
+  const gradeKey = selectedChild?.id ?? selectedChild?.studentId ?? propStudentId ?? user?.id
   useEffect(() => {
     if (!gradeKey) return
     gradesAPI.getGrades(gradeKey)

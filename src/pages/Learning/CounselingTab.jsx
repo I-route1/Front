@@ -62,7 +62,7 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
   const { user } = useAuth()
   const navigate = useNavigate()
   const effectiveId = propStudentId ?? user?.id
-  const gradeKey = selectedChild?.gradeStudentId ?? String(effectiveId ?? '')
+  const gradeKey = selectedChild?.id ?? selectedChild?.studentId ?? effectiveId
   const storageKey = `counseling-results-${gradeKey}`
 
   const collapsedKey = `counseling-collapsed-${gradeKey}`

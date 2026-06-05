@@ -32,7 +32,7 @@ const SUBJECT_BADGE_COLOR = {
 export default function PatternTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
   const effectiveId = propStudentId ?? user?.id
-  const gradeKey = selectedChild?.gradeStudentId ?? String(effectiveId ?? '')
+  const gradeKey = selectedChild?.id ?? selectedChild?.studentId ?? effectiveId
 
   const [selfEval, setSelfEval]         = useState({ 이해도:0, 집중도:0 })
 
@@ -166,7 +166,7 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
       // 1. 학습 기록 먼저 생성
       const today = new Date().toISOString().split('T')[0]
       const activity = await activitiesAPI.postActivity({
-        studentId: selectedChild?.gradeStudentId ?? effectiveId,
+        studentId: selectedChild?.id ?? selectedChild?.studentId ?? effectiveId,
         subject: '수학',
         studyDate: today,
         studyStartTime: new Date().toTimeString().slice(0,8),
