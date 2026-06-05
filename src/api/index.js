@@ -12,4 +12,13 @@ export { authAPI }            from './auth'
 export { aiReportAPI }        from './aiReport'
 export { studentAPI }         from './student'
 export { boardAPI }           from './board'
+export {
+  tagNfc,
+  getChildren,
+  getAttendanceByParent,
+  getAttendanceByStudent,
+  getAttendanceByBus,
+  getMyBusAttendance,
+  registerNfcCard,
+} from './attendance'
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'

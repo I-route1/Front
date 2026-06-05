@@ -69,7 +69,20 @@ export async function getAttendanceByBus(busId) {
 }
 
 /**
- * 6. NFC 카드 등록 (관리자용)
+ * 6. 기사 앱: 내 버스 탑승 명단 + 출결 현황 조회
+ * GET /api/gps/drivers/my-bus/attendance
+ */
+export async function getMyBusAttendance() {
+  const res = await fetch(`${BASE_URL}/api/gps/drivers/my-bus/attendance`, {
+    headers: { ...getAuthHeader() },
+  })
+  if (res.status === 403) throw new Error('기사 권한이 필요합니다.')
+  if (!res.ok) throw new Error('출결 명단 조회 실패')
+  return res.json()
+}
+
+/**
+ * 7. NFC 카드 등록 (관리자용)
  * PATCH /api/gps/students/{studentId}/nfc
  */
 export async function registerNfcCard(studentId, nfcCardId) {
