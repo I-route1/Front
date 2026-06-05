@@ -24,7 +24,7 @@ async function getMyBusAttendance() {
 }
 
 async function postAttendance({ studentId, eventType }) {
-  const res = await fetch(`${BASE_URL}/api/gps/attendance`, {
+  const res = await fetch(`${BASE_URL}/api/gps/attendance/manual`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ studentId, eventType }),
