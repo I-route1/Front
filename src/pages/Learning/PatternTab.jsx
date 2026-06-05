@@ -136,7 +136,7 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
   const handleMetaAnalysis = async () => {
     setMetaLoading(true)
     try {
-      const gradeId = selectedChild?.gradeStudentId ?? effectiveId
+      const gradeId = selectedChild?.id ?? selectedChild?.studentId ?? effectiveId
       const res = await analysisAPI.getMetaCognition(gradeId, '수학')
       setMetaResult(res)
     } catch (e) {
