@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { counselingAPI, studyPlanAPI, aiReportAPI, gradesAPI } from '@/api'
+import MathText, { mathToHtml, KATEX_CSS_LINK } from '@/components/common/MathText'
 
 const SUBJECT_OPTIONS = ['수학', '영어', '국어', '한국사', '사회탐구', '과학탐구']
 
@@ -379,7 +380,7 @@ function printTextReport(reportType, result) {
   const ts             = result._generatedAt || new Date().toLocaleDateString('ko-KR')
 
   const html = `
-    <html><head><meta charset="utf-8">
+    <html><head><meta charset="utf-8">${KATEX_CSS_LINK}
     <style>
       body { font-family: 'Malgun Gothic', sans-serif; padding: 32px; color: #111; max-width: 720px; margin: 0 auto; }
       h1 { font-size: 20px; margin-bottom: 4px; color: ${reportType.color}; }
@@ -393,9 +394,9 @@ function printTextReport(reportType, result) {
     <h1>${reportType.emoji} ${title}</h1>
     <div class="meta">생성일: ${ts}</div>
     ${concept        ? `<div class="concept">🎯 ${concept}</div>` : ''}
-    ${content        ? `<div class="section"><div class="section-title">📋 분석 결과</div><div class="section-body">${content}</div></div>` : ''}
-    ${recommendation ? `<div class="section"><div class="section-title">🤖 AI 추천 리포트</div><div class="section-body">${recommendation}</div></div>` : ''}
-    ${guide          ? `<div class="section"><div class="section-title">💡 학습 가이드</div><div class="section-body">${guide}</div></div>` : ''}
+    ${content        ? `<div class="section"><div class="section-title">📋 분석 결과</div><div class="section-body">${mathToHtml(content)}</div></div>` : ''}
+    ${recommendation ? `<div class="section"><div class="section-title">🤖 AI 추천 리포트</div><div class="section-body">${mathToHtml(recommendation)}</div></div>` : ''}
+    ${guide          ? `<div class="section"><div class="section-title">💡 학습 가이드</div><div class="section-body">${mathToHtml(guide)}</div></div>` : ''}
     </body></html>`
 
   const win = window.open('', '_blank')
@@ -447,7 +448,7 @@ function ResultBlock({ result, reportType, onClear }) {
                 🤖 AI 추천 리포트
               </p>
               <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                {result.aiRecommendationReport}
+                <MathText text={result.aiRecommendationReport} />
               </p>
             </div>
           )}
@@ -542,7 +543,7 @@ function ResultBlock({ result, reportType, onClear }) {
             📋 {title}
           </p>
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-            {careerAnalysis}
+            <MathText text={careerAnalysis} />
           </p>
         </div>
       )}
@@ -556,7 +557,7 @@ function ResultBlock({ result, reportType, onClear }) {
             💡 학습 가이드
           </p>
           <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-            {learningGuide}
+            <MathText text={learningGuide} />
           </p>
         </div>
       )}
