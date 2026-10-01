@@ -544,7 +544,7 @@ function ResultBlock({ result, reportType, onClear }) {
           <p style={{ fontSize: 12, fontWeight: 700, color: reportType.color, marginBottom: 6 }}>
             📋 {title}
           </p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
             <MathText text={careerAnalysis} />
           </p>
         </div>
@@ -554,7 +554,7 @@ function ResultBlock({ result, reportType, onClear }) {
       {learningGuide && (
         <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-primary-light)', border: '1px solid #1A56DB20' }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', marginBottom: 4 }}>💡 학습 가이드</p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
             <MathText text={learningGuide} />
           </p>
         </div>
