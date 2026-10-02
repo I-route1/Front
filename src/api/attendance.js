@@ -29,7 +29,7 @@ export async function tagNfc({ busId, nfcCardId }) {
  * GET /api/gps/parents/{parentId}/children
  */
 export async function getChildren(parentId) {
-  const res = await fetch(`${BASE_URL}/api/gps/parents/${parentId}/children`)
+  const res = await fetch(`${BASE_URL}/api/gps/parents/${parentId}/children`, { headers: getAuthHeader() })
   if (!res.ok) throw new Error('자녀 목록 조회 실패')
   return res.json()
 }
