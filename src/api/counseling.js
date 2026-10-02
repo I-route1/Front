@@ -1,5 +1,10 @@
 import { apiCall } from './client'
 
+const getSubjectReport = (studentId, subject) =>
+  apiCall(`/api/counseling/${encodeURIComponent(subject)}?studentId=${studentId}`, {
+    method: 'POST',
+  })
+
 // ⚠️ Python AI 서버(localhost:8082) 연동 필요
 // 서버 다운 시 503 에러 발생
 
@@ -10,7 +15,7 @@ export const counselingAPI = {
       method: 'POST',
     }),
 
-  // 3-2. 진로 탐색 리포트
+  // 3-2. 국어 역량 및 진로 탐색 리포트
   getWritingReport: (studentId) =>
     apiCall(`/api/counseling/writing?studentId=${studentId}`, {
       method: 'POST',
@@ -21,5 +26,10 @@ export const counselingAPI = {
     apiCall(`/api/counseling/premium?studentId=${studentId}`, {
       method: 'POST',
     }),
+  // 영어·과학·사회 메타인지 분석 리포트
+  getEnglishReport: (studentId) => getSubjectReport(studentId, '영어'),
+  getScienceReport: (studentId) => getSubjectReport(studentId, '과학'),
+  getSocialReport: (studentId) => getSubjectReport(studentId, '사회'),
+
   // 응답: { studentId, title, careerAnalysis, learningGuide }
 }

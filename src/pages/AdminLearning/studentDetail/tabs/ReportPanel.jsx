@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { counselingAPI, studyPlanAPI, aiReportAPI, gradesAPI } from '@/api'
 import MathText, { mathToHtml, KATEX_CSS_LINK } from '@/components/common/MathText'
 
-const SUBJECT_OPTIONS = ['수학', '영어', '국어', '한국사', '사회탐구', '과학탐구']
+import { REPORT_SUBJECTS as SUBJECT_OPTIONS, normalizeReportSubject } from '@/utils/reportSubjects'
 
 const REPORT_TYPES = [
   {
@@ -36,11 +36,38 @@ const REPORT_TYPES = [
   },
   {
     id: 'writing',
-    title: '진로 탐색 리포트',
-    description: '학생의 학습 성향 기반 진로 추천',
+    title: '국어·진로 탐색 리포트',
+    description: '국어 학습 수준과 언어·작문 역량을 바탕으로 진로와 학습 방향을 제시합니다',
     emoji: '🎯',
     color: '#9C88FF',
     api: 'getWritingReport',
+    apiSource: 'counseling',
+  },
+  {
+    id: 'english',
+    title: '영어 메타인지 리포트',
+    description: '영어 성적과 취약 개념을 분석해 맞춤 학습 전략을 제시합니다',
+    emoji: '📖',
+    color: '#00A896',
+    api: 'getEnglishReport',
+    apiSource: 'counseling',
+  },
+  {
+    id: 'science',
+    title: '과학 메타인지 리포트',
+    description: '과학 성적과 취약 개념을 분석해 맞춤 학습 전략을 제시합니다',
+    emoji: '🔬',
+    color: '#0088CC',
+    api: 'getScienceReport',
+    apiSource: 'counseling',
+  },
+  {
+    id: 'social',
+    title: '사회 메타인지 리포트',
+    description: '사회 성적과 취약 개념을 분석해 맞춤 학습 전략을 제시합니다',
+    emoji: '🌍',
+    color: '#D97706',
+    api: 'getSocialReport',
     apiSource: 'counseling',
   },
   {
@@ -95,7 +122,7 @@ export default function ReportPanel({ student }) {
     gradesAPI.getGrades(studentId)
       .then(data => {
         const list = Array.isArray(data) ? data : []
-        setSubjectsWithGrades([...new Set(list.map(g => g.subject).filter(Boolean))])
+        setSubjectsWithGrades([...new Set(list.map(g => normalizeReportSubject(g.subject)).filter(s => SUBJECT_OPTIONS.includes(s)))])
       })
       .catch(() => setSubjectsWithGrades([]))
       .finally(() => setGradesLoading(false))
@@ -159,7 +186,7 @@ export default function ReportPanel({ student }) {
         </p>
         <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
           학생의 학습 데이터를 분석해 맞춤 리포트를 생성합니다.
-          생성에 약 5~10초 소요됩니다.
+          과목과 대기 요청 수에 따라 생성에 시간이 걸릴 수 있습니다.
         </p>
       </div>
 

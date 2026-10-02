@@ -6,7 +6,7 @@ import { RecommendRoadmapSection, AnalysisReportSection } from './RecommendRoadm
 import { counselingAPI, studyPlanAPI, aiReportAPI, gradesAPI } from '@/api'
 import MathText, { mathToHtml, KATEX_CSS_LINK } from '@/components/common/MathText'
 
-const SUBJECT_OPTIONS = ['수학', '영어', '국어', '한국사', '사회탐구', '과학탐구']
+import { REPORT_SUBJECTS as SUBJECT_OPTIONS, normalizeReportSubject } from '@/utils/reportSubjects'
 
 const REPORT_TYPES = [
   {
@@ -39,11 +39,38 @@ const REPORT_TYPES = [
   },
   {
     id: 'writing',
-    title: '진로 탐색 리포트',
-    desc: '학습 패턴을 기반으로 진로 방향을 제시합니다',
+    title: '국어·진로 탐색 리포트',
+    desc: '국어 학습 수준과 언어·작문 역량을 바탕으로 진로와 학습 방향을 제시합니다',
     emoji: '🎯',
     color: '#9B59B6',
     api: 'getWritingReport',
+    apiSource: 'counseling',
+  },
+  {
+    id: 'english',
+    title: '영어 메타인지 리포트',
+    desc: '영어 성적과 취약 개념을 분석해 맞춤 학습 전략을 제시합니다',
+    emoji: '📖',
+    color: '#00A896',
+    api: 'getEnglishReport',
+    apiSource: 'counseling',
+  },
+  {
+    id: 'science',
+    title: '과학 메타인지 리포트',
+    desc: '과학 성적과 취약 개념을 분석해 맞춤 학습 전략을 제시합니다',
+    emoji: '🔬',
+    color: '#0088CC',
+    api: 'getScienceReport',
+    apiSource: 'counseling',
+  },
+  {
+    id: 'social',
+    title: '사회 메타인지 리포트',
+    desc: '사회 성적과 취약 개념을 분석해 맞춤 학습 전략을 제시합니다',
+    emoji: '🌍',
+    color: '#D97706',
+    api: 'getSocialReport',
     apiSource: 'counseling',
   },
   {
@@ -105,7 +132,7 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
     gradesAPI.getGrades(gradeKey)
       .then(data => {
         const list = Array.isArray(data) ? data : []
-        const subjects = [...new Set(list.map(g => g.subject).filter(Boolean))]
+        const subjects = [...new Set(list.map(g => normalizeReportSubject(g.subject)).filter(s => SUBJECT_OPTIONS.includes(s)))]
         setSubjectsWithGrades(subjects)
       })
       .catch(() => setSubjectsWithGrades([]))
