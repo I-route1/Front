@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import GradeTab from './GradeTab'
@@ -6,6 +6,7 @@ import PatternTab from './PatternTab'
 import SuggestTab from './SuggestTab'
 import PredictTab from './PredictTab'
 import CounselingTab from './CounselingTab'
+import AskTab from './AskTab'
 
 const TABS = [
   { id: 'grade',      label: '📊 성적' },
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'suggest',    label: '📚 맞춤 추천' },
   { id: 'predict',    label: '🎯 성장 예측' },
   { id: 'counseling', label: '🌱 AI 리포트' },
+  { id: 'ask',        label: '💬 AI 질문' },
 ]
 const VALID_TABS = TABS.map(t => t.id)
 
@@ -109,6 +111,10 @@ export default function Learning() {
   const [searchParams, setSearchParams] = useSearchParams()
   const active = VALID_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'grade'
   const setActive = (id) => setSearchParams({ tab: id }, { replace: true })
+  // 탭 바가 가로로 스크롤되므로 주소로 바로 들어온 탭(예: ?tab=ask)이 화면 밖에 있으면 보이게 한다
+  useEffect(() => {
+    document.querySelector(`[data-tab="${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [active])
   const [selectedChildIndex, setSelectedChildIndex] = useState(0)
 
   const isParent = user?.role === 'PARENT' || user?.role === '학부모'
@@ -123,9 +129,9 @@ export default function Learning() {
   if (hasNoChildren) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0, opacity: 0.4, pointerEvents: 'none' }}>
+        <div style={{ display: 'flex', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0, overflowX: 'auto', opacity: 0.4, pointerEvents: 'none' }}>
           {TABS.map(t => (
-            <button key={t.id} style={{ flex: 1, padding: '13px 4px', border: 'none', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, background: 'transparent', color: 'var(--color-text-muted)', borderBottom: '2px solid transparent' }}>
+            <button key={t.id} style={{ flex: '1 0 auto', padding: '13px 10px', whiteSpace: 'nowrap', border: 'none', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, background: 'transparent', color: 'var(--color-text-muted)', borderBottom: '2px solid transparent' }}>
               {t.label}
             </button>
           ))}
@@ -137,14 +143,15 @@ export default function Learning() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 탭 바 */}
-      <div style={{ display: 'flex', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
+      {/* 탭 바: 탭 6개라 좁은 화면에서는 줄바꿈 대신 가로로 스크롤한다 */}
+      <div style={{ display: 'flex', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0, overflowX: 'auto' }}>
         {TABS.map(t => (
           <button
             key={t.id}
+            data-tab={t.id}
             onClick={() => setActive(t.id)}
             style={{
-              flex: 1, padding: '13px 4px', border: 'none', cursor: 'pointer',
+              flex: '1 0 auto', padding: '13px 10px', whiteSpace: 'nowrap', border: 'none', cursor: 'pointer',
               fontFamily: 'inherit', fontSize: 13,
               fontWeight: active === t.id ? 700 : 500,
               background: 'transparent',
@@ -174,6 +181,7 @@ export default function Learning() {
         {active === 'suggest'    && <SuggestTab    studentId={studentId} selectedChild={selectedChild} />}
         {active === 'predict'    && <PredictTab    studentId={studentId} selectedChild={selectedChild} />}
         {active === 'counseling' && <CounselingTab studentId={studentId} selectedChild={selectedChild} />}
+        {active === 'ask'        && <AskTab        studentId={studentId} />}
       </div>
     </div>
   )
