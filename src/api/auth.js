@@ -144,8 +144,11 @@ export const authAPI = {
   },
 
   getSocialToken(provider, code) {
-    return apiCall(`/api/oauth/social/${provider}/token?code=${encodeURIComponent(code)}`, {
-      method: 'GET',
+    return apiCall(`/api/oauth/social/${provider}/token`, {
+      method: 'POST',
+      body: JSON.stringify({
+        code,
+      }),
     })
   },
 
@@ -169,11 +172,11 @@ export const authAPI = {
     })
   },
 
-  changePassword(oldPassword, newPassword) {
+  changePassword(currentPassword, newPassword) {
     return apiCall('/api/auth/password/change', {
       method: 'PATCH',
       body: JSON.stringify({
-        oldPassword,
+        currentPassword,
         newPassword,
       }),
     })

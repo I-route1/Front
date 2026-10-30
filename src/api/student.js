@@ -12,4 +12,19 @@ export const studentAPI = {
   getAcademies() {
     return apiCall('/api/academies')
   },
+
+  // 자녀 추가 / 수정
+  addChild(data) {
+    return apiCall('/api/students', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 자녀 삭제
+  deleteChild(studentId) {
+    return apiCall(`/api/students/${studentId}`, {
+      method: 'DELETE',
+    })
+  },
 }

@@ -86,8 +86,17 @@ export async function apiCall(path, options = {}) {
     }
   }
 
+  // 1. 에러 응답 처리
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
+    const errText = await res.text().catch(() => '')
+    let err = {}
+    try {
+      err = JSON.parse(errText)
+    } catch {
+      // 에러 메시지가 일반 문자열일 경우 그대로 사용
+      throw new Error(errText || '요청 처리에 실패했습니다.')
+    }
+
     throw new Error(
         err.message ||
         err.error ||
@@ -96,6 +105,20 @@ export async function apiCall(path, options = {}) {
     )
   }
 
+  // 2. 204 No Content (내용 없음) 인 경우 바로 null 반환
+  if (res.status === 204) {
+    return null
+  }
+
+  // 3. 응답 텍스트 읽기
   const text = await res.text()
-  return text ? JSON.parse(text) : null
+  if (!text) return null
+
+  // 4. 💡 JSON 파싱 예외 처리 (핵심 수정 구간)
+  try {
+    return JSON.parse(text)
+  } catch {
+    // 백엔드가 JSON이 아닌 일반 한글/문자열("자녀 정보가 정상적으로 삭제되었습니다.")을 반환할 경우
+    return text
+  }
 }
