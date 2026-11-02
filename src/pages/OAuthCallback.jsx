@@ -26,13 +26,19 @@ function OAuthCallback() {
                 const result = await authAPI.getSocialToken('kakao', code)
                 const loginData = result.data ?? result
 
+                // Context에 토큰 및 사용자 정보 저장
                 await loginWithSocialToken(loginData, 'kakao')
 
                 setStatus('success')
                 setMessage('로그인이 완료되었습니다.')
 
                 setTimeout(() => {
-                    navigate(getDefaultRoute(loginData.role), { replace: true })
+                    // [추가된 부분] 신규 회원이면 추가 회원가입(또는 정보입력) 페이지로, 기존 회원이면 역할별 기본 페이지로 이동
+                    if (loginData.isNewUser) {
+                        navigate('/social-register', { replace: true, state: { providerId: loginData.userId } })
+                    } else {
+                        navigate(getDefaultRoute(loginData.role), { replace: true })
+                    }
                 }, 700)
             } catch (error) {
                 console.error('OAuth callback error:', error)

@@ -4,7 +4,6 @@ import { Client } from '@stomp/stompjs';
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
 import { getBusCurrentLocation, getBusRoute, getStudentEtas, getStudentCurrentLocation } from '../services/gpsService';
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
-import NoChildScreen from '@/components/common/NoChildScreen'
 import BackButton from '../components/common/BackButton'
 
 const MOCK_ROUTE = [
@@ -44,10 +43,7 @@ export default function Map() {
   const [studentEtas, setStudentEtas] = useState([]);
   const [isChildOnBoard, setIsChildOnBoard] = useState(null);
 
-  // 학부모인데 자녀 없으면 빈 화면
-  if (role === USER_ROLES.PARENT && (!user?.children || user.children.length === 0)) {
-    return <NoChildScreen message={'자녀를 등록하면\n실시간 위치를 확인할 수 있어요'} />
-  }
+  // 💡 자녀가 없어도 지도를 바로 확인할 수 있도록 NoChildScreen 차단 구문 제거
 
   const [portalContainer, setPortalContainer] = useState(null)
 
@@ -82,16 +78,18 @@ export default function Map() {
   }, [])
 
   const displayStations = routeData.stations.length > 0
-    ? routeData.stations
-    : MOCK_ROUTE.map((stop, i) => ({
-      stationId: stop.id,
-      stationName: stop.name,
-      sequence: i + 1,
-      status: i < currentStopIndex ? 'PASSED' : (i === currentStopIndex ? 'ARRIVING' : 'NOT_YET')
-    }));
+      ? routeData.stations
+      : MOCK_ROUTE.map((stop, i) => ({
+        stationId: stop.id,
+        stationName: stop.name,
+        sequence: i + 1,
+        status: i < currentStopIndex ? 'PASSED' : (i === currentStopIndex ? 'ARRIVING' : 'NOT_YET')
+      }));
 
   const activeStationIndex = displayStations.findIndex(s => s.status === 'ARRIVING');
   const activeIndex = activeStationIndex !== -1 ? activeStationIndex : currentStopIndex;
+
+  // 💡 구문 오류 수정 (12 - activeIndex * 3)
   const globalEta = Math.max(12 - activeIndex * 3, 0) + (isDelayed ? 5 : 0);
 
   useEffect(() => {
@@ -147,11 +145,8 @@ export default function Map() {
 
         try {
           const child = user?.children?.[0];
-          // DB의 숫자형 studentId를 우선으로 가져옵니다. (없을 경우 fallback으로 id 또는 1)
-          let childStudentId = child?.studentId || child?.studentId || child?.id || 1;
+          let childStudentId = child?.studentId || child?.id || 1;
 
-          // 방어 코드: 만약 식별자가 'child-1780556222654'와 같은 문자열 형태인 경우
-          // 백엔드 오류 방지를 위해 숫자 1로 대체합니다. (실제 운영 시에는 백엔드에서 부여받은 DB PK 사용)
           if (typeof childStudentId === 'string' && childStudentId.startsWith('child-')) {
             childStudentId = 1;
           }
@@ -267,177 +262,175 @@ export default function Map() {
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
-      {portalContainer && createPortal(
-        <BackButton
-          to="/home"
-          label=""
-          style={{ color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center' }}
-        />,
-        portalContainer
-      )}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
+        {portalContainer && createPortal(
+            <BackButton
+                to="/home"
+                label=""
+                style={{ color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center' }}
+            />,
+            portalContainer
+        )}
 
-      {errorMessage && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <style>{`@keyframes spinner-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-          <div style={{ background: 'white', padding: '24px', borderRadius: '16px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '80%' }}>
-            {errorMessage.includes('재연결') ? (
-              <div style={{ width: '36px', height: '36px', border: '4px solid #DBEAFE', borderTop: '4px solid #2563EB', borderRadius: '50%', animation: 'spinner-spin 1s linear infinite', marginBottom: '16px' }} />
-            ) : (
-              <span style={{ fontSize: '32px', display: 'block', marginBottom: '16px' }}>🚫</span>
-            )}
-            <p style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#111', lineHeight: '1.4', wordBreak: 'keep-all' }}>{errorMessage}</p>
-          </div>
-        </div>
-      )}
+        {errorMessage && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <style>{`@keyframes spinner-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+              <div style={{ background: 'white', padding: '24px', borderRadius: '16px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '80%' }}>
+                {errorMessage.includes('재연결') ? (
+                    <div style={{ width: '36px', height: '36px', border: '4px solid #DBEAFE', borderTop: '4px solid #2563EB', borderRadius: '50%', animation: 'spinner-spin 1s linear infinite', marginBottom: '16px' }} />
+                ) : (
+                    <span style={{ fontSize: '32px', display: 'block', marginBottom: '16px' }}>🚫</span>
+                )}
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#111', lineHeight: '1.4', wordBreak: 'keep-all' }}>{errorMessage}</p>
+              </div>
+            </div>
+        )}
 
+        {isDelayed && (
+            <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
+              <span>⚠️</span> 교통 혼잡으로 인해 예상 도착 시간이 5분 지연되고 있습니다.
+            </div>
+        )}
 
+        {(status === 'child_arrived' || isChildOnBoard === false) && (
+            <div style={{ background: '#ECFDF5', borderBottom: '1px solid #A7F3D0', color: '#047857', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
+              <span></span> 우리 아이 하차가 완료되었습니다.
+            </div>
+        )}
 
-      {isDelayed && (
-        <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
-          <span>⚠️</span> 교통 혼잡으로 인해 예상 도착 시간이 5분 지연되고 있습니다.
-        </div>
-      )}
+        {status === 'ended' && (
+            <div style={{ background: '#F3F4F6', borderBottom: '1px solid #D1D5DB', color: '#374151', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
+              <span></span> 차량 운행이 종료되었습니다.
+            </div>
+        )}
 
-      {(status === 'child_arrived' || isChildOnBoard === false) && (
-        <div style={{ background: '#ECFDF5', borderBottom: '1px solid #A7F3D0', color: '#047857', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
-          <span></span> 우리 아이 하차가 완료되었습니다.
-        </div>
-      )}
-
-      {status === 'ended' && (
-        <div style={{ background: '#F3F4F6', borderBottom: '1px solid #D1D5DB', color: '#374151', padding: '10px 20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 6 }}>
-          <span></span> 차량 운행이 종료되었습니다.
-        </div>
-      )}
-
-      <div style={{ background: isDelayed ? '#EF4444' : STATUS_CONFIG[status].bg, color: 'white', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 5, transition: 'background 0.3s ease' }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', animation: status === 'moving' ? 'pulse 1.5s ease-in-out infinite' : 'none' }} />
-        <span style={{ fontSize: 14, fontWeight: 600 }}>
+        <div style={{ background: isDelayed ? '#EF4444' : STATUS_CONFIG[status].bg, color: 'white', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 5, transition: 'background 0.3s ease' }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', animation: status === 'moving' ? 'pulse 1.5s ease-in-out infinite' : 'none' }} />
+          <span style={{ fontSize: 14, fontWeight: 600 }}>
           {status === 'moving' ? `이동 중 · ${displayStations[activeIndex]?.stationName || ''} 부근` : STATUS_CONFIG[status].label}
         </span>
-        <span style={{ fontSize: 12, opacity: 0.8, marginLeft: 'auto' }}>
+          <span style={{ fontSize: 12, opacity: 0.8, marginLeft: 'auto' }}>
           {status === 'moving' ? `종점 도착 ${globalEta}분 전` : STATUS_CONFIG[status].sub}
         </span>
-      </div>
-
-      <div style={{ flex: 1, minHeight: 400, background: '#E8F0FE', position: 'relative' }}>
-        <div ref={mapRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
-        <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 10 }}>
-          <button onClick={() => { setIsSheetOpen(true); setIsRouteSheetOpen(false); }} style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}>기사 정보 🚍</button>
-          <button onClick={() => { setIsRouteSheetOpen(true); setIsSheetOpen(false); }} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>전체 경로 🗺️</button>
         </div>
-      </div>
 
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, zIndex: 5 }}>
-        <div style={{ padding: '16px', background: 'white', borderRadius: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <p style={{ fontSize: 13, color: '#666', margin: 0, fontWeight: 600 }}>
-              실시간 노선 진행 상태
-              {updatedAt && <span style={{ marginLeft: 6, fontSize: 11, color: '#9CA3AF', fontWeight: 'normal' }}>({new Date(updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })})</span>}
-            </p>
-            <span style={{ background: '#FEF08A', color: '#A16207', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '800' }}>
+        <div style={{ flex: 1, minHeight: 400, background: '#E8F0FE', position: 'relative' }}>
+          <div ref={mapRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
+          <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 10 }}>
+            <button onClick={() => { setIsSheetOpen(true); setIsRouteSheetOpen(false); }} style={{ padding: '10px 14px', background: '#1A56DB', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, color: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }}>기사 정보 🚍</button>
+            <button onClick={() => { setIsRouteSheetOpen(true); setIsSheetOpen(false); }} style={{ padding: '10px 14px', background: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#333', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', cursor: 'pointer' }}>전체 경로 🗺️</button>
+          </div>
+        </div>
+
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, zIndex: 5 }}>
+          <div style={{ padding: '16px', background: 'white', borderRadius: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <p style={{ fontSize: 13, color: '#666', margin: 0, fontWeight: 600 }}>
+                실시간 노선 진행 상태
+                {updatedAt && <span style={{ marginLeft: 6, fontSize: 11, color: '#9CA3AF', fontWeight: 'normal' }}>({new Date(updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })})</span>}
+              </p>
+              <span style={{ background: '#FEF08A', color: '#A16207', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '800' }}>
               {user?.children?.[0]?.name ?? '자녀'} 하차 예정
             </span>
-          </div>
+            </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', paddingBottom: '12px' }}>
-            <div style={{ position: 'absolute', top: '7px', left: '10%', right: '10%', height: '3px', background: '#E5E7EB', zIndex: 0 }} />
-            {displayStations.map((stop, index) => {
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', paddingBottom: '12px' }}>
+              <div style={{ position: 'absolute', top: '7px', left: '10%', right: '10%', height: '3px', background: '#E5E7EB', zIndex: 0 }} />
+              {displayStations.map((stop, index) => {
+                const isPassed = stop.status === 'PASSED';
+                const isCurrent = stop.status === 'ARRIVING';
+                const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID;
+                const dotColor = isPassed ? '#10B981' : isCurrent ? '#3B82F6' : '#D1D5DB';
+                let etaText = '';
+                let etaColor = '#9CA3AF';
+                if (isPassed) { etaText = '통과'; }
+                else if (isCurrent) { etaText = '도착예정'; etaColor = '#3B82F6'; }
+                else {
+                  let mins = Math.max((index - activeIndex) * 3, 3);
+                  if (isDelayed) mins += 5;
+                  etaText = `${mins}분 후`;
+                  etaColor = isDelayed ? '#DC2626' : '#10B981';
+                  const matchedEta = studentEtas.find(eta => eta.stopId === stop.stationId);
+                  if (matchedEta) { etaText = `${matchedEta.etaMinutes}분 후`; if (matchedEta.lateRisk) { etaColor = '#DC2626'; etaText += ' 🚨'; } }
+                }
+                return (
+                    <div key={stop.stationId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, zIndex: 1, width: '20%' }}>
+                      <div style={{ width: isCurrent || isMyChildStop ? 16 : 12, height: isCurrent || isMyChildStop ? 16 : 12, borderRadius: '50%', background: isMyChildStop && !isPassed && !isCurrent ? '#FBBF24' : (isCurrent ? 'white' : dotColor), border: isCurrent ? `4px solid #3B82F6` : (isMyChildStop && !isPassed ? `4px solid #F59E0B` : `none`), boxShadow: isCurrent ? '0 0 0 4px rgba(59, 130, 246, 0.2)' : 'none', transition: 'all 0.3s ease' }} />
+                      <span style={{ fontSize: 11, color: isMyChildStop ? '#B45309' : (isCurrent ? '#111' : '#6B7280'), fontWeight: isCurrent || isMyChildStop ? 800 : 500, textAlign: 'center', wordBreak: 'keep-all', letterSpacing: '-0.5px' }}>{stop.stationName}</span>
+                      <span style={{ fontSize: '10px', fontWeight: '700', color: etaColor }}>{etaText}</span>
+                    </div>
+                )
+              })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
+              {[['이동거리', `${(activeIndex * 1.2).toFixed(1)}km`], ['종점 도착', `${globalEta}분`], ['현재속도', `${speed}km/h`]].map(([k, v]) => (
+                  <div key={k} style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, color: '#666' }}>{k}</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: '#111', marginTop: 4 }}>{v}</p>
+                  </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 기사 정보 바텀 시트 */}
+        <div style={{ position: 'absolute', bottom: isSheetOpen ? '0' : '-100%', left: '0', width: '100%', background: 'white', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', boxShadow: '0 -4px 16px rgba(0,0,0,0.15)', transition: 'bottom 0.3s ease-in-out', zIndex: 100, padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#111' }}>안심 통학 차량 정보</h3>
+            <button onClick={() => setIsSheetOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#9CA3AF', cursor: 'pointer', padding: '4px' }}>✕</button>
+          </div>
+          {driverInfo && (
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
+                <img src={driverInfo.photo} alt="기사님" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #E5E7EB' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', color: '#2563EB', fontWeight: '700', marginBottom: '2px' }}>{driverInfo.vehicleNumber}</div>
+                  <div style={{ fontSize: '20px', fontWeight: '800', color: '#111', marginBottom: '2px' }}>{driverInfo.driverName} 기사님</div>
+                  <div style={{ fontSize: '13px', color: '#6B7280' }}>{driverInfo.agency}</div>
+                </div>
+              </div>
+          )}
+          <a href={`tel:${driverInfo?.contact}`} style={{ display: 'block', width: '100%', padding: '14px', background: '#10B981', color: 'white', textAlign: 'center', borderRadius: '12px', fontSize: '16px', fontWeight: '700', textDecoration: 'none', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)' }}>
+            📞 기사님께 바로 전화걸기
+          </a>
+        </div>
+
+        {/* 전체 경로 노선도 바텀 시트 */}
+        <div style={{ position: 'absolute', bottom: isRouteSheetOpen ? '0' : '-100%', left: '0', width: '100%', background: 'white', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', boxShadow: '0 -4px 16px rgba(0,0,0,0.15)', transition: 'bottom 0.3s ease-in-out', zIndex: 100, padding: '24px', maxHeight: '60%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#111' }}>전체 운행 노선</h3>
+            <button onClick={() => setIsRouteSheetOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#9CA3AF', cursor: 'pointer', padding: '4px' }}>✕</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', paddingLeft: '8px', position: 'relative', paddingBottom: '20px' }}>
+            <div style={{ position: 'absolute', top: '12px', bottom: '32px', left: '19px', width: '4px', background: '#E5E7EB', zIndex: 0 }} />
+            {displayStations.map((stop) => {
               const isPassed = stop.status === 'PASSED';
               const isCurrent = stop.status === 'ARRIVING';
               const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID;
-              const dotColor = isPassed ? '#10B981' : isCurrent ? '#3B82F6' : '#D1D5DB';
-              let etaText = '';
-              let etaColor = '#9CA3AF';
-              if (isPassed) { etaText = '통과'; }
-              else if (isCurrent) { etaText = '도착예정'; etaColor = '#3B82F6'; }
-              else {
-                let mins = Math.max((index - activeIndex) * 3, 3);
-                if (isDelayed) mins += 5;
-                etaText = `${mins}분 후`;
-                etaColor = isDelayed ? '#DC2626' : '#10B981';
-                const matchedEta = studentEtas.find(eta => eta.stopId === stop.stationId);
-                if (matchedEta) { etaText = `${matchedEta.etaMinutes}분 후`; if (matchedEta.lateRisk) { etaColor = '#DC2626'; etaText += ' 🚨'; } }
-              }
               return (
-                <div key={stop.stationId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, zIndex: 1, width: '20%' }}>
-                  <div style={{ width: isCurrent || isMyChildStop ? 16 : 12, height: isCurrent || isMyChildStop ? 16 : 12, borderRadius: '50%', background: isMyChildStop && !isPassed && !isCurrent ? '#FBBF24' : (isCurrent ? 'white' : dotColor), border: isCurrent ? `4px solid #3B82F6` : (isMyChildStop && !isPassed ? `4px solid #F59E0B` : `none`), boxShadow: isCurrent ? '0 0 0 4px rgba(59, 130, 246, 0.2)' : 'none', transition: 'all 0.3s ease' }} />
-                  <span style={{ fontSize: 11, color: isMyChildStop ? '#B45309' : (isCurrent ? '#111' : '#6B7280'), fontWeight: isCurrent || isMyChildStop ? 800 : 500, textAlign: 'center', wordBreak: 'keep-all', letterSpacing: '-0.5px' }}>{stop.stationName}</span>
-                  <span style={{ fontSize: '10px', fontWeight: '700', color: etaColor }}>{etaText}</span>
-                </div>
-              )
-            })}
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
-            {[['이동거리', `${(activeIndex * 1.2).toFixed(1)}km`], ['종점 도착', `${globalEta}분`], ['현재속도', `${speed}km/h`]].map(([k, v]) => (
-              <div key={k} style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: 11, color: '#666' }}>{k}</p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: '#111', marginTop: 4 }}>{v}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 기사 정보 바텀 시트 */}
-      <div style={{ position: 'absolute', bottom: isSheetOpen ? '0' : '-100%', left: '0', width: '100%', background: 'white', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', boxShadow: '0 -4px 16px rgba(0,0,0,0.15)', transition: 'bottom 0.3s ease-in-out', zIndex: 100, padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#111' }}>안심 통학 차량 정보</h3>
-          <button onClick={() => setIsSheetOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#9CA3AF', cursor: 'pointer', padding: '4px' }}>✕</button>
-        </div>
-        {driverInfo && (
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-            <img src={driverInfo.photo} alt="기사님" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #E5E7EB' }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '13px', color: '#2563EB', fontWeight: '700', marginBottom: '2px' }}>{driverInfo.vehicleNumber}</div>
-              <div style={{ fontSize: '20px', fontWeight: '800', color: '#111', marginBottom: '2px' }}>{driverInfo.driverName} 기사님</div>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>{driverInfo.agency}</div>
-            </div>
-          </div>
-        )}
-        <a href={`tel:${driverInfo?.contact}`} style={{ display: 'block', width: '100%', padding: '14px', background: '#10B981', color: 'white', textAlign: 'center', borderRadius: '12px', fontSize: '16px', fontWeight: '700', textDecoration: 'none', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)' }}>
-          📞 기사님께 바로 전화걸기
-        </a>
-      </div>
-
-      {/* 전체 경로 노선도 바텀 시트 */}
-      <div style={{ position: 'absolute', bottom: isRouteSheetOpen ? '0' : '-100%', left: '0', width: '100%', background: 'white', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', boxShadow: '0 -4px 16px rgba(0,0,0,0.15)', transition: 'bottom 0.3s ease-in-out', zIndex: 100, padding: '24px', maxHeight: '60%', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#111' }}>전체 운행 노선</h3>
-          <button onClick={() => setIsRouteSheetOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#9CA3AF', cursor: 'pointer', padding: '4px' }}>✕</button>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', paddingLeft: '8px', position: 'relative', paddingBottom: '20px' }}>
-          <div style={{ position: 'absolute', top: '12px', bottom: '32px', left: '19px', width: '4px', background: '#E5E7EB', zIndex: 0 }} />
-          {displayStations.map((stop) => {
-            const isPassed = stop.status === 'PASSED';
-            const isCurrent = stop.status === 'ARRIVING';
-            const isMyChildStop = stop.stationId === MY_CHILD_STOP_ID;
-            return (
-              <div key={stop.stationId} style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', position: 'relative', zIndex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', marginRight: '16px' }}>
-                  {isCurrent ? <span style={{ fontSize: '18px' }}>🚌</span> : (
-                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: isPassed ? '#9CA3AF' : '#2563EB', border: isMyChildStop ? '2px solid #F59E0B' : 'none', boxShadow: isMyChildStop ? '0 0 0 2px #FEF08A' : 'none' }} />
-                  )}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '15px', fontWeight: isCurrent || isMyChildStop ? '800' : '500', color: isPassed ? '#9CA3AF' : (isCurrent ? '#3B82F6' : '#111') }}>{stop.stationName}</span>
-                  {isMyChildStop && (
-                    <span style={{ marginLeft: '8px', background: '#FEF08A', color: '#A16207', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
+                  <div key={stop.stationId} style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', position: 'relative', zIndex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', marginRight: '16px' }}>
+                      {isCurrent ? <span style={{ fontSize: '18px' }}>🚌</span> : (
+                          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: isPassed ? '#9CA3AF' : '#2563EB', border: isMyChildStop ? '2px solid #F59E0B' : 'none', boxShadow: isMyChildStop ? '0 0 0 2px #FEF08A' : 'none' }} />
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '15px', fontWeight: isCurrent || isMyChildStop ? '800' : '500', color: isPassed ? '#9CA3AF' : (isCurrent ? '#3B82F6' : '#111') }}>{stop.stationName}</span>
+                      {isMyChildStop && (
+                          <span style={{ marginLeft: '8px', background: '#FEF08A', color: '#A16207', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
                       {user?.children?.[0]?.name ?? '우리 아이'} 하차 정류장
                     </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: isCurrent ? '#FF3B3B' : (isPassed ? '#9CA3AF' : '#2563EB') }}>
-                  {isCurrent ? '도착예정' : (isPassed ? '통과' : '대기')}
-                </div>
-              </div>
-            );
-          })}
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: isCurrent ? '#FF3B3B' : (isPassed ? '#9CA3AF' : '#2563EB') }}>
+                      {isCurrent ? '도착예정' : (isPassed ? '통과' : '대기')}
+                    </div>
+                  </div>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
   )
 }
 
