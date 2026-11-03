@@ -92,8 +92,10 @@ export default function EditProfile() {
     return `${raw.slice(0, 3)}-${raw.slice(3, 5)}-${raw.slice(5)}`
   }
 
+  // 💡 form 상태에 nickname 및 name 분리 지정
   const [form, setForm] = useState({
     name: user?.name ?? '',
+    nickname: user?.nickname ?? '',
     email: user?.email ?? '',
     phone: user?.phoneNumber ?? user?.phone ?? '',
     children: [],
@@ -110,9 +112,11 @@ export default function EditProfile() {
         .getMyProfile()
         .then((res) => {
           const userData = res?.data ?? res ?? {}
+          // 💡 userData.nickname과 userData.name을 혼용하지 않고 각각 매핑
           setForm((prev) => ({
             ...prev,
-            name: userData.name ?? userData.nickname ?? user?.name ?? prev.name,
+            name: userData.name ?? user?.name ?? prev.name,
+            nickname: userData.nickname ?? user?.nickname ?? prev.nickname,
             email: userData.email ?? user?.email ?? prev.email,
             phone: userData.phoneNumber ?? userData.phone ?? user?.phoneNumber ?? user?.phone ?? prev.phone,
           }))
@@ -141,7 +145,6 @@ export default function EditProfile() {
                 }),
               }))
             } else {
-              // 자녀가 0명일 때는 빈 배열로 설정 (필수 추가 안 함)
               setForm((prev) => ({ ...prev, children: [] }))
             }
           })
@@ -181,7 +184,6 @@ export default function EditProfile() {
     setErrors((prev) => ({ ...prev, children: '' }))
   }
 
-  // 자녀 삭제 (0명까지 완전 삭제 허용)
   const removeChild = async (childId) => {
     const targetChild = form.children.find((child) => child.id === childId)
     if (!targetChild) return
@@ -268,54 +270,15 @@ export default function EditProfile() {
     }))
   }
 
-  const updateManagedAcademy = (academyId, key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      academies: prev.academies.map((academy) =>
-          academy.id === academyId
-              ? { ...academy, [key]: key === 'businessNumber' ? formatBusinessNumber(value) : value }
-              : academy
-      ),
-    }))
-
-    setErrors((prev) => ({
-      ...prev,
-      [`${academyId}-${key}`]: '',
-      academies: '',
-    }))
-  }
-
-  const addManagedAcademy = () => {
-    setForm((prev) => ({
-      ...prev,
-      academies: [...(prev.academies ?? []), makeDefaultAcademy()],
-    }))
-    setErrors((prev) => ({ ...prev, academies: '' }))
-  }
-
-  const removeManagedAcademy = (academyId) => {
-    if ((form.academies ?? []).length <= 1) {
-      setErrors((prev) => ({ ...prev, academies: '관리 학원은 최소 1개 이상 필요합니다' }))
-      return
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      academies: (prev.academies ?? []).filter((academy) => academy.id !== academyId),
-    }))
-    setErrors((prev) => ({ ...prev, academies: '' }))
-  }
-
-  // 자녀가 0명이어도 저장 가능하도록 조건 완화
   const validate = () => {
     const nextErrors = {}
 
     if (!form.name.trim()) nextErrors.name = '이름을 입력해 주세요'
+    if (!form.nickname.trim()) nextErrors.nickname = '닉네임을 입력해 주세요'
     if (!form.email.includes('@')) nextErrors.email = '올바른 이메일을 입력해 주세요'
     if (form.phone.replace(/\D/g, '').length < 10) nextErrors.phone = '올바른 전화번호를 입력해 주세요'
 
     if (user?.role === USER_ROLES.PARENT) {
-      // 💡 자녀가 입력 필드에 등록되어 있을 때만 유효성 검증
       if (form.children && form.children.length > 0) {
         form.children.forEach((child) => {
           if (!child.name.trim()) {
@@ -363,6 +326,7 @@ export default function EditProfile() {
     try {
       const updated = {
         name: form.name.trim(),
+        nickname: form.nickname.trim(), // 💡 닉네임 저장 반영
         email: form.email.trim(),
         phone: form.phone.trim(),
         phoneNumber: form.phone.trim(),
@@ -429,6 +393,12 @@ export default function EditProfile() {
           </div>
 
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* 💡 닉네임 입력 필드 */}
+            <Field label="닉네임" error={errors.nickname}>
+              <input className="input-field" value={form.nickname} onChange={(e) => update('nickname', e.target.value)} placeholder="닉네임을 입력해 주세요" />
+            </Field>
+
+            {/* 💡 이름 입력 필드 */}
             <Field label="이름" error={errors.name}>
               <input className="input-field" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="이름을 입력해 주세요" />
             </Field>
