@@ -1,6 +1,10 @@
 import { apiCall } from './client'
 
 export const wrongAnswerAPI = {
+  getAll: (studentId, subject) => {
+    const query = subject ? `?${new URLSearchParams({ subject })}` : ''
+    return apiCall(`/api/wrong-answer/${encodeURIComponent(studentId)}${query}`)
+  },
   // 4-1. 오답 기록
   record: ({ studentId, subject, questionId, conceptTag, errorType }) => {
     const params = new URLSearchParams({

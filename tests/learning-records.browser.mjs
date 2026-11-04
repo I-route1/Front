@@ -1,0 +1,192 @@
+// 서버/학생 데이터는 이 프로세스 안의 fixtures만 사용한다. 운영 서버에는 요청하지 않는다.
+import test, { before, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { chromium } from 'playwright'
+import { mkdir } from 'node:fs/promises'
+
+const BASE = 'http://127.0.0.1:4178'
+let server, browser
+let serverOutput = ''
+const children = [{ studentId: 14, id: 914, name: '연결검증학생', grade: '중1' },
+  { studentId: 15, id: 915, name: '다른학생', grade: '중2' }]
+const wrong = [{ id: 1, studentId: 14, subject: '국어', questionId: '국어-1', conceptTag: '받침', errorType: 'MEMORIZATION_GAP', failCount: 2, createdAt: '2026-11-04T10:00:00' },
+  { id: 2, studentId: 14, subject: '수학', questionId: '수학-1', conceptTag: '함수', errorType: 'CONCEPT_GAP', failCount: 1 }]
+const ocr = [{ id: 1, studentId: 14, subject: '국어', totalQuestions: 2, correctCount: 1, gradedAt: '2026-11-04T01:00:00Z', questions: [
+  { questionId: '국어-1', expectedAnswer: '돼지', recognizedText: '되지', correct: false, similarity: 0.5, conceptTag: '받침' },
+  { questionId: '국어-2', expectedAnswer: '수박', recognizedText: '수박', correct: true, similarity: 1, conceptTag: '명사' },
+] }]
+const camera = { id: 1, subject: '국어', studyDate: '2026-11-04', studyStartTime: '10:00:00', studyDurationMinutes: 30,
+  concentrationScore: 5, understandingScore: 4, measurementSource: 'CAMERA', focusedRatio: 1, drowsyRatio: 0 }
+
+before(async () => {
+  server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4178', '--strictPort'], {
+    cwd: process.cwd(), env: { ...process.env, VITE_API_URL: BASE }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  server.stdout.on('data', chunk => { serverOutput += chunk })
+  server.stderr.on('data', chunk => { serverOutput += chunk })
+  const deadline = Date.now() + 30_000
+  while (true) {
+    try { if ((await fetch(BASE)).ok) break } catch {}
+    if (Date.now() > deadline) throw new Error(`Vite startup failed: ${serverOutput}`)
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
+  browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  await mkdir('test-results', { recursive: true })
+})
+after(async () => { await browser?.close(); server?.kill() })
+
+async function openPage(options = {}) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  // 지도 SDK·외부 폰트가 테스트 시작을 막거나 외부 서버로 요청하지 않게 한다.
+  await context.route('**/*', route => new URL(route.request().url()).origin === BASE
+    ? route.continue()
+    : route.fulfill({ status: 200, contentType: route.request().resourceType() === 'stylesheet' ? 'text/css' : 'application/javascript', body: '' }))
+  const page = await context.newPage()
+  page.setDefaultTimeout(10_000)
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  const state = { requests: [], activities: options.camera ? [camera] : [], fail: false, ...options }
+  await context.addInitScript(role => {
+    sessionStorage.setItem('i-route-user', JSON.stringify({ id: 700, name: '테스트 계정', role, token: 'test-token', children: [] }))
+  }, options.role || 'PARENT')
+  await page.route(`${BASE}/api/**`, async route => {
+    const req = route.request(), url = new URL(req.url()), path = url.pathname
+    state.requests.push({ path, query: url.search, method: req.method(), body: req.postDataJSON(), auth: req.headers().authorization })
+    const respond = (json, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) })
+    if (path === '/api/students/my-children' || path === '/api/students/academy/students') return respond(children)
+    if (path.startsWith('/api/wrong-answer/')) {
+      if (state.delay && path.endsWith('/14')) await state.delay
+      if (state.fail) return respond({ error: '오답 서버 응답 실패' }, 503)
+      return respond(path.endsWith('/14') && !state.empty ? wrong : [])
+    }
+    if (path === '/api/ocr-results') {
+      if (state.delay && url.searchParams.get('studentId') === '14') await state.delay
+      return respond(url.searchParams.get('studentId') === '14' && !state.empty ? ocr : [])
+    }
+    if (path === '/api/activities' && req.method() === 'POST') {
+      const body = req.postDataJSON()
+      const saved = { ...body, id: state.activities.length + 10 }
+      state.activities.push(saved)
+      return respond(saved)
+    }
+    if (path.startsWith('/api/activities/')) return respond(path.endsWith('/14') ? state.activities : [])
+    if (path === '/api/analysis/meta-cognition') return respond({ error: '분석 데이터가 부족합니다.' }, 400)
+    if (path.includes('study-pattern')) return respond({ goldenTime: '데이터 없음', subjectStudyMinutes: {} })
+    if (path.includes('strengths')) return respond({ strongSubjectIds: [] })
+    if (path.includes('risk')) return respond({ atRisk: false })
+    if (path.startsWith('/api/grades/')) return respond([])
+    return respond([])
+  })
+  return { page, context, state, errors }
+}
+
+test('학부모 성적 화면에서 학생별 오답·OCR 인식 글자·과목 필터를 사용한다', async () => {
+  const { page, context, state, errors } = await openPage()
+  try {
+    await page.goto(`${BASE}/learning?tab=grade`)
+    const records = page.getByRole('region', { name: '오답 및 OCR 채점 기록' })
+    await records.getByText('국어 · 국어-1', { exact: true }).waitFor()
+    await records.getByText('국어 · 1 / 2문항 정답', { exact: true }).click()
+    await records.getByText('되지', { exact: true }).waitFor()
+    await records.getByText('돼지', { exact: true }).waitFor()
+    await page.getByLabel('기록 과목').selectOption('수학')
+    assert.equal(await records.getByText('국어 · 국어-1', { exact: true }).count(), 0)
+    await records.getByText('수학 · 수학-1', { exact: true }).waitFor()
+    assert(state.requests.some(r => r.path === '/api/wrong-answer/14' && r.auth === 'Bearer test-token'))
+    assert(state.requests.some(r => r.path === '/api/ocr-results' && r.query === '?studentId=14'))
+    assert(!state.requests.some(r => /914|700/.test(r.path)))
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/learning-records.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('직접 입력 자기평가 저장·재조회·메타인지 분석 실패를 처리한다', async () => {
+  const { page, context, state, errors } = await openPage({ empty: true })
+  try {
+    await page.goto(`${BASE}/learning?tab=pattern`)
+    await page.getByText('아직 카메라 측정 기록이 없어요.', { exact: false }).waitFor()
+    await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.getByText('학습일, 학습 시간(1분 이상), 이해도와 집중도를 입력해 주세요.', { exact: true }).waitFor()
+    assert.equal(state.requests.filter(r => r.method === 'POST').length, 0)
+    await page.getByRole('button', { name: '이해도 4점', exact: true }).click()
+    await page.getByRole('button', { name: '집중도 3점', exact: true }).click()
+    await page.getByLabel('학습 과목').selectOption('국어')
+    await page.getByLabel('학습 시간 (분)').fill('25')
+    await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.getByText('자기평가가 직접 입력 기록으로 저장되었습니다.', { exact: true }).waitFor()
+    await page.getByText('직접 입력', { exact: true }).waitFor()
+    const post = state.requests.find(r => r.path === '/api/activities' && r.method === 'POST')
+    assert.equal(post.body.studentId, 14)
+    assert.equal(post.body.subject, '국어')
+    assert.equal(post.body.studyDurationMinutes, 25)
+    assert.equal(post.body.measurementSource, 'MANUAL')
+    assert.equal(post.body.concentrationScore, 3)
+    assert.equal(post.body.focusedRatio, undefined)
+    await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.getByRole('button', { name: '🧠 AI 메타인지 분석', exact: true }).click()
+    await page.getByRole('alert').getByText('분석 데이터가 부족합니다.', { exact: true }).waitFor()
+    assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 1)
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/attention-manual.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('카메라 집중 100%·졸음 0%와 출처를 표시한다', async () => {
+  const { page, context, errors } = await openPage({ camera: true })
+  try {
+    await page.goto(`${BASE}/learning?tab=pattern`)
+    const records = page.getByRole('region', { name: '집중도 측정 기록' })
+    await records.getByText('카메라 측정', { exact: true }).waitFor()
+    await records.getByText('집중 100%', { exact: true }).waitFor()
+    await records.getByText('졸음 0%', { exact: true }).waitFor()
+    assert.equal(await records.getByText('아직 카메라 측정 기록이 없어요.', { exact: false }).count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('자녀 전환 뒤 이전 학생의 늦은 응답이 화면을 덮어쓰지 않는다', async () => {
+  let release
+  const delay = new Promise(resolve => { release = resolve })
+  const { page, context, state, errors } = await openPage({ delay })
+  try {
+    await page.goto(`${BASE}/learning?tab=grade`)
+    await page.getByRole('button', { name: '다음 자녀', exact: true }).click()
+    const records = page.getByRole('region', { name: '오답 및 OCR 채점 기록' })
+    await records.getByText('아직 저장된 오답이 없어요.', { exact: true }).waitFor()
+    const oldResponse = page.waitForResponse(r => r.url().includes('/api/ocr-results?studentId=14'))
+    release()
+    await oldResponse
+    assert.equal(await records.getByText('국어 · 국어-1', { exact: true }).count(), 0)
+    assert(state.requests.some(r => r.path === '/api/wrong-answer/15'))
+    assert.deepEqual(errors, [])
+  } finally { release(); await context.close() }
+})
+
+test('조회 오류는 빈 기록과 구분하고 다시 불러올 수 있다', async () => {
+  const { page, context, state } = await openPage({ fail: true })
+  try {
+    await page.goto(`${BASE}/learning?tab=grade`)
+    await page.getByRole('alert').getByText('오답 서버 응답 실패', { exact: true }).waitFor()
+    state.fail = false
+    await page.getByRole('button', { name: '다시 불러오기', exact: true }).click()
+    await page.getByText('국어 · 국어-1', { exact: true }).waitFor()
+  } finally { await context.close() }
+})
+
+test('학원 학생 상세와 피드백에서도 같은 학생의 실데이터를 확인한다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', camera: true })
+  try {
+    await page.goto(`${BASE}/admin/learning`)
+    await page.getByRole('button', { name: '👥 학생관리', exact: true }).click()
+    await page.getByText('연결검증학생', { exact: true }).click()
+    await page.getByText('국어 · 국어-1', { exact: true }).waitFor()
+    await page.getByRole('button', { name: /^🧠\s*패턴$/ }).click()
+    await page.getByText('카메라 측정', { exact: true }).waitFor()
+    await page.getByRole('button', { name: '📝 피드백', exact: true }).click()
+    await page.locator('select').selectOption('14')
+    await page.getByText('졸음 0%', { exact: true }).waitFor()
+    assert(state.requests.some(r => r.path === '/api/activities/14'))
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})

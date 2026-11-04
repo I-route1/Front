@@ -3,11 +3,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
-import { analysisAPI } from '@/api'
+import { analysisAPI, activitiesAPI } from '@/api'
 import { SUBJECTS } from '../../data/mockData'
+import useStudentRecords from '@/hooks/useStudentRecords'
+import AttentionRecords from '@/components/learning/AttentionRecords'
+import { hourlyConcentration } from '@/components/learning/recordUtils'
 
 export default function PatternPanel({ student }) {
-  const [studyPattern, setStudyPattern] = useState(null)
+  const activityRecords = useStudentRecords(student?.studentId ?? student?.id, activitiesAPI.getActivities)
   const [metaCognition, setMetaCognition] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectedSubject, setSelectedSubject] = useState('수학')
@@ -27,8 +30,7 @@ export default function PatternPanel({ student }) {
         console.error('메타인지 조회 실패:', e); return null 
       }),
     ])
-      .then(([patternData, metaData]) => {
-        setStudyPattern(patternData)
+      .then(([, metaData]) => {
         setMetaCognition(metaData)
       })
       .finally(() => setLoading(false))
@@ -44,25 +46,7 @@ export default function PatternPanel({ student }) {
   
   // 시간대별 데이터 가공
   // 응답 형식 불확실해서 여러 케이스 대비
-  const hourlyData = (() => {
-    if (!studyPattern) return []
-    
-    // 케이스 1: { hourlyFocus: [{hour, focus}, ...] }
-    if (Array.isArray(studyPattern.hourlyFocus)) return studyPattern.hourlyFocus
-    
-    // 케이스 2: { focusByHour: { "8": 60, "9": 75, ... } }
-    if (studyPattern.focusByHour) {
-      return Object.entries(studyPattern.focusByHour).map(([hour, focus]) => ({
-        time: `${hour}시`,
-        focus: Number(focus),
-      }))
-    }
-    
-    // 케이스 3: 그냥 배열
-    if (Array.isArray(studyPattern)) return studyPattern
-    
-    return []
-  })()
+  const hourlyData = hourlyConcentration(activityRecords.data)
   
   const goldenHour = hourlyData.length > 0
     ? hourlyData.reduce((a, b) => (a.focus > b.focus ? a : b), hourlyData[0])
@@ -70,6 +54,7 @@ export default function PatternPanel({ student }) {
   
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <AttentionRecords records={activityRecords} />
       
       {/* 1. 골든타임 강조 */}
       {goldenHour && (
@@ -97,7 +82,7 @@ export default function PatternPanel({ student }) {
       {hourlyData.length > 0 ? (
         <div>
           <p style={{ fontSize:12, fontWeight:700, color:'var(--color-text-secondary)', marginBottom:8 }}>
-            🕐 시간대별 집중도
+            🕐 시간대별 집중도 (별점 환산 · 100점)
           </p>
           <div style={{ background:'var(--color-surface)', borderRadius:10, padding:12, border:'1px solid var(--color-border)' }}>
             <ResponsiveContainer width="100%" height={170}>
@@ -150,7 +135,7 @@ export default function PatternPanel({ student }) {
               key={subject}
               onClick={() => setSelectedSubject(subject)}
               style={{
-                padding:'5px 12px', borderRadius:20, border:'none',
+                padding:'5px 12px', borderRadius:20,
                 fontSize:11, fontWeight:600, fontFamily:'inherit',
                 cursor:'pointer',
                 background: selectedSubject === subject ? 'var(--color-primary)' : 'var(--color-surface)',
