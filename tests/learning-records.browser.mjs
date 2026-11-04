@@ -58,16 +58,19 @@ async function openPage(options = {}) {
     if (path.startsWith('/api/wrong-answer/')) {
       if (state.delay && path.endsWith('/14')) await state.delay
       if (state.fail) return respond({ error: '오답 서버 응답 실패' }, 503)
-      return respond(path.endsWith('/14') && !state.empty ? wrong : [])
+      return respond(path.endsWith('/14') && !state.empty ? (state.wrong || wrong) : [])
     }
     if (path === '/api/ocr-results') {
       if (state.delay && url.searchParams.get('studentId') === '14') await state.delay
-      return respond(url.searchParams.get('studentId') === '14' && !state.empty ? ocr : [])
+      return respond(url.searchParams.get('studentId') === '14' && !state.empty ? (state.ocr || ocr) : [])
     }
     if (path === '/api/activities' && req.method() === 'POST') {
       const body = req.postDataJSON()
+      const existing = state.activities.find(a => a.submissionId === body.submissionId)
+      if (existing) return respond(existing)
       const saved = { ...body, id: state.activities.length + 10 }
       state.activities.push(saved)
+      if (state.loseSaveResponse) { state.loseSaveResponse = false; return route.abort('connectionreset') }
       return respond(saved)
     }
     if (path.startsWith('/api/activities/')) return respond(path.endsWith('/14') ? state.activities : [])
@@ -145,6 +148,54 @@ test('카메라 집중 100%·졸음 0%와 출처를 표시한다', async () => {
   } finally { await context.close() }
 })
 
+test('저장 응답 유실·재시도·새로고침에도 동일 자기평가가 하나만 남고 입력 시각을 보존한다', async () => {
+  const { page, context, state } = await openPage({ loseSaveResponse: true })
+  const fill = async () => {
+    await page.getByRole('button', { name: '이해도 5점', exact: true }).click()
+    await page.getByRole('button', { name: '집중도 1점', exact: true }).click()
+    await page.getByLabel('학습일', { exact: true }).fill('2026-11-05')
+    await page.getByLabel('학습 시작 시각').fill('10:17')
+    await page.getByLabel('학습 시간 (분)').fill('8')
+  }
+  try {
+    await page.goto(`${BASE}/learning?tab=pattern`)
+    await fill()
+    await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.getByText('Failed to fetch', { exact: true }).waitFor()
+    await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.getByText('자기평가가 직접 입력 기록으로 저장되었습니다.', { exact: true }).waitFor()
+    assert.equal(state.activities.length, 1)
+    assert.equal(state.activities[0].studyStartTime, '10:17:00')
+    await page.reload()
+    await fill()
+    await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.getByText('자기평가가 직접 입력 기록으로 저장되었습니다.', { exact: true }).waitFor()
+    assert.equal(state.activities.length, 1)
+    const posts = state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST')
+    assert.equal(posts.length, 3)
+    assert.equal(new Set(posts.map(p => p.body.submissionId)).size, 1)
+  } finally { await context.close() }
+})
+
+test('비정상 학습 시간은 전송하지 않고 허용 최대값은 저장한다', async () => {
+  const { page, context, state } = await openPage()
+  try {
+    await page.goto(`${BASE}/learning?tab=pattern`)
+    await page.getByRole('button', { name: '이해도 1점', exact: true }).click()
+    await page.getByRole('button', { name: '집중도 5점', exact: true }).click()
+    for (const duration of ['0', '-1', '1.5', '1441', '']) {
+      await page.getByLabel('학습 시간 (분)').fill(duration)
+      await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+      await page.getByText('학습일, 학습 시간(1분 이상), 이해도와 집중도를 입력해 주세요.', { exact: true }).waitFor()
+    }
+    assert.equal(state.activities.length, 0)
+    await page.getByLabel('학습 시간 (분)').fill('1440')
+    await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.getByText('자기평가가 직접 입력 기록으로 저장되었습니다.', { exact: true }).waitFor()
+    assert.equal(state.activities[0].studyDurationMinutes, 1440)
+  } finally { await context.close() }
+})
+
 test('자녀 전환 뒤 이전 학생의 늦은 응답이 화면을 덮어쓰지 않는다', async () => {
   let release
   const delay = new Promise(resolve => { release = resolve })
@@ -171,6 +222,35 @@ test('조회 오류는 빈 기록과 구분하고 다시 불러올 수 있다', 
     state.fail = false
     await page.getByRole('button', { name: '다시 불러오기', exact: true }).click()
     await page.getByText('국어 · 국어-1', { exact: true }).waitFor()
+  } finally { await context.close() }
+})
+
+test('많은 기록·1000문항·긴 인식 글자를 나누어 표시하며 HTML은 문자로 표시한다', async () => {
+  const text = '<img src=x onerror="window.bad=true">' + '긴글'.repeat(3000)
+  const questions = Array.from({ length: 1000 }, (_, i) => ({ questionId: `Q${i}`, expectedAnswer: '정답',
+    recognizedText: i === 0 ? text : '', correct: false, similarity: 0, conceptTag: '검증' }))
+  const { page, context, errors } = await openPage({
+    wrong: Array.from({ length: 150 }, (_, i) => ({ ...wrong[0], id: i + 1, questionId: `W${i}` })),
+    ocr: Array.from({ length: 30 }, (_, i) => ({ ...ocr[0], id: i + 1, questions, correctCount: 0, totalQuestions: 1000 })),
+  })
+  try {
+    await page.goto(`${BASE}/learning?tab=grade`)
+    const records = page.getByRole('region', { name: '오답 및 OCR 채점 기록' })
+    await records.getByText('국어 · W0', { exact: true }).waitFor()
+    assert.equal(await records.locator('details').count(), 20)
+    assert.equal(await records.locator('.ocr-question').count(), 0)
+    await records.getByRole('button', { name: '채점 결과 더 보기', exact: true }).click()
+    assert.equal(await records.locator('details').count(), 30)
+    const details = records.locator('details').first()
+    await details.locator('summary').click()
+    await details.getByText(text, { exact: true }).waitFor()
+    assert.equal(await details.locator('.ocr-question').count(), 50)
+    assert.equal(await details.locator('img').count(), 0)
+    await details.getByRole('button', { name: /문항 더 보기/ }).click()
+    assert.equal(await details.locator('.ocr-question').count(), 100)
+    await records.getByRole('button', { name: '오답 더 보기', exact: true }).click()
+    await records.getByText('국어 · W99', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
   } finally { await context.close() }
 })
 

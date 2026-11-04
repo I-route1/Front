@@ -8,6 +8,8 @@ export default function LearningResults({ studentId }) {
   const wrong = useStudentRecords(studentId, wrongAnswerAPI.getAll)
   const ocr = useStudentRecords(studentId, ocrResultsAPI.getAll)
   const [subject, setSubject] = useState('')
+  const [wrongLimit, setWrongLimit] = useState(50)
+  const [ocrLimit, setOcrLimit] = useState(20)
   const subjects = [...new Set([...wrong.data, ...ocr.data].map(row => row.subject).filter(Boolean))]
   const wrongRows = wrong.data.filter(row => !subject || row.subject === subject)
   const ocrRows = ocr.data.filter(row => !subject || row.subject === subject)
@@ -35,12 +37,13 @@ export default function LearningResults({ studentId }) {
             </div>
             <p className="record-hint">문항 {wrongRows.length}개 · 유형별 횟수는 반복 오답을 포함합니다.</p>
             <div className="record-scroll">
-              {wrongRows.map(row => <article className="record-item" key={row.id}>
+              {wrongRows.slice(0, wrongLimit).map(row => <article className="record-item" key={row.id}>
                 <div className="record-heading"><strong>{row.subject} · {row.questionId}</strong><span>{row.failCount}회 오답</span></div>
                 <p>{row.conceptTag} · {errorTypeLabel(row.errorType)}</p>
                 <small>{row.createdAt?.replace('T', ' ').slice(0, 16)}</small>
               </article>)}
             </div>
+            {wrongRows.length > wrongLimit && <button onClick={() => setWrongLimit(n => n + 50)}>오답 더 보기</button>}
           </>}
       </div>
       <div className="record-card" aria-label="OCR 채점 결과">
@@ -48,7 +51,8 @@ export default function LearningResults({ studentId }) {
         {ocr.loading ? <p role="status">채점 결과를 불러오는 중...</p>
           : ocr.error ? <RecordError message={ocr.error} retry={ocr.reload} />
           : ocrRows.length === 0 ? <p className="record-empty">아직 저장된 OCR 채점 결과가 없어요. 채점 결과가 전송되면 여기에 표시됩니다.</p>
-          : ocrRows.map(row => <OcrResult key={row.id} result={row} />)}
+          : <>{ocrRows.slice(0, ocrLimit).map(row => <OcrResult key={row.id} result={row} />)}
+            {ocrRows.length > ocrLimit && <button onClick={() => setOcrLimit(n => n + 20)}>채점 결과 더 보기</button>}</>}
       </div>
     </section>
   )
@@ -59,18 +63,22 @@ export function RecordError({ message, retry }) {
 }
 
 function OcrResult({ result }) {
-  return <details className="record-item">
+  const [open, setOpen] = useState(false)
+  const [limit, setLimit] = useState(50)
+  const questions = result.questions || []
+  return <details className="record-item" onToggle={e => setOpen(e.currentTarget.open)}>
     <summary>
       <strong>{result.subject} · {result.correctCount} / {result.totalQuestions}문항 정답</strong>
       <span>{result.gradedAt ? new Date(result.gradedAt).toLocaleString('ko-KR') : ''}</span>
     </summary>
-    <div className="ocr-questions">
-      {(result.questions || []).map(question => <div key={question.questionId} className="ocr-question">
+    {open && <div className="ocr-questions">
+      {questions.slice(0, limit).map(question => <div key={question.questionId} className="ocr-question">
         <div className="record-heading"><strong>문항 {question.questionId}</strong><span className={question.correct ? 'record-correct' : 'record-incorrect'}>{question.correct ? '정답' : '오답'}</span></div>
         <dl><dt>인식된 글자</dt><dd>{question.recognizedText === '' ? '인식된 글자 없음' : question.recognizedText}</dd>
           <dt>정답</dt><dd>{question.expectedAnswer}</dd></dl>
         <p>{question.conceptTag} · 유사도 {Math.round(question.similarity * 100)}%</p>
       </div>)}
-    </div>
+      {questions.length > limit && <button onClick={() => setLimit(n => n + 50)}>문항 더 보기 ({Math.min(limit, questions.length)}/{questions.length})</button>}
+    </div>}
   </details>
 }
