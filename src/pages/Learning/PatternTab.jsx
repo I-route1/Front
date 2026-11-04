@@ -11,6 +11,7 @@ import { useAuth, isAcademy } from '@/context/AuthContext'
 import useStudentRecords from '@/hooks/useStudentRecords'
 import AttentionRecords from '@/components/learning/AttentionRecords'
 import { hourlyConcentration, localStudyDate } from '@/components/learning/recordUtils'
+import { evaluationSubmissionId } from '@/components/learning/evaluationSubmission'
 
 // subjectId → 과목명 매핑 (백엔드 확인 후 보정 필요)
 const SUBJECT_NAME_BY_ID = {
@@ -134,7 +135,7 @@ export default function PatternTab({ studentId: propStudentId }) {
 
   const saveEvaluation = async () => {
     if (!effectiveId || !selfEval.이해도 || !selfEval.집중도 || !studyDate || !startTime
-        || !Number.isInteger(Number(duration)) || Number(duration) < 1) {
+        || !Number.isInteger(Number(duration)) || Number(duration) < 1 || Number(duration) > 1440) {
       throw new Error('학습일, 학습 시간(1분 이상), 이해도와 집중도를 입력해 주세요.')
     }
     const payload = {
@@ -145,7 +146,8 @@ export default function PatternTab({ studentId: propStudentId }) {
     }
     const signature = JSON.stringify(payload)
     if (savedEvaluation.current?.signature === signature) return savedEvaluation.current.activity
-    const activity = await activitiesAPI.postActivity(payload)
+    const submissionId = await evaluationSubmissionId(payload)
+    const activity = await activitiesAPI.postActivity({ ...payload, submissionId })
     if (!activity?.id) throw new Error('학습 기록을 저장하지 못했습니다.')
     savedEvaluation.current = { signature, activity }
     activityRecords.reload()
@@ -308,7 +310,7 @@ export default function PatternTab({ studentId: propStudentId }) {
             <label>학습 과목<select value={activitySubject} onChange={e => setActivitySubject(e.target.value)}>{SUBJECTS.map(s => <option key={s}>{s}</option>)}</select></label>
             <label>학습일<input type="date" value={studyDate} onChange={e => setStudyDate(e.target.value)} /></label>
             <label>학습 시작 시각<input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></label>
-            <label>학습 시간 (분)<input type="number" min="1" step="1" value={duration} onChange={e => setDuration(e.target.value)} /></label>
+            <label>학습 시간 (분)<input type="number" min="1" max="1440" step="1" value={duration} onChange={e => setDuration(e.target.value)} /></label>
           </div>
           <button type="button" disabled={evaluationSaving || metaLoading} onClick={handleEvaluationSave}
             style={{ width:'100%', marginTop:14, padding:12, borderRadius:10, border:'none', background:'var(--color-primary)', color:'white', fontWeight:700, cursor:'pointer' }}>
