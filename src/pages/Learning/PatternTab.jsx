@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 import {
-  SUBJECTS, GOLDEN_TIME_DATA, WEAK_AREAS,
+  SUBJECTS,
 } from './data/mockData'
 import { activitiesAPI, analysisAPI, gradesAPI } from '@/api'
 import { useAuth, isAcademy } from '@/context/AuthContext'
+import useStudentRecords from '@/hooks/useStudentRecords'
+import AttentionRecords from '@/components/learning/AttentionRecords'
+import { hourlyConcentration, localStudyDate } from '@/components/learning/recordUtils'
 
 // subjectId → 과목명 매핑 (백엔드 확인 후 보정 필요)
 const SUBJECT_NAME_BY_ID = {
@@ -29,16 +32,22 @@ const SUBJECT_BADGE_COLOR = {
   '과학탐구': '#4ECDC4',
 }
 
-export default function PatternTab({ studentId: propStudentId, selectedChild }) {
+export default function PatternTab({ studentId: propStudentId }) {
   const { user } = useAuth()
   const effectiveId = propStudentId ?? user?.id
-  const gradeKey = selectedChild?.id ?? selectedChild?.studentId ?? effectiveId
+  const gradeKey = effectiveId
+  const activityRecords = useStudentRecords(effectiveId, activitiesAPI.getActivities)
+  const hourlyData = useMemo(() => hourlyConcentration(activityRecords.data), [activityRecords.data])
+  const [activitySubject, setActivitySubject] = useState('수학')
+  const [duration, setDuration] = useState(60)
+  const [studyDate, setStudyDate] = useState(localStudyDate)
+  const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5))
+  const [evaluationSaving, setEvaluationSaving] = useState(false)
+  const [evaluationMessage, setEvaluationMessage] = useState('')
+  const [metaError, setMetaError] = useState('')
+  const savedEvaluation = useRef(null)
 
   const [selfEval, setSelfEval]         = useState({ 이해도:0, 집중도:0 })
-
-  useEffect(() => {
-    setSelfEval({ 이해도: 0, 집중도: 0 })
-  }, [effectiveId])
 
   const [feedback, setFeedback]         = useState('')
   const [saved, setSaved]               = useState(false)
@@ -50,7 +59,14 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
     setFeedback('')
     setSaved(false)
     setMetaResult(null)
+    savedEvaluation.current = null
   }, [effectiveId])
+
+  useEffect(() => {
+    setEvaluationMessage('')
+    setMetaResult(null)
+    setMetaError('')
+  }, [activitySubject, duration, studyDate, startTime, selfEval.이해도, selfEval.집중도])
 
   // 강점 분석
   const [strengths, setStrengths] = useState(null)
@@ -60,7 +76,7 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
   const [studyPatternData, setStudyPatternData] = useState(null)
 
   // 교사 피드백 (실데이터)
-  const [feedbackList, setFeedbackList] = useState([])
+  const feedbackList = activityRecords.data.filter(a => a.instructorFeedback).slice(0, 5)
 
   // 성적 데이터 (약점 계산용)
   const [gradesData, setGradesData] = useState([])
@@ -79,21 +95,7 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
     analysisAPI.getStudyPatternV2(effectiveId)
       .then(data => setStudyPatternData(data))
       .catch(() => setStudyPatternData(null))
-  }, [effectiveId])
-
-  useEffect(() => {
-    if (!effectiveId) return
-    activitiesAPI.getActivities(effectiveId)
-      .then(data => {
-        const list = Array.isArray(data) ? data : []
-        const withFeedback = list
-          .filter(a => a.instructorFeedback)
-          .sort((a, b) => new Date(b.studyDate || b.createdAt || 0) - new Date(a.studyDate || a.createdAt || 0))
-          .slice(0, 5)
-        setFeedbackList(withFeedback)
-      })
-      .catch(() => setFeedbackList([]))
-  }, [effectiveId])
+  }, [effectiveId, activityRecords.data])
 
   useEffect(() => {
     if (!gradeKey) return
@@ -103,8 +105,8 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
   }, [gradeKey])
 
   // 실데이터 기반 골든타임 / 과목별 학습시간
-  const displayGoldenHour = studyPatternData?.goldenTime
-    || GOLDEN_TIME_DATA.reduce((a, b) => a.focus > b.focus ? a : b).time
+  const goldenHour = hourlyData.length ? hourlyData.reduce((a,b) => a.focus>b.focus ? a : b) : null
+  const displayGoldenHour = goldenHour?.time || '데이터 없음'
 
   const displayStudyTimeData = useMemo(() => {
     if (studyPatternData?.subjectStudyMinutes && Object.keys(studyPatternData.subjectStudyMinutes).length > 0) {
@@ -115,43 +117,65 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
     return null // null이면 API 데이터 없음
   }, [studyPatternData])
 
-  // 성적 기반 약점 과목 계산 (실데이터 우선, 없으면 mock)
+  // 성적 기반 약점 과목 계산
   const weakSubjects = useMemo(() => {
-    if (gradesData.length === 0) return WEAK_AREAS
+    if (gradesData.length === 0) return []
     const avgBySubject = {}
     SUBJECTS.forEach(s => {
       const scores = gradesData.filter(g => g.subject === s).map(g => g.score)
       if (scores.length > 0)
         avgBySubject[s] = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
     })
-    const strongIds = new Set(strengths?.strongSubjectIds ?? [])
     const sorted = Object.entries(avgBySubject).sort((a, b) => a[1] - b[1])
     return sorted.slice(0, 3).map(([subject, avg]) => ({
       unit: subject, subject, accuracy: avg, trend: '▼',
     }))
   }, [gradesData, strengths])
 
-  const goldenHour = GOLDEN_TIME_DATA.reduce((a,b) => a.focus>b.focus ? a : b)
+  const saveEvaluation = async () => {
+    if (!effectiveId || !selfEval.이해도 || !selfEval.집중도 || !studyDate || !startTime
+        || !Number.isInteger(Number(duration)) || Number(duration) < 1) {
+      throw new Error('학습일, 학습 시간(1분 이상), 이해도와 집중도를 입력해 주세요.')
+    }
+    const payload = {
+      studentId: effectiveId, subject: activitySubject, studyDate,
+      studyStartTime: `${startTime}:00`,
+      studyDurationMinutes: Number(duration), understandingScore: selfEval.이해도,
+      concentrationScore: selfEval.집중도, measurementSource: 'MANUAL',
+    }
+    const signature = JSON.stringify(payload)
+    if (savedEvaluation.current?.signature === signature) return savedEvaluation.current.activity
+    const activity = await activitiesAPI.postActivity(payload)
+    if (!activity?.id) throw new Error('학습 기록을 저장하지 못했습니다.')
+    savedEvaluation.current = { signature, activity }
+    activityRecords.reload()
+    return activity
+  }
+
+  const handleEvaluationSave = async () => {
+    setEvaluationSaving(true)
+    setEvaluationMessage('')
+    try {
+      await saveEvaluation()
+      setEvaluationMessage('자기평가가 직접 입력 기록으로 저장되었습니다.')
+    } catch (error) {
+      setEvaluationMessage(error.message)
+    } finally {
+      setEvaluationSaving(false)
+    }
+  }
 
   const handleMetaAnalysis = async () => {
     setMetaLoading(true)
+    setMetaResult(null)
+    setMetaError('')
     try {
-      const gradeId = selectedChild?.id ?? selectedChild?.studentId ?? effectiveId
-      const res = await analysisAPI.getMetaCognition(gradeId, '수학')
+      await saveEvaluation()
+      const res = await analysisAPI.getMetaCognition(effectiveId, activitySubject)
       setMetaResult(res)
     } catch (e) {
       console.error('메타인지 분석 실패:', e)
-      // 실패 시 mock으로 대체
-      setMetaResult({
-        gapScore: selfEval.이해도 >= 4 ? 15.5 : 3.2,
-        gapLevel: selfEval.이해도 >= 4 ? 'HIGH' : 'LOW',
-        gapSummary: selfEval.이해도 >= 4
-          ? '자기평가가 실제 점수보다 15.5점 높습니다'
-          : '자기평가와 실제 점수가 비슷합니다',
-        advice: selfEval.이해도 >= 4
-          ? '개념 이해도를 재점검하고 실전 문제 풀이 비중을 높이세요'
-          : '현재 학습 방향을 유지하세요',
-      })
+      setMetaError(e.message || '메타인지 분석을 불러오지 못했습니다.')
     } finally {
       setMetaLoading(false)
     }
@@ -163,19 +187,9 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
       return
     }
     try {
-      // 1. 학습 기록 먼저 생성
-      const today = new Date().toISOString().split('T')[0]
-      const activity = await activitiesAPI.postActivity({
-        studentId: selectedChild?.id ?? selectedChild?.studentId ?? effectiveId,
-        subject: '수학',
-        studyDate: today,
-        studyStartTime: new Date().toTimeString().slice(0,8),
-        studyDurationMinutes: 60,
-        understandingScore: selfEval.이해도 || 3,
-        concentrationScore: selfEval.집중도 || 3,
-      })
-      // 2. 생성된 기록에 피드백 저장
+      const activity = await saveEvaluation()
       await activitiesAPI.patchFeedback(activity.id, feedback)
+      activityRecords.reload()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
@@ -204,22 +218,26 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
       <div style={{ margin:'16px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🕐 시간대별 집중도</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>앱 접속 패턴 기반 분석</p>
+          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>저장된 학습 기록의 집중도 별점 환산 (100점)</p>
+          {hourlyData.length > 0 ? (
           <ResponsiveContainer width="100%" height={170}>
-            <BarChart data={GOLDEN_TIME_DATA} margin={{ top:4, right:8, left:-20, bottom:0 }}>
+            <BarChart data={hourlyData} margin={{ top:4, right:8, left:-20, bottom:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0F3FA" vertical={false} />
               <XAxis dataKey="time" tick={{ fontSize:10, fill:'#94A3B8' }} />
               <YAxis domain={[0,100]} tick={{ fontSize:10, fill:'#94A3B8' }} />
               <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #E2E8F0', fontSize:12 }} formatter={v => [`${v}점`, '집중도']} />
               <Bar dataKey="focus" radius={[6,6,0,0]}>
-                {GOLDEN_TIME_DATA.map((entry,i) => (
+                {hourlyData.map((entry,i) => (
                   <Cell key={i} fill={entry.time===goldenHour.time ? '#1A56DB' : entry.focus>=70 ? '#60A5FA' : '#E2E8F0'} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          ) : <p className="record-empty">{activityRecords.loading ? '학습 기록을 불러오는 중...' : '아직 시간대별 집중도 기록이 없어요.'}</p>}
         </div>
       </div>
+
+      <div style={{ margin:'12px 16px 0' }}><AttentionRecords records={activityRecords} /></div>
 
       {/* 과목별 학습 시간 */}
       <div style={{ margin:'12px 16px 0' }}>
@@ -266,7 +284,7 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
                   {[1,2,3,4,5].map(n => (
-                    <button key={n} onClick={() => setSelfEval(p => ({...p,[key]:n}))} style={{
+                    <button key={n} aria-label={`${key} ${n}점`} onClick={() => setSelfEval(p => ({...p,[key]:n}))} style={{
                       flex:1, aspectRatio:'1', borderRadius:10, border:'none', cursor:'pointer',
                       fontFamily:'inherit', fontSize:18, transition:'all 0.15s',
                       background: selfEval[key]>=n ? '#FEE500' : 'var(--color-surface-2)',
@@ -286,11 +304,24 @@ export default function PatternTab({ studentId: propStudentId, selectedChild }) 
             </div>
           )}
 
-          {/* AI 메타인지 분석 버튼 - 이해도·집중도 둘 다 입력했을 때 표시 */}
+          <div className="manual-evaluation">
+            <label>학습 과목<select value={activitySubject} onChange={e => setActivitySubject(e.target.value)}>{SUBJECTS.map(s => <option key={s}>{s}</option>)}</select></label>
+            <label>학습일<input type="date" value={studyDate} onChange={e => setStudyDate(e.target.value)} /></label>
+            <label>학습 시작 시각<input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></label>
+            <label>학습 시간 (분)<input type="number" min="1" step="1" value={duration} onChange={e => setDuration(e.target.value)} /></label>
+          </div>
+          <button type="button" disabled={evaluationSaving || metaLoading} onClick={handleEvaluationSave}
+            style={{ width:'100%', marginTop:14, padding:12, borderRadius:10, border:'none', background:'var(--color-primary)', color:'white', fontWeight:700, cursor:'pointer' }}>
+            {evaluationSaving ? '저장 중...' : '자기평가 저장'}
+          </button>
+          {evaluationMessage && <p role="status" style={{ marginTop:10, fontSize:12 }}>{evaluationMessage}</p>}
+          {metaError && <p role="alert" style={{ marginTop:10, fontSize:12, color:'var(--color-danger)' }}>{metaError}</p>}
+
+          {/* 현재 자기평가를 저장한 뒤 실제 분석을 조회한다. */}
           {selfEval.이해도 > 0 && selfEval.집중도 > 0 && (
             <button
               onClick={handleMetaAnalysis}
-              disabled={metaLoading}
+              disabled={metaLoading || evaluationSaving}
               style={{
                 width:'100%', marginTop:14, padding:'11px', borderRadius:10,
                 border:'none', fontFamily:'inherit', fontSize:13, fontWeight:700,

@@ -10,7 +10,8 @@ export const activitiesAPI = {
     }),
   // 요청 형식:
   // { studentId, subject, studyDate, studyStartTime(선택),
-  //   studyDurationMinutes, understandingScore(1~5), concentrationScore(1~5) }
+  //   studyDurationMinutes, understandingScore(1~5), concentrationScore(1~5),
+  //   measurementSource: MANUAL | CAMERA, focusedRatio(0~1), drowsyRatio(0~1) }
 
   // 2-2. 학습 기록 조회
   // GET /api/activities/{studentId}

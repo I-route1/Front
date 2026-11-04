@@ -1,8 +1,20 @@
 import { useState, useEffect } from 'react'
-import { activitiesAPI } from '@/api'
-import { STUDENTS, INIT_FEEDBACKS } from './data/mockData'
+import { activitiesAPI, studentAPI } from '@/api'
+import { MeasurementDetails } from '@/components/learning/AttentionRecords'
 
 export default function FeedbackTab() {
+  const [students, setStudents] = useState([])
+  const [studentsError, setStudentsError] = useState('')
+  const [activityError, setActivityError] = useState('')
+  useEffect(() => {
+    let active = true
+    studentAPI.getAcademyStudents()
+      .then(list => {
+        if (active) setStudents((Array.isArray(list) ? list : []).map(s => ({ ...s, id: s.studentId ?? s.id })))
+      })
+      .catch(error => { if (active) setStudentsError(error.message) })
+    return () => { active = false }
+  }, [])
   const [selectedStudent, setSelectedStudent] = useState('')
   const [activities, setActivities] = useState([])      
   const [loadingActivities, setLoadingActivities] = useState(false)
@@ -13,10 +25,12 @@ export default function FeedbackTab() {
   const [savingId, setSavingId] = useState(null)
   const [savedId, setSavedId] = useState(null)
   
-  const [filterStudent, setFilterStudent] = useState('전체')
   
   // 학생 선택 시 학습 기록 조회
   useEffect(() => {
+    let active = true
+    setActivities([])
+    setActivityError('')
     if (!selectedStudent) {
       setActivities([])
       return
@@ -25,6 +39,7 @@ export default function FeedbackTab() {
     setLoadingActivities(true)
     activitiesAPI.getActivities(String(selectedStudent))
       .then(data => {
+        if (!active) return
         // 응답이 배열 또는 { activities: [...] } 형태일 수 있음
         const list = Array.isArray(data) ? data : (data?.activities || [])
         // 최신순 정렬
@@ -32,10 +47,13 @@ export default function FeedbackTab() {
         setActivities(list)
       })
       .catch(e => {
+        if (!active) return
         console.error('학습 기록 조회 실패:', e)
+        setActivityError(e.message)
         setActivities([])
       })
-      .finally(() => setLoadingActivities(false))
+      .finally(() => { if (active) setLoadingActivities(false) })
+    return () => { active = false }
   }, [selectedStudent])
   
   // 피드백 작성 시작
@@ -80,7 +98,7 @@ export default function FeedbackTab() {
     }
   }
   
-  const selectedStudentInfo = STUDENTS.find(s => String(s.id) === String(selectedStudent))
+  const selectedStudentInfo = students.find(s => String(s.id) === String(selectedStudent))
   
   // 필터된 학습 기록 (피드백 유무 기준)
   const withFeedback = activities.filter(a => a.instructorFeedback)
@@ -115,10 +133,11 @@ export default function FeedbackTab() {
             }}
           >
             <option value="">학생을 선택해 주세요</option>
-            {STUDENTS.map(s => (
-              <option key={s.id} value={s.id}>{s.name} ({s.class})</option>
+            {students.map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.grade || '학년 미등록'})</option>
             ))}
           </select>
+          {studentsError && <p role="alert" className="record-error">{studentsError}</p>}
         </div>
       </div>
       
@@ -140,7 +159,8 @@ export default function FeedbackTab() {
       )}
       
       {/* 학습 기록 없음 */}
-      {selectedStudent && !loadingActivities && activities.length === 0 && (
+      {activityError && <p role="alert" className="record-error" style={{ margin:16 }}>{activityError}</p>}
+      {selectedStudent && !loadingActivities && !activityError && activities.length === 0 && (
         <div style={{ margin:'24px 16px', padding:'32px 16px', textAlign:'center', background:'var(--color-surface)', borderRadius:14, border:'1px dashed var(--color-border)' }}>
           <p style={{ fontSize:32, marginBottom:8 }}>📭</p>
           <p style={{ fontSize:13, color:'var(--color-text-muted)' }}>
@@ -281,6 +301,8 @@ function ActivityCard({ activity, subjectColor, editingId, feedbackText, setFeed
         </div>
       )}
       
+      <MeasurementDetails activity={activity} />
+
       {/* 피드백 영역 */}
       {isEditing ? (
         <div>

@@ -52,6 +52,7 @@ function ChildSelector({ children, selectedIndex, onSelect }) {
             {/* 이전 버튼 */}
             <button
                 onClick={() => onSelect(selectedIndex - 1)}
+                aria-label="이전 자녀"
                 disabled={isFirst}
                 style={{
                     width: 32, height: 32, borderRadius: '50%', border: 'none',
@@ -95,6 +96,7 @@ function ChildSelector({ children, selectedIndex, onSelect }) {
             {/* 다음 버튼 */}
             <button
                 onClick={() => onSelect(selectedIndex + 1)}
+                aria-label="다음 자녀"
                 disabled={isLast}
                 style={{
                     width: 32, height: 32, borderRadius: '50%', border: 'none',
@@ -121,6 +123,10 @@ export default function Learning() {
     const [childrenList, setChildrenList] = useState(user?.children ?? [])
     const [selectedChildIndex, setSelectedChildIndex] = useState(0)
     const [isLoading, setIsLoading] = useState(true)
+
+    useEffect(() => {
+        setSelectedChildIndex(index => Math.max(0, Math.min(index, childrenList.length - 1)))
+    }, [childrenList.length])
 
     const isParent = user?.role === 'PARENT' || user?.role === '학부모'
 
@@ -152,7 +158,7 @@ export default function Learning() {
     const selectedChild = isParent
         ? (childrenList?.[selectedChildIndex] ?? null)
         : user
-    const studentId = selectedChild?.studentId ?? selectedChild?.id ?? user?.id
+    const studentId = selectedChild?.studentId ?? selectedChild?.id
 
     const hasNoChildren = isParent && !isLoading && childrenList.length === 0
 
@@ -206,12 +212,14 @@ export default function Learning() {
 
             {/* 탭 콘텐츠 */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
-                {active === 'grade'      && <GradeTab      studentId={studentId} selectedChild={selectedChild} />}
-                {active === 'pattern'    && <PatternTab    studentId={studentId} selectedChild={selectedChild} />}
+                {isLoading && isParent ? <p role="status" style={{ padding:24 }}>자녀 정보를 불러오는 중...</p> : <>
+                {active === 'grade'      && <GradeTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
+                {active === 'pattern'    && <PatternTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'suggest'    && <SuggestTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'predict'    && <PredictTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'counseling' && <CounselingTab studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'ask'        && <AskTab        studentId={studentId} />}
+                </>}
             </div>
         </div>
     )

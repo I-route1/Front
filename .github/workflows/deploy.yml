@@ -23,7 +23,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: npm run test:learning-records && npm run build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_API_BASE_URL: ${{ secrets.VITE_API_URL }}

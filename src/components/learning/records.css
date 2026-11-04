@@ -1,0 +1,32 @@
+.learning-records { display:flex; flex-direction:column; gap:12px; font-size:13px; }
+.record-card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:16px; padding:16px; min-width:0; }
+.record-card h3 { font-size:14px; font-weight:700; margin:0 0 12px; }
+.record-toolbar,.record-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.learning-records button,.learning-records select,.manual-evaluation select,.manual-evaluation input { font:inherit; color:var(--color-text-primary); background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:8px; padding:7px 10px; }
+.learning-records button { cursor:pointer; font-size:12px; }
+.learning-records button:focus-visible,.learning-records summary:focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; }
+.record-item { border:1px solid var(--color-border); background:var(--color-surface-2); border-radius:10px; padding:12px; margin-top:8px; overflow-wrap:anywhere; }
+.record-item summary { cursor:pointer; }
+.record-item summary>span { display:block; margin-top:6px; color:var(--color-text-muted); font-size:11px; }
+.record-item p { margin-top:6px; line-height:1.6; }
+.record-item small,.record-hint { font-size:11px; color:var(--color-text-muted); }
+.record-hint { margin-top:10px; line-height:1.6; }
+.record-empty { color:var(--color-text-muted); padding:14px 0; line-height:1.7; }
+.record-error { color:var(--color-danger); line-height:1.6; }
+.record-error button { margin-top:8px; }
+.record-scroll { max-height:400px; overflow-y:auto; }
+.wrong-summary>div { display:flex; gap:10px; align-items:center; margin:10px 0; }
+.wrong-summary>div>span:first-child { min-width:85px; }
+.wrong-bar { flex:1; background:var(--color-surface-2); border-radius:4px; height:8px; overflow:hidden; }
+.wrong-bar>span { height:100%; display:block; }
+.ocr-question { margin-top:12px; padding-top:12px; border-top:1px solid var(--color-border); }
+.ocr-question dl { display:grid; grid-template-columns:80px minmax(0,1fr); gap:6px; margin:10px 0; }
+.ocr-question dt { color:var(--color-text-muted); }
+.ocr-question dd { margin:0; white-space:pre-wrap; }
+.record-correct { color:var(--color-success); }
+.record-incorrect { color:var(--color-danger); }
+.measurement-details { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; font-size:12px; align-items:center; }
+.record-source { color:var(--color-primary); background:var(--color-primary-light); padding:4px 8px; border-radius:12px; font-weight:600; }
+.manual-evaluation { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+.manual-evaluation label { display:flex; flex-direction:column; gap:6px; flex:1; min-width:130px; font-size:12px; }
+.manual-evaluation input { width:100%; box-sizing:border-box; }

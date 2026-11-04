@@ -20,8 +20,8 @@ export default function StudentDetail({ student }) {
   
   const renderPanel = () => {
     switch (activeTab) {
-      case 'grade':     return <GradePanel student={student} />
-      case 'pattern':   return <PatternPanel student={student} />
+      case 'grade':     return <GradePanel key={student.studentId ?? student.id} student={student} />
+      case 'pattern':   return <PatternPanel key={student.studentId ?? student.id} student={student} />
       case 'strengths': return <StrengthsPanel student={student} />
       case 'predict':   return <PredictPanel student={student} />
       case 'report':    return <ReportPanel student={student} />  

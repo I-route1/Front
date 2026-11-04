@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import { gradesAPI, analysisAPI } from '@/api'
 import { SUBJECTS, SUBJECT_COLORS } from '../../data/mockData'
+import LearningResults from '@/components/learning/LearningResults'
 
 export default function GradePanel({ student }) {
   const [grades, setGrades] = useState([])
@@ -82,6 +83,7 @@ export default function GradePanel({ student }) {
   
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <LearningResults key={student.studentId ?? student.id} studentId={student.studentId ?? student.id} />
       
       {/* 1. 분석 요약 */}
       {analysis && (analysis.summary || analysis.summaryMessage || analysis.message) && (

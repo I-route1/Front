@@ -8,14 +8,15 @@ import {
 } from 'recharts'
 import {
   SUBJECTS, EXAM_TYPES, EXAM_TYPE_MOCK, SUBJECT_COLORS,
-  INIT_TREND, WRONG_TYPES,
+  INIT_TREND,
   getGrade, getPercentile,
 } from './data/mockData'
 import { calcMockExamScores } from './utils/mockExamScoring'
+import LearningResults from '@/components/learning/LearningResults'
 
 export default function GradeTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
-  const gradeKey = selectedChild?.id ?? selectedChild?.studentId ?? propStudentId ?? user?.id
+  const gradeKey = propStudentId ?? selectedChild?.studentId ?? selectedChild?.id ?? user?.id
   useEffect(() => {
     if (!gradeKey) return
     gradesAPI.getGrades(gradeKey)
@@ -425,23 +426,9 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
         </div>
       </div>
 
-      {/* 오답 유형 */}
+      {/* 학생별 전체 오답 및 OCR 채점 결과 */}
       <div style={{ margin:'12px 16px 16px' }}>
-        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:14 }}>❌ 주요 오답 유형</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {WRONG_TYPES.map((w,i) => (
-              <div key={w.type} style={{ display:'flex', alignItems:'center', gap:12 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'var(--color-text-muted)', width:16, textAlign:'center' }}>{i+1}</span>
-                <span style={{ fontSize:13, fontWeight:600, width:72, flexShrink:0 }}>{w.type}</span>
-                <div style={{ flex:1, height:8, background:'var(--color-surface-2)', borderRadius:4, overflow:'hidden' }}>
-                  <div style={{ height:'100%', width:`${(w.count/WRONG_TYPES[0].count)*100}%`, background:w.color, borderRadius:4 }} />
-                </div>
-                <span style={{ fontSize:12, fontWeight:700, color:w.color, width:28, textAlign:'right' }}>{w.count}건</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <LearningResults key={gradeKey} studentId={gradeKey} />
       </div>
     </div>
   )
