@@ -1,6 +1,24 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { formatRatio, wrongTypeCounts, hourlyConcentration, localStudyDate } from '../src/components/learning/recordUtils.js'
+import { evaluationSubmissionId, manualEvaluationPayload } from '../src/components/learning/evaluationSubmission.js'
+
+test('학원 자기평가는 실제 학생 ID와 날짜·시각·별점·분 단위를 검증하고 재시도 키를 유지한다', async () => {
+  const input = { studentId: 14, subject: '영어', studyDate: '2026-11-05', startTime: '00:00', duration: '1440', understanding: 1, concentration: 5 }
+  const payload = manualEvaluationPayload(input)
+  assert.equal(payload.studentId, 14)
+  assert.equal(payload.studyStartTime, '00:00:00')
+  assert.equal(payload.studyDurationMinutes, 1440)
+  assert.equal(payload.measurementSource, 'MANUAL')
+  assert.equal(await evaluationSubmissionId(payload), await evaluationSubmissionId(manualEvaluationPayload(input)))
+  assert.notEqual(await evaluationSubmissionId(payload), await evaluationSubmissionId(manualEvaluationPayload({ ...input, studentId: 15 })))
+  for (const invalid of [
+    { studentId: 0 }, { studentId: 'S-001' }, { subject: '' }, { studyDate: '2026-02-30' },
+    { studyDate: '' }, { startTime: '24:00' }, { startTime: '' },
+    { duration: 0 }, { duration: -1 }, { duration: 1.5 }, { duration: 1441 }, { duration: '' },
+    { understanding: 0 }, { understanding: 6 }, { concentration: 1.5 }, { concentration: 6 },
+  ]) assert.throws(() => manualEvaluationPayload({ ...input, ...invalid }), /입력해 주세요/)
+})
 
 test('집중도 비율의 0, 1, 미측정 값을 구분한다', () => {
   assert.equal(formatRatio(0), '0%')

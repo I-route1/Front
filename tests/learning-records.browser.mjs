@@ -65,6 +65,8 @@ async function openPage(options = {}) {
       return respond(url.searchParams.get('studentId') === '14' && !state.empty ? (state.ocr || ocr) : [])
     }
     if (path === '/api/activities' && req.method() === 'POST') {
+      if (state.saveDelay) await state.saveDelay
+      if (state.failSave) return respond({ error: '일시적인 저장 오류입니다.' }, 503)
       const body = req.postDataJSON()
       const existing = state.activities.find(a => a.submissionId === body.submissionId)
       if (existing) return respond(existing)
@@ -73,7 +75,7 @@ async function openPage(options = {}) {
       if (state.loseSaveResponse) { state.loseSaveResponse = false; return route.abort('connectionreset') }
       return respond(saved)
     }
-    if (path.startsWith('/api/activities/')) return respond(path.endsWith('/14') ? state.activities : [])
+    if (path.startsWith('/api/activities/')) return respond(state.activities.filter(a => Number(a.studentId ?? 14) === Number(path.split('/').at(-1))))
     if (path === '/api/analysis/meta-cognition') return respond({ error: '분석 데이터가 부족합니다.' }, 400)
     if (path.includes('study-pattern')) return respond({ goldenTime: '데이터 없음', subjectStudyMinutes: {} })
     if (path.includes('strengths')) return respond({ strongSubjectIds: [] })
@@ -269,4 +271,124 @@ test('학원 학생 상세와 피드백에서도 같은 학생의 실데이터�
     assert(state.requests.some(r => r.path === '/api/activities/14'))
     assert.deepEqual(errors, [])
   } finally { await context.close() }
+})
+
+async function openAcademyPattern(page, name = '연결검증학생') {
+  await page.goto(`${BASE}/admin/learning`)
+  await page.getByRole('button', { name: '👥 학생관리', exact: true }).click()
+  await page.getByText(name, { exact: true }).click()
+  await page.getByRole('button', { name: /^🧠\s*패턴$/ }).click()
+  await page.getByRole('form', { name: '학생 자기평가 입력', exact: true }).waitFor()
+}
+
+async function fillAcademyEvaluation(page, duration = '27') {
+  const form = page.getByRole('form', { name: '학생 자기평가 입력', exact: true })
+  await form.getByRole('button', { name: '이해도 4점', exact: true }).click()
+  await form.getByRole('button', { name: '집중도 2점', exact: true }).click()
+  await form.getByLabel('학습 과목').selectOption('영어')
+  await form.getByLabel('학습일', { exact: true }).fill('2026-11-05')
+  await form.getByLabel('학습 시작 시각').fill('13:47')
+  await form.getByLabel('학습 시간 (분)').fill(duration)
+  return form
+}
+
+test('학원은 학생별 자기평가를 검증·저장하고 재조회하며 기존 오답·OCR 화면을 유지한다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY' })
+  try {
+    await openAcademyPattern(page)
+    const form = page.getByRole('form', { name: '학생 자기평가 입력' })
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('alert').waitFor()
+    assert.equal(state.requests.filter(r => r.method === 'POST').length, 0)
+    await fillAcademyEvaluation(page)
+    for (const duration of ['0', '-1', '1.5', '1441', '']) {
+      await form.getByLabel('학습 시간 (분)').fill(duration)
+      await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+      await form.getByRole('alert').waitFor()
+    }
+    assert.equal(state.activities.length, 0)
+    await form.getByLabel('학습 시간 (분)').fill('27')
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('status').getByText('자기평가가 직접 입력 기록으로 저장되었습니다.').waitFor()
+    const records = page.getByRole('region', { name: '집중도 측정 기록' })
+    await records.getByText('2026-11-05 13:47 · 27분', { exact: true }).waitFor()
+    await records.getByText('집중도 2 / 5', { exact: true }).waitFor()
+    const post = state.requests.find(r => r.path === '/api/activities' && r.method === 'POST')
+    assert.equal(post.body.studentId, 14)
+    assert.equal(post.auth, 'Bearer test-token')
+    assert.equal(post.body.subject, '영어')
+    assert.equal(post.body.understandingScore, 4)
+    assert.equal(post.body.measurementSource, 'MANUAL')
+    assert.equal(post.body.submissionId.length, 64)
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('status').waitFor()
+    assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 1)
+    assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false)
+    await page.screenshot({ path: 'test-results/academy-self-evaluation.png', fullPage: true })
+    await page.getByRole('button', { name: /^📊\s*성적$/ }).click()
+    await page.getByText('국어 · 국어-1', { exact: true }).waitFor()
+    await page.getByText('국어 · 1 / 2문항 정답', { exact: true }).click()
+    await page.getByText('되지', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학원 자기평가 저장 오류·응답 유실·새로고침 후 재시도에도 하나의 기록만 남는다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', failSave: true })
+  try {
+    await openAcademyPattern(page)
+    let form = await fillAcademyEvaluation(page, '1440')
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('alert').getByText('일시적인 저장 오류입니다.').waitFor()
+    assert.equal(state.activities.length, 0)
+    state.failSave = false
+    state.loseSaveResponse = true
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('alert').getByText('Failed to fetch').waitFor()
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('status').waitFor()
+    await page.reload()
+    await page.getByRole('button', { name: '👥 학생관리', exact: true }).click()
+    await page.getByText('연결검증학생', { exact: true }).click()
+    await page.getByRole('button', { name: /^🧠\s*패턴$/ }).click()
+    const records = page.getByRole('region', { name: '집중도 측정 기록' })
+    await records.getByText('2026-11-05 13:47 · 1440분', { exact: true }).waitFor()
+    form = await fillAcademyEvaluation(page, '1440')
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('status').waitFor()
+    assert.equal(state.activities.length, 1)
+    const posts = state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST')
+    assert.equal(posts.length, 4)
+    assert.equal(new Set(posts.map(post => post.body.submissionId)).size, 1)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학원에서 저장 중 학생을 바꾸면 이전 입력·성공 메시지·기록이 새 학생에게 섞이지 않는다', async () => {
+  let release
+  const saveDelay = new Promise(resolve => { release = resolve })
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', saveDelay })
+  try {
+    await openAcademyPattern(page)
+    let form = await fillAcademyEvaluation(page)
+    const saveRequest = page.waitForRequest(r => r.url().endsWith('/api/activities') && r.method() === 'POST')
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).dblclick()
+    await saveRequest
+    assert.equal(await form.getByLabel('학습 시간 (분)').isDisabled(), true)
+    await page.getByText('다른학생', { exact: true }).click()
+    await page.getByRole('button', { name: /^🧠\s*패턴$/ }).click()
+    form = page.getByRole('form', { name: '학생 자기평가 입력' })
+    await form.getByText('다른학생 학생의 자기평가를 확인하고 입력해 주세요').waitFor()
+    assert.equal(await form.getByLabel('학습 시간 (분)').inputValue(), '60')
+    const savedResponse = page.waitForResponse(r => r.url().endsWith('/api/activities') && r.request().method() === 'POST')
+    release()
+    await savedResponse
+    assert.equal(await form.getByRole('status').count(), 0)
+    assert.equal(await form.getByRole('button', { name: '이해도 4점' }).getAttribute('aria-pressed'), 'false')
+    assert.equal(state.activities.length, 1)
+    assert.equal(state.activities[0].studentId, 14)
+    assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 1)
+    await page.getByRole('region', { name: '집중도 측정 기록' }).getByText('자기평가를 저장하면 직접 입력한 학습 기록을 확인할 수 있어요.').waitFor()
+    assert.deepEqual(errors, [])
+  } finally { release(); await context.close() }
 })
