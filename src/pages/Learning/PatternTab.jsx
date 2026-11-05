@@ -10,7 +10,7 @@ import { activitiesAPI, analysisAPI, gradesAPI } from '@/api'
 import { useAuth, isAcademy } from '@/context/AuthContext'
 import useStudentRecords from '@/hooks/useStudentRecords'
 import AttentionRecords from '@/components/learning/AttentionRecords'
-import { hourlyConcentration, localStudyDate } from '@/components/learning/recordUtils'
+import { hourlyConcentration, localStudyDate, metaCognitionPresentation } from '@/components/learning/recordUtils'
 import { evaluationSubmissionId } from '@/components/learning/evaluationSubmission'
 
 // subjectId → 과목명 매핑 (백엔드 확인 후 보정 필요)
@@ -54,6 +54,7 @@ export default function PatternTab({ studentId: propStudentId }) {
   const [saved, setSaved]               = useState(false)
   const [metaResult, setMetaResult]     = useState(null)
   const [metaLoading, setMetaLoading]   = useState(false)
+  const metaPresentation = metaCognitionPresentation(metaResult)
 
   useEffect(() => {
     setSelfEval({ 이해도:0, 집중도:0 })
@@ -346,15 +347,15 @@ export default function PatternTab({ studentId: propStudentId }) {
               }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
                   <p style={{ fontSize:12, fontWeight:700, color: metaResult.gapLevel === 'HIGH' ? '#8A6500' : 'var(--color-success)' }}>
-                    {metaResult.gapLevel === 'HIGH' ? '⚠️ 메타인지 과대평가' : '✅ 메타인지 적정'}
+                    {metaPresentation.title}
                   </p>
-                  <span style={{
+                  {metaPresentation.hasData && <span style={{
                     fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:20,
                     background: metaResult.gapLevel === 'HIGH' ? '#FFB80020' : '#00C49A20',
                     color: metaResult.gapLevel === 'HIGH' ? '#8A6500' : 'var(--color-success)',
                   }}>
                     갭 {metaResult.gapScore}점
-                  </span>
+                  </span>}
                 </div>
                 <p style={{ fontSize:12, color:'var(--color-text-secondary)', lineHeight:1.5 }}>
                   {metaResult.gapSummary}

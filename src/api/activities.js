@@ -7,6 +7,7 @@ export const activitiesAPI = {
     apiCall('/api/activities', {
       method: 'POST',
       body: JSON.stringify(data),
+      timeoutMs: 30000,
     }),
   // 요청 형식:
   // { studentId, subject, studyDate, studyStartTime(선택),

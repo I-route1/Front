@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { formatRatio, wrongTypeCounts, hourlyConcentration, localStudyDate } from '../src/components/learning/recordUtils.js'
+import { formatRatio, wrongTypeCounts, hourlyConcentration, localStudyDate, metaCognitionPresentation } from '../src/components/learning/recordUtils.js'
 import { evaluationSubmissionId, manualEvaluationPayload } from '../src/components/learning/evaluationSubmission.js'
 
 test('학원 자기평가는 실제 학생 ID와 날짜·시각·별점·분 단위를 검증하고 재시도 키를 유지한다', async () => {
@@ -18,6 +18,25 @@ test('학원 자기평가는 실제 학생 ID와 날짜·시각·별점·분 단
     { duration: 0 }, { duration: -1 }, { duration: 1.5 }, { duration: 1441 }, { duration: '' },
     { understanding: 0 }, { understanding: 6 }, { concentration: 1.5 }, { concentration: 6 },
   ]) assert.throws(() => manualEvaluationPayload({ ...input, ...invalid }), /입력해 주세요/)
+})
+
+test('저장 가능한 연도·윤년·자정·마지막 분 경계를 확인한다', () => {
+  const input = { studentId: 14, subject: '영어', studyDate: '1000-01-01', startTime: '00:00', duration: 1, understanding: 1, concentration: 5 }
+  for (const studyDate of ['1000-01-01', '2000-02-29', '2024-02-29', '9999-12-31']) {
+    assert.equal(manualEvaluationPayload({ ...input, studyDate, startTime: '23:59' }).studyStartTime, '23:59:00')
+  }
+  for (const studyDate of ['0001-01-01', '0999-12-31', '10000-01-01', '1900-02-29', '2026-02-29']) {
+    assert.throws(() => manualEvaluationPayload({ ...input, studyDate }))
+  }
+})
+
+test('메타인지 데이터 부족·과소평가·중간 차이를 적정이나 과대평가로 표시하지 않는다', () => {
+  assert.equal(metaCognitionPresentation({ gapLevel: '데이터 없음', gapScore: 0 }).hasData, false)
+  assert.match(metaCognitionPresentation(null).title, /부족/)
+  assert.match(metaCognitionPresentation({ gapLevel: 'HIGH', gapScore: 30, scaledUnderstandingScore: 40, avgActualScore: 70 }).title, /과소/)
+  assert.match(metaCognitionPresentation({ gapLevel: 'HIGH', gapScore: 30, scaledUnderstandingScore: 100, avgActualScore: 70 }).title, /과대/)
+  assert.match(metaCognitionPresentation({ gapLevel: 'MEDIUM', gapScore: 15 }).title, /차이/)
+  assert.match(metaCognitionPresentation({ gapLevel: 'LOW', gapScore: 5 }).title, /적정/)
 })
 
 test('집중도 비율의 0, 1, 미측정 값을 구분한다', () => {

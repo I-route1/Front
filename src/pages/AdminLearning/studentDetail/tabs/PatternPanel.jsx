@@ -8,7 +8,7 @@ import { SUBJECTS } from '../../data/mockData'
 import useStudentRecords from '@/hooks/useStudentRecords'
 import AttentionRecords from '@/components/learning/AttentionRecords'
 import ManualEvaluationForm from '@/components/learning/ManualEvaluationForm'
-import { hourlyConcentration } from '@/components/learning/recordUtils'
+import { hourlyConcentration, metaCognitionPresentation } from '@/components/learning/recordUtils'
 
 export default function PatternPanel({ student }) {
   const studentId = student?.studentId ?? student?.id
@@ -17,6 +17,7 @@ export default function PatternPanel({ student }) {
   const [loading, setLoading] = useState(true)
   const [selectedSubject, setSelectedSubject] = useState('수학')
   const [analysisRevision, setAnalysisRevision] = useState(0)
+  const metaPresentation = metaCognitionPresentation(metaCognition)
   
   // 학습 패턴 + 메타인지 일괄 조회
   useEffect(() => {
@@ -150,14 +151,14 @@ export default function PatternPanel({ student }) {
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             <div style={{
               padding:'12px 14px', borderRadius:10,
-              background: metaCognition.gapLevel === 'HIGH' ? '#FFF8E0' : '#D1FAF015',
-              border: `1px solid ${metaCognition.gapLevel === 'HIGH' ? '#FFB80040' : '#00C49A30'}`,
+              background: metaPresentation.warning ? '#FFF8E0' : '#D1FAF015',
+              border: `1px solid ${metaPresentation.warning ? '#FFB80040' : '#00C49A30'}`,
             }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-                <p style={{ fontSize:12, fontWeight:700, color: metaCognition.gapLevel === 'HIGH' ? '#8A6500' : 'var(--color-success)' }}>
-                  {metaCognition.gapLevel === 'HIGH' ? '⚠️ 메타인지 과대평가' : '✅ 메타인지 적정'}
+                <p style={{ fontSize:12, fontWeight:700, color: metaPresentation.warning ? '#8A6500' : 'var(--color-text-secondary)' }}>
+                  {metaPresentation.title}
                 </p>
-                {metaCognition.gapScore != null && (
+                {metaPresentation.hasData && (
                   <span style={{
                     fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:20,
                     background: metaCognition.gapLevel === 'HIGH' ? '#FFB80020' : '#00C49A20',
@@ -192,7 +193,7 @@ export default function PatternPanel({ student }) {
         )}
       </div>
       <ManualEvaluationForm key={studentId} studentId={studentId} studentName={student?.name} subjects={SUBJECTS}
-        onSaved={() => { activityRecords.reload(); setAnalysisRevision(value => value + 1) }} />
+        onSaved={activity => { activityRecords.reload(); setSelectedSubject(activity.subject); setAnalysisRevision(value => value + 1) }} />
     </div>
   )
 }

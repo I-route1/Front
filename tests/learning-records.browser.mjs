@@ -48,12 +48,13 @@ async function openPage(options = {}) {
   page.on('pageerror', error => errors.push(error.message))
   const state = { requests: [], activities: options.camera ? [camera] : [], fail: false, ...options }
   await context.addInitScript(role => {
-    sessionStorage.setItem('i-route-user', JSON.stringify({ id: 700, name: '테스트 계정', role, token: 'test-token', children: [] }))
+    sessionStorage.setItem('i-route-user', JSON.stringify({ id: 700, name: '테스트 계정', role, token: 'test-token', refreshToken: 'test-refresh', children: [] }))
   }, options.role || 'PARENT')
   await page.route(`${BASE}/api/**`, async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname
     state.requests.push({ path, query: url.search, method: req.method(), body: req.postDataJSON(), auth: req.headers().authorization })
     const respond = (json, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) })
+    if (path === '/api/auth/token/refresh') return respond({ accessToken: 'renewed' })
     if (path === '/api/students/my-children' || path === '/api/students/academy/students') return respond(children)
     if (path.startsWith('/api/wrong-answer/')) {
       if (state.delay && path.endsWith('/14')) await state.delay
@@ -65,8 +66,11 @@ async function openPage(options = {}) {
       return respond(url.searchParams.get('studentId') === '14' && !state.empty ? (state.ocr || ocr) : [])
     }
     if (path === '/api/activities' && req.method() === 'POST') {
+      if (state.expiredSave && req.headers().authorization === 'Bearer test-token') return respond({}, 401)
       if (state.saveDelay) await state.saveDelay
       if (state.failSave) return respond({ error: '일시적인 저장 오류입니다.' }, 503)
+      if (state.saveStatus) return respond({ error: '학생 기록에 접근할 수 없습니다.' }, state.saveStatus)
+      if ('saveResponse' in state) return respond(state.saveResponse)
       const body = req.postDataJSON()
       const existing = state.activities.find(a => a.submissionId === body.submissionId)
       if (existing) return respond(existing)
@@ -76,7 +80,8 @@ async function openPage(options = {}) {
       return respond(saved)
     }
     if (path.startsWith('/api/activities/')) return respond(state.activities.filter(a => Number(a.studentId ?? 14) === Number(path.split('/').at(-1))))
-    if (path === '/api/analysis/meta-cognition') return respond({ error: '분석 데이터가 부족합니다.' }, 400)
+    if (path === '/api/analysis/meta-cognition') return state.metaResponse
+      ? respond(state.metaResponse) : respond({ error: '분석 데이터가 부족합니다.' }, 400)
     if (path.includes('study-pattern')) return respond({ goldenTime: '데이터 없음', subjectStudyMinutes: {} })
     if (path.includes('strengths')) return respond({ strongSubjectIds: [] })
     if (path.includes('risk')) return respond({ atRisk: false })
@@ -292,6 +297,23 @@ async function fillAcademyEvaluation(page, duration = '27') {
   return form
 }
 
+test('학원 키보드 저장 중 토큰이 만료되어도 갱신 후 같은 내용을 한 번만 저장한다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', expiredSave: true })
+  try {
+    await openAcademyPattern(page)
+    const form = await fillAcademyEvaluation(page)
+    await form.getByLabel('학습 시간 (분)').press('Enter')
+    await form.getByRole('status').waitFor()
+    const posts = state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST')
+    assert.equal(posts.length, 2)
+    assert.deepEqual(posts[0].body, posts[1].body)
+    assert.equal(posts[1].auth, 'Bearer renewed')
+    assert.equal(state.requests.filter(r => r.path === '/api/auth/token/refresh').length, 1)
+    assert.equal(state.activities.length, 1)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
 test('학원은 학생별 자기평가를 검증·저장하고 재조회하며 기존 오답·OCR 화면을 유지한다', async () => {
   const { page, context, state, errors } = await openPage({ role: 'ACADEMY' })
   try {
@@ -322,7 +344,9 @@ test('학원은 학생별 자기평가를 검증·저장하고 재조회하며 �
     assert.equal(post.body.submissionId.length, 64)
     await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
     await form.getByRole('status').waitFor()
-    assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 1)
+    assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 2)
+    assert.equal(state.activities.length, 1)
+    assert(state.requests.some(r => r.path === '/api/analysis/meta-cognition' && new URL(BASE + r.path + r.query).searchParams.get('subject') === '영어'))
     assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false)
     await page.screenshot({ path: 'test-results/academy-self-evaluation.png', fullPage: true })
     await page.getByRole('button', { name: /^📊\s*성적$/ }).click()
@@ -344,7 +368,7 @@ test('학원 자기평가 저장 오류·응답 유실·새로고침 후 재시�
     state.failSave = false
     state.loseSaveResponse = true
     await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
-    await form.getByRole('alert').getByText('Failed to fetch').waitFor()
+    await form.getByRole('alert').getByText('서버에 연결하지 못했습니다. 입력값을 유지한 채 다시 저장해 주세요.').waitFor()
     await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
     await form.getByRole('status').waitFor()
     await page.reload()
@@ -360,6 +384,104 @@ test('학원 자기평가 저장 오류·응답 유실·새로고침 후 재시�
     const posts = state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST')
     assert.equal(posts.length, 4)
     assert.equal(new Set(posts.map(post => post.body.submissionId)).size, 1)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학원 재저장은 변경된 권한과 잘못된 응답을 확인하고 이전 성공 안내를 재사용하지 않는다', async () => {
+  const { page, context, state } = await openPage({ role: 'ACADEMY' })
+  try {
+    await openAcademyPattern(page)
+    const form = await fillAcademyEvaluation(page)
+    const save = () => form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await save()
+    await form.getByRole('status').waitFor()
+    state.saveStatus = 403
+    await save()
+    await form.getByRole('alert').getByText('학생 기록에 접근할 수 없습니다.').waitFor()
+    assert.equal(await form.getByRole('status').count(), 0)
+    state.saveStatus = 0
+    state.saveResponse = { id: 'invalid' }
+    await save()
+    await form.getByRole('alert').getByText('학습 기록을 저장하지 못했습니다. 다시 시도해 주세요.').waitFor()
+    assert.equal(state.activities.length, 1)
+    assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 3)
+    delete state.saveResponse
+    await save()
+    await form.getByRole('status').waitFor()
+    assert.equal(state.activities.length, 1)
+  } finally { await context.close() }
+})
+
+test('저장 키 준비 중 학생을 바꾸면 아직 보내지 않은 이전 학생 요청을 전송하지 않는다', async () => {
+  const { page, context, state } = await openPage({ role: 'ACADEMY' })
+  try {
+    await page.addInitScript(() => {
+      const original = crypto.subtle.digest.bind(crypto.subtle)
+      crypto.subtle.digest = (...args) => new Promise(resolve => {
+        window.releaseEvaluationDigest = async () => { resolve(await original(...args)) }
+        window.evaluationDigestStarted = true
+      })
+    })
+    await openAcademyPattern(page)
+    const form = await fillAcademyEvaluation(page)
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await page.waitForFunction(() => window.evaluationDigestStarted)
+    await page.getByText('다른학생', { exact: true }).click()
+    await page.getByRole('button', { name: /^🧠\s*패턴$/ }).click()
+    await page.getByRole('form', { name: '학생 자기평가 입력' }).getByText('다른학생 학생의 자기평가를 확인하고 입력해 주세요').waitFor()
+    await page.evaluate(() => window.releaseEvaluationDigest())
+    assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 0)
+    assert.equal(state.activities.length, 0)
+  } finally { await context.close() }
+})
+
+test('학원 두 탭의 같은 입력은 한 건이며 내용이나 학생이 다르면 구분한다', async () => {
+  const activities = []
+  const first = await openPage({ role: 'ACADEMY', activities })
+  const second = await openPage({ role: 'ACADEMY', activities })
+  try {
+    await Promise.all([openAcademyPattern(first.page), openAcademyPattern(second.page)])
+    const forms = await Promise.all([fillAcademyEvaluation(first.page), fillAcademyEvaluation(second.page)])
+    await Promise.all(forms.map(form => form.getByRole('button', { name: '자기평가 저장', exact: true }).click()))
+    await Promise.all(forms.map(form => form.getByRole('status').waitFor()))
+    assert.equal(activities.length, 1)
+    await forms[1].getByLabel('학습 시간 (분)').fill('28')
+    await forms[1].getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await forms[1].getByRole('status').waitFor()
+    assert.equal(activities.length, 2)
+    await second.page.getByText('다른학생', { exact: true }).click()
+    await second.page.getByRole('button', { name: /^🧠\s*패턴$/ }).click()
+    const other = await fillAcademyEvaluation(second.page)
+    await other.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await other.getByRole('status').waitFor()
+    assert.deepEqual(activities.map(row => row.studentId), [14, 14, 15])
+    assert.equal(new Set(activities.map(row => row.submissionId)).size, 3)
+  } finally { await first.context.close(); await second.context.close() }
+})
+
+test('학원 분석 데이터 부족과 과소평가를 구별하고 좁은 화면에서도 입력할 수 있다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', metaResponse: { gapLevel: '데이터 없음', gapScore: 0, gapSummary: '성적이 부족합니다.' } })
+  try {
+    await page.setViewportSize({ width: 320, height: 700 })
+    await openAcademyPattern(page)
+    await page.getByText('ℹ️ 분석 데이터 부족', { exact: true }).waitFor()
+    assert.equal(await page.getByText('✅ 메타인지 적정', { exact: true }).count(), 0)
+    assert.equal(await page.getByText('갭 0점', { exact: true }).count(), 0)
+    state.metaResponse = { gapLevel: 'HIGH', gapScore: 30, scaledUnderstandingScore: 40, avgActualScore: 70 }
+    await page.getByRole('button', { name: '국어', exact: true }).click()
+    await page.getByText('⚠️ 메타인지 과소평가', { exact: true }).waitFor()
+    const form = await fillAcademyEvaluation(page, '1')
+    await form.getByLabel('학습일', { exact: true }).fill('0001-01-01')
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('alert').waitFor()
+    assert.equal(state.activities.length, 0)
+    await form.getByLabel('학습일', { exact: true }).fill('2024-02-29')
+    await form.getByLabel('학습 시작 시각').fill('23:59')
+    await form.getByRole('button', { name: '자기평가 저장', exact: true }).click()
+    await form.getByRole('status').waitFor()
+    assert.equal(state.activities[0].studyStartTime, '23:59:00')
+    assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > innerWidth), false)
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })

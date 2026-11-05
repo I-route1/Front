@@ -8,7 +8,7 @@ export async function evaluationSubmissionId(payload) {
 export function manualEvaluationPayload({ studentId, subject, studyDate, startTime, duration, understanding, concentration }) {
   const date = new Date(`${studyDate}T00:00:00`)
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(studyDate)
-    && !Number.isNaN(date.getTime()) && date.getFullYear() > 0
+    && !Number.isNaN(date.getTime()) && date.getFullYear() >= 1000 && date.getFullYear() <= 9999
     && date.getFullYear() === Number(studyDate.slice(0, 4))
     && date.getMonth() + 1 === Number(studyDate.slice(5, 7))
     && date.getDate() === Number(studyDate.slice(8, 10))
