@@ -7,20 +7,23 @@ import { analysisAPI, activitiesAPI } from '@/api'
 import { SUBJECTS } from '../../data/mockData'
 import useStudentRecords from '@/hooks/useStudentRecords'
 import AttentionRecords from '@/components/learning/AttentionRecords'
+import ManualEvaluationForm from '@/components/learning/ManualEvaluationForm'
 import { hourlyConcentration } from '@/components/learning/recordUtils'
 
 export default function PatternPanel({ student }) {
-  const activityRecords = useStudentRecords(student?.studentId ?? student?.id, activitiesAPI.getActivities)
+  const studentId = student?.studentId ?? student?.id
+  const activityRecords = useStudentRecords(studentId, activitiesAPI.getActivities)
   const [metaCognition, setMetaCognition] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectedSubject, setSelectedSubject] = useState('수학')
+  const [analysisRevision, setAnalysisRevision] = useState(0)
   
   // 학습 패턴 + 메타인지 일괄 조회
   useEffect(() => {
-    if (!student?.id) return
-    
+    let active = true
+    if (!studentId) { setLoading(false); return }
     setLoading(true)
-    const studentId = String(student.id)
+    setMetaCognition(null)
     
     Promise.all([
       analysisAPI.getStudyPattern(studentId).catch(e => { 
@@ -31,18 +34,11 @@ export default function PatternPanel({ student }) {
       }),
     ])
       .then(([, metaData]) => {
-        setMetaCognition(metaData)
+        if (active) setMetaCognition(metaData)
       })
-      .finally(() => setLoading(false))
-  }, [student?.id, selectedSubject])
-  
-  if (loading) {
-    return (
-      <div style={{ padding:'40px 0', textAlign:'center', color:'var(--color-text-muted)', fontSize:13 }}>
-        학습 패턴 분석 중...
-      </div>
-    )
-  }
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [studentId, selectedSubject, analysisRevision])
   
   // 시간대별 데이터 가공
   // 응답 형식 불확실해서 여러 케이스 대비
@@ -150,7 +146,7 @@ export default function PatternPanel({ student }) {
         </div>
         
         {/* 메타인지 결과 */}
-        {metaCognition ? (
+        {loading ? <p role="status" style={{ fontSize:12, color:'var(--color-text-muted)' }}>학습 패턴 분석 중...</p> : metaCognition ? (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             <div style={{
               padding:'12px 14px', borderRadius:10,
@@ -195,6 +191,8 @@ export default function PatternPanel({ student }) {
           </div>
         )}
       </div>
+      <ManualEvaluationForm key={studentId} studentId={studentId} studentName={student?.name} subjects={SUBJECTS}
+        onSaved={() => { activityRecords.reload(); setAnalysisRevision(value => value + 1) }} />
     </div>
   )
 }
