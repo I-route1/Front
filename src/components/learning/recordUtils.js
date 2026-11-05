@@ -45,3 +45,16 @@ export function hourlyConcentration(records) {
 export function localStudyDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
+
+export function metaCognitionPresentation(result) {
+  const hasData = ['HIGH', 'MEDIUM', 'LOW'].includes(result?.gapLevel)
+    && Number.isFinite(result?.gapScore)
+  if (!hasData) return { title: 'ℹ️ 분석 데이터 부족', warning: false, hasData: false }
+  if (result.gapLevel === 'LOW') return { title: '✅ 메타인지 적정', warning: false, hasData: true }
+  let title = '⚠️ 자기평가와 성적 차이'
+  if (result.gapLevel === 'HIGH' && Number.isFinite(result.scaledUnderstandingScore)
+      && Number.isFinite(result.avgActualScore)) {
+    title = result.scaledUnderstandingScore > result.avgActualScore ? '⚠️ 메타인지 과대평가' : '⚠️ 메타인지 과소평가'
+  }
+  return { title, warning: true, hasData: true }
+}

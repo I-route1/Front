@@ -15,7 +15,6 @@ export default function ManualEvaluationForm({ studentId, studentName, subjects,
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const pending = useRef(false)
-  const saved = useRef(null)
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -34,19 +33,22 @@ export default function ManualEvaluationForm({ studentId, studentName, subjects,
     try {
       const payload = manualEvaluationPayload({ studentId, subject, studyDate, startTime, duration,
         understanding: scores.이해도, concentration: scores.집중도 })
-      const signature = JSON.stringify(payload)
-      if (saved.current?.signature !== signature) {
-        const submissionId = await evaluationSubmissionId(payload)
-        const activity = await activitiesAPI.postActivity({ ...payload, submissionId })
-        if (!activity?.id) throw new Error('학습 기록을 저장하지 못했습니다. 다시 시도해 주세요.')
-        saved.current = { signature, activity }
+      const submissionId = await evaluationSubmissionId(payload)
+      // 아직 전송하지 않은 요청은 학생/화면 전환 후 시작하지 않는다.
+      if (!mounted.current) return
+      // 매번 서버에서 권한과 저장 결과를 확인한다. 중복 방지는 동일 제출 키가 담당한다.
+      const activity = await activitiesAPI.postActivity({ ...payload, submissionId })
+      if (!Number.isSafeInteger(activity?.id) || activity.id < 1) {
+        throw new Error('학습 기록을 저장하지 못했습니다. 다시 시도해 주세요.')
       }
       if (mounted.current) {
         setMessage('자기평가가 직접 입력 기록으로 저장되었습니다.')
-        onSaved(saved.current.activity)
+        onSaved(activity)
       }
     } catch (cause) {
-      if (mounted.current) setError(cause.message || '저장하지 못했습니다. 다시 시도해 주세요.')
+      if (mounted.current) setError(cause?.name === 'TypeError'
+        ? '서버에 연결하지 못했습니다. 입력값을 유지한 채 다시 저장해 주세요.'
+        : cause?.message || '저장하지 못했습니다. 다시 시도해 주세요.')
     } finally {
       pending.current = false
       if (mounted.current) setSaving(false)
@@ -83,7 +85,7 @@ export default function ManualEvaluationForm({ studentId, studentName, subjects,
         <label>학습 과목<select value={subject} onChange={event => setSubject(event.target.value)}>
           {subjects.map(value => <option key={value}>{value}</option>)}
         </select></label>
-        <label>학습일<input type="date" value={studyDate} onChange={event => setStudyDate(event.target.value)} /></label>
+        <label>학습일<input type="date" min="1000-01-01" max="9999-12-31" value={studyDate} onChange={event => setStudyDate(event.target.value)} /></label>
         <label>학습 시작 시각<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} /></label>
         <label>학습 시간 (분)<input type="number" min="1" max="1440" step="1" value={duration}
           onChange={event => setDuration(event.target.value)} /></label>
