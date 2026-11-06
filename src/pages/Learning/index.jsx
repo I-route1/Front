@@ -7,11 +7,13 @@ import SuggestTab from './SuggestTab'
 import PredictTab from './PredictTab'
 import CounselingTab from './CounselingTab'
 import AskTab from './AskTab'
+import ConcentrationTab from './ConcentrationTab'
 import { studentAPI } from '@/api/student'
 
 const TABS = [
     { id: 'grade',      label: '📊 성적' },
     { id: 'pattern',    label: '🧠 학습 패턴' },
+  { id: 'focus',      label: '🧘 집중도' },
     { id: 'suggest',    label: '📚 맞춤 추천' },
     { id: 'predict',    label: '🎯 성장 예측' },
     { id: 'counseling', label: '🌱 AI 리포트' },
@@ -215,6 +217,7 @@ export default function Learning() {
                 {isLoading && isParent ? <p role="status" style={{ padding:24 }}>자녀 정보를 불러오는 중...</p> : <>
                 {active === 'grade'      && <GradeTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'pattern'    && <PatternTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
+                {active === 'focus'      && <ConcentrationTab key={studentId} studentId={studentId} />}
                 {active === 'suggest'    && <SuggestTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'predict'    && <PredictTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'counseling' && <CounselingTab studentId={studentId} selectedChild={selectedChild} />}

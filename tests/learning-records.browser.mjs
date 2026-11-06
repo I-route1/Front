@@ -79,6 +79,7 @@ async function openPage(options = {}) {
       if (state.loseSaveResponse) { state.loseSaveResponse = false; return route.abort('connectionreset') }
       return respond(saved)
     }
+    if (path.startsWith('/api/activities/') && state.failActivities) return respond({ error: '학습 기록 서버 응답 실패' }, 503)
     if (path.startsWith('/api/activities/')) return respond(state.activities.filter(a => Number(a.studentId ?? 14) === Number(path.split('/').at(-1))))
     if (path === '/api/analysis/meta-cognition') return state.metaResponse
       ? respond(state.metaResponse) : respond({ error: '분석 데이터가 부족합니다.' }, 400)
@@ -115,7 +116,7 @@ test('직접 입력 자기평가 저장·재조회·메타인지 분석 실패�
   const { page, context, state, errors } = await openPage({ empty: true })
   try {
     await page.goto(`${BASE}/learning?tab=pattern`)
-    await page.getByText('아직 카메라 측정 기록이 없어요.', { exact: false }).waitFor()
+    await page.getByText('아직 집중도 기록이 없어요.', { exact: true }).waitFor()
     await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
     await page.getByText('학습일, 학습 시간(1분 이상), 이해도와 집중도를 입력해 주세요.', { exact: true }).waitFor()
     assert.equal(state.requests.filter(r => r.method === 'POST').length, 0)
@@ -125,7 +126,7 @@ test('직접 입력 자기평가 저장·재조회·메타인지 분석 실패�
     await page.getByLabel('학습 시간 (분)').fill('25')
     await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
     await page.getByText('자기평가가 직접 입력 기록으로 저장되었습니다.', { exact: true }).waitFor()
-    await page.getByText('직접 입력', { exact: true }).waitFor()
+    await page.getByText('최근 1회 · 카메라 측정 기록 없음', { exact: true }).waitFor()
     const post = state.requests.find(r => r.path === '/api/activities' && r.method === 'POST')
     assert.equal(post.body.studentId, 14)
     assert.equal(post.body.subject, '국어')
@@ -145,12 +146,37 @@ test('직접 입력 자기평가 저장·재조회·메타인지 분석 실패�
 test('카메라 집중 100%·졸음 0%와 출처를 표시한다', async () => {
   const { page, context, errors } = await openPage({ camera: true })
   try {
+    // 학습 패턴 탭에는 요약 카드만 있고, 누르면 집중도 탭으로 이동한다
     await page.goto(`${BASE}/learning?tab=pattern`)
-    const records = page.getByRole('region', { name: '집중도 측정 기록' })
-    await records.getByText('카메라 측정', { exact: true }).waitFor()
-    await records.getByText('집중 100%', { exact: true }).waitFor()
-    await records.getByText('졸음 0%', { exact: true }).waitFor()
-    assert.equal(await records.getByText('아직 카메라 측정 기록이 없어요.', { exact: false }).count(), 0)
+    await page.getByText('카메라 측정 1회 · 집중 100% · 졸음 0%', { exact: true }).click()
+    await page.waitForURL(/tab=focus/)
+    const cameraCard = page.getByRole('region', { name: '카메라 측정 결과' })
+    await cameraCard.getByText('집중 100% · 졸음 0%', { exact: true }).waitFor()
+    await cameraCard.getByRole('img', { name: '집중 100%, 집중 안 함 0%, 졸음 0%' }).first().waitFor()
+    await page.getByText('📷 카메라', { exact: true }).waitFor()
+    assert.equal(await page.getByText('아직 카메라로 측정한 기록이 없어요.', { exact: false }).count(), 0)
+    assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false)
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/concentration-camera.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('집중도 탭은 직접 입력 기록만 있으면 카메라 안내를 보이고, 조회 실패 시 다시 불러올 수 있다', async () => {
+  const { page, context, state, errors } = await openPage({ activities: [
+    { id: 11, subject: '수학', studyDate: '2026-11-03', studyStartTime: '19:00:00', studyDurationMinutes: 40, concentrationScore: 2, understandingScore: 3, measurementSource: 'MANUAL' },
+    { id: 12, subject: '국어', studyDate: '2026-11-04', studyStartTime: '20:00:00', studyDurationMinutes: 30, concentrationScore: 4, understandingScore: 4, measurementSource: 'MANUAL' },
+  ] })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus`)
+    await page.getByText('아직 카메라로 측정한 기록이 없어요.', { exact: false }).waitFor()
+    await page.getByText('3 / 5', { exact: true }).waitFor()
+    assert.equal(await page.getByText('✍️ 직접 입력', { exact: true }).count(), 2)
+    state.failActivities = true
+    await page.getByRole('button', { name: '새로고침', exact: true }).click()
+    await page.getByRole('alert').waitFor()
+    state.failActivities = false
+    await page.getByRole('button', { name: '다시 불러오기', exact: true }).click()
+    await page.getByText('국어 시간에 가장 집중을 잘하고, 수학 시간에는 집중이 떨어지는 편이에요.', { exact: true }).waitFor()
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })
