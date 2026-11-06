@@ -1,15 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell,
-} from 'recharts'
+import { useSearchParams } from 'react-router-dom'
 import {
   SUBJECTS,
 } from './data/mockData'
 import { activitiesAPI, analysisAPI, gradesAPI } from '@/api'
 import { useAuth, isAcademy } from '@/context/AuthContext'
 import useStudentRecords from '@/hooks/useStudentRecords'
-import AttentionRecords from '@/components/learning/AttentionRecords'
+import ConcentrationSummaryCard from '@/components/learning/ConcentrationSummaryCard'
 import { hourlyConcentration, localStudyDate, metaCognitionPresentation } from '@/components/learning/recordUtils'
 import { evaluationSubmissionId } from '@/components/learning/evaluationSubmission'
 
@@ -38,6 +35,7 @@ export default function PatternTab({ studentId: propStudentId }) {
   const effectiveId = propStudentId ?? user?.id
   const gradeKey = effectiveId
   const activityRecords = useStudentRecords(effectiveId, activitiesAPI.getActivities)
+  const [, setSearchParams] = useSearchParams()
   const hourlyData = useMemo(() => hourlyConcentration(activityRecords.data), [activityRecords.data])
   const [activitySubject, setActivitySubject] = useState('수학')
   const [duration, setDuration] = useState(60)
@@ -217,30 +215,10 @@ export default function PatternTab({ studentId: propStudentId }) {
         </div>
       </div>
 
-      {/* 시간대별 집중도 */}
+      {/* 집중도 요약 → 집중도 탭 */}
       <div style={{ margin:'16px 16px 0' }}>
-        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🕐 시간대별 집중도</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:14 }}>저장된 학습 기록의 집중도 별점 환산 (100점)</p>
-          {hourlyData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={170}>
-            <BarChart data={hourlyData} margin={{ top:4, right:8, left:-20, bottom:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0F3FA" vertical={false} />
-              <XAxis dataKey="time" tick={{ fontSize:10, fill:'#94A3B8' }} />
-              <YAxis domain={[0,100]} tick={{ fontSize:10, fill:'#94A3B8' }} />
-              <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #E2E8F0', fontSize:12 }} formatter={v => [`${v}점`, '집중도']} />
-              <Bar dataKey="focus" radius={[6,6,0,0]}>
-                {hourlyData.map((entry,i) => (
-                  <Cell key={i} fill={entry.time===goldenHour.time ? '#1A56DB' : entry.focus>=70 ? '#60A5FA' : '#E2E8F0'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          ) : <p className="record-empty">{activityRecords.loading ? '학습 기록을 불러오는 중...' : '아직 시간대별 집중도 기록이 없어요.'}</p>}
-        </div>
+        <ConcentrationSummaryCard records={activityRecords} onOpen={() => setSearchParams({ tab: 'focus' }, { replace: true })} />
       </div>
-
-      <div style={{ margin:'12px 16px 0' }}><AttentionRecords records={activityRecords} /></div>
 
       {/* 과목별 학습 시간 */}
       <div style={{ margin:'12px 16px 0' }}>
