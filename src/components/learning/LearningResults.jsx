@@ -4,7 +4,7 @@ import useStudentRecords from '@/hooks/useStudentRecords'
 import { errorTypeLabel, wrongTypeCounts } from './recordUtils'
 import './records.css'
 
-export default function LearningResults({ studentId }) {
+export default function LearningResults({ studentId, showSummary = false }) {
   const wrong = useStudentRecords(studentId, wrongAnswerAPI.getAll)
   const ocr = useStudentRecords(studentId, ocrResultsAPI.getAll)
   const [subject, setSubject] = useState('')
@@ -16,6 +16,8 @@ export default function LearningResults({ studentId }) {
   const counts = wrongTypeCounts(wrongRows)
   return (
     <section className="learning-records" aria-label="오답 및 OCR 채점 기록">
+      {showSummary && !wrong.loading && !ocr.loading && !wrong.error && !ocr.error &&
+        <RecordsSummary wrongRows={wrongRows} ocrRows={ocrRows} counts={counts} subject={subject} />}
       <div className="record-toolbar">
         <label>과목 <select aria-label="기록 과목" value={subject} onChange={e => setSubject(e.target.value)}>
           <option value="">전체 과목</option>
@@ -55,6 +57,29 @@ export default function LearningResults({ studentId }) {
             {ocrRows.length > ocrLimit && <button onClick={() => setOcrLimit(n => n + 20)}>채점 결과 더 보기</button>}</>}
       </div>
     </section>
+  )
+}
+
+// 오답·채점 '한눈에 보기': 최근 채점 결과와 가장 많은 오답 유형 (선택한 과목 기준)
+function RecordsSummary({ wrongRows, ocrRows, counts, subject }) {
+  if (wrongRows.length === 0 && ocrRows.length === 0) return null
+  const latest = ocrRows.reduce((a, r) => (!a || String(r.gradedAt) > String(a.gradedAt) ? r : a), null)
+  const repeated = wrongRows.filter(r => r.failCount >= 2).length
+  const top = counts[0]
+  const lines = []
+  if (latest) lines.push(`최근 ${latest.subject} 채점에서 ${latest.totalQuestions}문항 중 ${latest.correctCount}문항을 맞혔어요.`)
+  if (top && top.type !== 'UNKNOWN') lines.push(`'${top.label}' 유형의 오답이 가장 많아요.`)
+  const date = latest?.gradedAt ? new Date(latest.gradedAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' }) : null
+  return (
+    <div className="records-summary" aria-label="오답·채점 한눈에 보기">
+      <p className="records-summary__label">{subject || '전체 과목'}{date ? ` · 최근 채점 ${date}` : ''}</p>
+      <p className="records-summary__headline">{lines.map(line => <span key={line}>{line}</span>)}</p>
+      <div className="records-summary__stats">
+        <div><span>최근 채점</span><strong>{latest ? `${latest.correctCount} / ${latest.totalQuestions}` : '-'}</strong></div>
+        <div><span>오답 문항</span><strong>{wrongRows.length}개</strong></div>
+        <div><span>반복 오답</span><strong>{repeated}개</strong></div>
+      </div>
+    </div>
   )
 }
 

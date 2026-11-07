@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { gradesAPI } from '@/api'
 import { useAuth } from '@/context/AuthContext'
 import {
@@ -8,54 +8,50 @@ import {
 } from 'recharts'
 import {
   SUBJECTS, EXAM_TYPES, EXAM_TYPE_MOCK, SUBJECT_COLORS,
-  INIT_TREND,
-  getGrade, getPercentile,
+  getGrade,
 } from './data/mockData'
 import { calcMockExamScores } from './utils/mockExamScoring'
+import { normalizeGrades, summarizeGrades, gradeHeadline } from '@/utils/gradeSummary'
 
 export default function GradeTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
   const gradeKey = propStudentId ?? selectedChild?.studentId ?? selectedChild?.id ?? user?.id
-  useEffect(() => {
-    if (!gradeKey) return
-    gradesAPI.getGrades(gradeKey)
-      .then(data => {
-        if (!data || data.length === 0) return
-        // 날짜별로 그룹핑해서 trendData 형식으로 변환
-        const grouped = {}
-        data.forEach(g => {
-          const d = new Date(g.examDate)
-          const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`
-          if (!grouped[label]) {
-            grouped[label] = { date: label, 국어:0, 수학:0, 영어:0, 사회:0, 과학:0 }
-          }
-          grouped[label][g.subject] = g.score
-        })
-        const trend = Object.values(grouped).sort((a,b) => a.date.localeCompare(b.date))
-        if (trend.length > 0) setTrendData(trend)
-      })
-      .catch(e => console.error('성적 조회 실패:', e))
-    }, [gradeKey])
-
-  const [trendData, setTrendData] = useState(INIT_TREND)
+  const [records, setRecords] = useState([])
+  const [loadState, setLoadState] = useState('loading') // loading | ready | error
   const [showForm, setShowForm]   = useState(false)
   const [examType, setExamType]   = useState('중간고사')
   const [examDate, setExamDate]   = useState('')
   const [scores, setScores]       = useState({ 국어:'', 수학:'', 영어:'', 사회:'', 과학:'' })
   const [activeSubs, setActiveSubs] = useState(['국어','수학','영어'])
   const [saveMsg, setSaveMsg]     = useState('')
+  const [saving, setSaving]       = useState(false)
+
+  // 성적이 없는 학생에게 예시 점수를 보여주지 않는다: 실제 기록만 쓴다.
+  const loadGrades = useCallback(() => {
+    if (!gradeKey) { setRecords([]); setLoadState('ready'); return () => {} }
+    let cancelled = false
+    setLoadState('loading')
+    gradesAPI.getGrades(gradeKey)
+      .then(data => { if (!cancelled) { setRecords(normalizeGrades(data)); setLoadState('ready') } })
+      .catch(e => { console.error('성적 조회 실패:', e); if (!cancelled) setLoadState('error') })
+    return () => { cancelled = true }
+  }, [gradeKey])
 
   useEffect(() => {
     setShowForm(false)
     setScores({ 국어:'', 수학:'', 영어:'', 사회:'', 과학:'' })
     setExamDate('')
     setSaveMsg('')
-    setTrendData(INIT_TREND)
-  }, [gradeKey])
+    return loadGrades()
+  }, [loadGrades])
 
-  const latest = trendData[trendData.length - 1]
-  const prev   = trendData[trendData.length - 2] ?? latest
-  const isLatestMock = latest.examType === EXAM_TYPE_MOCK
+  const summary  = useMemo(() => summarizeGrades(records), [records])
+  const headline = useMemo(() => gradeHeadline(summary), [summary])
+  const { current, previous, subjects: takenSubjects, trend: trendData } = summary
+  const hasGrades = takenSubjects.length > 0
+
+  // 그래프 과목 버튼: 기록이 있는 과목만, 처음에는 모두 켠다
+  useEffect(() => { setActiveSubs(takenSubjects) }, [takenSubjects.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mockPreview = useMemo(() => {
     if (examType !== EXAM_TYPE_MOCK) return {}
@@ -66,57 +62,23 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
     return calcMockExamScores(raw)
   }, [examType, scores])
 
-  const reportData = useMemo(() => SUBJECTS.map(s => {
-    const mock = latest.mockMeta?.[s]
-    if (mock) {
-      const prevMock = prev.mockMeta?.[s]
-      return {
-        subject: s,
-        score: mock.raw,
-        displayScore: `${mock.raw}점 (표준 ${mock.standard})`,
-        prev: prevMock?.raw ?? prev[s],
-        percentile: mock.percentile,
-        grade: mock.gradeLabel,
-        standard: mock.standard,
-        isMock: true,
-      }
-    }
-    return {
-      subject: s,
-      score: latest[s],
-      displayScore: `${latest[s]}점`,
-      prev: prev[s],
-      percentile: getPercentile(latest[s]),
-      grade: getGrade(latest[s]),
-      isMock: false,
-    }
-  }), [latest, prev])
+  // 과목별 리포트: 각 과목의 가장 최근 점수와 그 직전 점수를 비교한다
+  const reportData = useMemo(() => takenSubjects.map(s => ({
+    subject: s,
+    score: current[s],
+    prev: previous[s],
+    grade: getGrade(current[s]),
+  })), [takenSubjects, current, previous])
 
-  const radarData = useMemo(() => SUBJECTS.map(s => {
-    const vals = trendData.map(d => d[s]).filter(v => v && v > 0)
-    const subjectAvg = vals.length > 0
-      ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
-      : 72
-    return { subject: s, score: latest[s], avg: subjectAvg }
-  }), [latest, trendData])
+  // 과목별 균형: 최근 점수와 지금까지의 내 평균
+  const radarData = useMemo(() => takenSubjects.map(s => {
+    const vals = records.filter(r => r.subject === s).map(r => r.score)
+    return { subject: s, score: current[s], avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) }
+  }), [takenSubjects, current, records])
 
-  const totalAvg  = Math.round(SUBJECTS.reduce((a,s) => a + latest[s], 0) / SUBJECTS.length)
-  const mockAvgStandard = isLatestMock && latest.mockMeta
-    ? Math.round(
-        Object.values(latest.mockMeta).reduce((a, m) => a + m.standard, 0)
-        / Object.keys(latest.mockMeta).length,
-      )
-    : null
-  const bestSub   = SUBJECTS.reduce((a,s) => latest[s] > latest[a] ? s : a)
-  const worstSub  = SUBJECTS.reduce((a,s) => latest[s] < latest[a] ? s : a)
-  const bestMock  = isLatestMock && latest.mockMeta
-    ? Object.entries(latest.mockMeta).reduce((best, [sub, m]) =>
-        !best || m.percentile > best.percentile ? { sub, ...m } : best, null)
-    : null
-  const worstMock = isLatestMock && latest.mockMeta
-    ? Object.entries(latest.mockMeta).reduce((worst, [sub, m]) =>
-        !worst || m.percentile < worst.percentile ? { sub, ...m } : worst, null)
-    : null
+  const latestExamText = summary.latestExam
+    ? `최근 시험 · ${summary.latestExam.date.replaceAll('-', '.')} ${summary.latestExam.examType}`.trim()
+    : ''
 
     const handleSave = async () => {
       const filled = SUBJECTS.filter(s => scores[s] !== '' && !isNaN(Number(scores[s])))
@@ -124,34 +86,24 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
         setSaveMsg('날짜와 점수를 하나 이상 입력해 주세요')
         return
       }
-    
-      const d = new Date(examDate)
-      const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`
-      const newEntry = { ...latest, date: label, examType }
-    
-      if (examType === EXAM_TYPE_MOCK) {
-        const rawInput = Object.fromEntries(filled.map(s => [s, scores[s]]))
-        const mockMeta = calcMockExamScores(rawInput)
-        if (Object.keys(mockMeta).length === 0) {
-          setSaveMsg('모의고사 원점수를 확인해 주세요')
-          return
-        }
-        filled.forEach(s => { newEntry[s] = mockMeta[s].raw })
-        newEntry.mockMeta = mockMeta
-      } else {
-        delete newEntry.mockMeta
-        filled.forEach(s => { newEntry[s] = Number(scores[s]) })
+      const outOfRange = filled.find(s => Number(scores[s]) < 0 || Number(scores[s]) > 100)
+      if (outOfRange) {
+        setSaveMsg(`${outOfRange} 점수는 0~100 사이로 입력해 주세요`)
+        return
       }
-    
+      if (examType === EXAM_TYPE_MOCK && Object.keys(mockPreview).length === 0) {
+        setSaveMsg('모의고사 원점수를 확인해 주세요')
+        return
+      }
+
       // ── 실제 API 저장 ──────────────────────────
+      setSaving(true)
       try {
         for (const s of filled) {
           await gradesAPI.postGrade({
             studentId: gradeKey,
             subject: s,
-            score: examType === EXAM_TYPE_MOCK
-              ? Number(scores[s])
-              : Number(scores[s]),
+            score: Number(scores[s]),
             gradeLevel: (() => { const m = (selectedChild?.grade ?? '').match(/(\d+)/); return m ? Number(m[1]) : 1 })(),
             examType: examType === '중간고사' ? '중간'
               : examType === '기말고사' ? '기말'
@@ -162,24 +114,14 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
       } catch (e) {
         console.error('성적 저장 실패:', e)
         setSaveMsg('❌ 저장 실패: ' + e.message)
+        setSaving(false)
         return
       }
-    
-      setTrendData(prev => {
-        const idx = prev.findIndex(d => d.date === label)
-        if (idx !== -1) {
-          const updated = [...prev]
-          updated[idx] = newEntry
-          return updated
-        }
-        return [...prev, newEntry]
-      })
-    
-      setSaveMsg(
-        examType === EXAM_TYPE_MOCK
-          ? '✓ 모의고사 성적이 산출·반영되었습니다 (표준점수·백분위·9등급)'
-          : '✓ 성적이 반영되었습니다!',
-      )
+      setSaving(false)
+
+      // 저장한 내용은 서버에서 다시 불러와서 화면을 맞춘다
+      loadGrades()
+      setSaveMsg('✓ 성적이 반영되었습니다!')
       setTimeout(() => setSaveMsg(''), 2500)
       setShowForm(false)
       setScores({ 국어:'', 수학:'', 영어:'', 사회:'', 과학:'' })
@@ -206,23 +148,37 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
           }}>{showForm ? '✕ 닫기' : '+ 성적 입력'}</button>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:20 }}>
-          {(isLatestMock ? [
-            ['평균 표준점수', `${mockAvgStandard}점`, '모의고사 기준'],
-            ['최고 과목', `${bestMock?.sub} ${bestMock?.percentile}%`, bestMock?.gradeLabel ?? ''],
-            ['최저 과목', `${worstMock?.sub} ${worstMock?.percentile}%`, worstMock?.gradeLabel ?? ''],
-          ] : [
-            ['전체 평균', `${totalAvg}점`, ''],
-            ['최고 과목', `${bestSub} ${latest[bestSub]}`, getGrade(latest[bestSub])],
-            ['최저 과목', `${worstSub} ${latest[worstSub]}`, getGrade(latest[worstSub])],
-          ]).map(([k,v,s]) => (
-            <div key={k} style={{ background:'rgba(255,255,255,0.12)', borderRadius:12, padding:'12px 10px', border:'1px solid rgba(255,255,255,0.15)', textAlign:'center' }}>
-              <p style={{ fontSize:10, opacity:0.65 }}>{k}</p>
-              <p style={{ fontSize:14, fontWeight:800, marginTop:3 }}>{v}</p>
-              <p style={{ fontSize:10, opacity:0.7, marginTop:2 }}>{s}</p>
+        {loadState === 'loading' && <p role="status" style={{ marginTop:18, fontSize:13, opacity:0.8 }}>성적을 불러오는 중...</p>}
+        {loadState === 'error' && (
+          <div role="alert" style={{ marginTop:18, fontSize:13 }}>
+            성적을 불러오지 못했어요.{' '}
+            <button type="button" onClick={loadGrades} style={{ border:'none', background:'rgba(255,255,255,0.2)', color:'white', borderRadius:8, padding:'4px 10px', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>다시 불러오기</button>
+          </div>
+        )}
+        {loadState === 'ready' && !hasGrades && (
+          <p style={{ marginTop:18, fontSize:15, fontWeight:700, lineHeight:1.5 }}>아직 등록된 성적이 없어요.<br /><span style={{ fontSize:13, fontWeight:500, opacity:0.8 }}>'+ 성적 입력'으로 첫 시험 점수를 넣어 보세요.</span></p>
+        )}
+        {loadState === 'ready' && hasGrades && (
+          <section aria-label="성적 한눈에 보기">
+            <p style={{ marginTop:14, fontSize:12, opacity:0.75 }}>{latestExamText}</p>
+            <p style={{ marginTop:4, fontSize:17, fontWeight:800, lineHeight:1.45 }}>
+              {headline.map((line, i) => <span key={line} style={{ display:'block' }}>{line}</span>)}
+            </p>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:16 }}>
+              {[
+                ['과목별 최근 평균', `${summary.average}점`, `${takenSubjects.length}과목`],
+                ['가장 잘한 과목', summary.best, `${current[summary.best]}점`],
+                ['보완할 과목', summary.weakest ?? '-', summary.weakest ? `${current[summary.weakest]}점` : '과목이 더 필요해요'],
+              ].map(([k,v,sub]) => (
+                <div key={k} style={{ background:'rgba(255,255,255,0.12)', borderRadius:12, padding:'12px 10px', border:'1px solid rgba(255,255,255,0.15)', textAlign:'center' }}>
+                  <p style={{ fontSize:10, opacity:0.75 }}>{k}</p>
+                  <p style={{ fontSize:15, fontWeight:800, marginTop:3 }}>{v}</p>
+                  <p style={{ fontSize:10, opacity:0.75, marginTop:2 }}>{sub}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </section>
+        )}
 
         {saveMsg && (
           <div style={{ marginTop:12, padding:'10px 14px', background:'rgba(0,196,154,0.25)', borderRadius:10, border:'1px solid rgba(0,196,154,0.4)', fontSize:13, fontWeight:600 }}>
@@ -286,17 +242,17 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
                         <input
                           type="number" min={0} max={100}
                           className="input-field"
-                          placeholder={examType === EXAM_TYPE_MOCK ? '원점수 입력' : `현재 ${latest[s]}점`}
+                          placeholder={examType === EXAM_TYPE_MOCK ? '원점수 입력' : current[s] != null ? `최근 ${current[s]}점` : '점수 입력'}
                           value={scores[s]}
                           onChange={e => setScores(p => ({ ...p, [s]: e.target.value }))}
                           style={{ flex:1 }}
                         />
-                        {examType !== EXAM_TYPE_MOCK && scores[s] !== '' && !isNaN(Number(scores[s])) && (
+                        {examType !== EXAM_TYPE_MOCK && current[s] != null && scores[s] !== '' && !isNaN(Number(scores[s])) && (
                           <span style={{
                             fontSize:11, fontWeight:700, flexShrink:0,
-                            color: Number(scores[s]) > latest[s] ? 'var(--color-success)' : Number(scores[s]) < latest[s] ? 'var(--color-danger)' : 'var(--color-text-muted)',
+                            color: Number(scores[s]) > current[s] ? 'var(--color-success)' : Number(scores[s]) < current[s] ? 'var(--color-danger)' : 'var(--color-text-muted)',
                           }}>
-                            {Number(scores[s]) > latest[s] ? `▲${Number(scores[s])-latest[s]}` : Number(scores[s]) < latest[s] ? `▼${latest[s]-Number(scores[s])}` : '-'}
+                            {Number(scores[s]) > current[s] ? `▲${Number(scores[s])-current[s]}` : Number(scores[s]) < current[s] ? `▼${current[s]-Number(scores[s])}` : '-'}
                           </span>
                         )}
                       </div>
@@ -317,23 +273,24 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
               </div>
             </div>
 
-            <button onClick={handleSave} style={{
+            <button onClick={handleSave} disabled={saving} style={{
               width:'100%', padding:'13px', borderRadius:12, border:'none',
               background:'var(--color-primary)', color:'white', fontSize:15, fontWeight:700,
               fontFamily:'inherit', cursor:'pointer', boxShadow:'0 4px 12px rgba(26,86,219,0.3)',
-            }}>저장하고 반영하기</button>
+            }}>{saving ? '저장 중...' : '저장하고 반영하기'}</button>
           </div>
         </div>
       )}
 
+      {hasGrades && <>
       {/* 추이 그래프 */}
       <div style={{ margin:'16px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
             <p style={{ fontSize:14, fontWeight:700 }}>📈 성적 추이</p>
             <div style={{ display:'flex', gap:5, flexWrap:'wrap', justifyContent:'flex-end' }}>
-              {SUBJECTS.map(s => (
-                <button key={s} onClick={() => toggleSub(s)} style={{
+              {takenSubjects.map(s => (
+                <button key={s} type="button" aria-pressed={activeSubs.includes(s)} onClick={() => toggleSub(s)} style={{
                   padding:'3px 9px', borderRadius:20, border:'none', cursor:'pointer',
                   fontFamily:'inherit', fontSize:11, fontWeight:600,
                   background: activeSubs.includes(s) ? SUBJECT_COLORS[s]+'20' : 'var(--color-surface-2)',
@@ -347,11 +304,11 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
             <LineChart data={trendData} margin={{ top:4, right:8, left:-20, bottom:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0F3FA" />
               <XAxis dataKey="date" tick={{ fontSize:11, fill:'#94A3B8' }} />
-              <YAxis domain={[40,100]} tick={{ fontSize:11, fill:'#94A3B8' }} />
-              <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #E2E8F0', fontSize:12 }} formatter={(v,n) => [`${v}점`, n]} />
-              {SUBJECTS.filter(s => activeSubs.includes(s)).map(s => (
+              <YAxis domain={[0,100]} tick={{ fontSize:11, fill:'#94A3B8' }} />
+              <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #E2E8F0', fontSize:12 }} formatter={(v,n) => [v == null ? '응시 안 함' : `${v}점`, n]} />
+              {takenSubjects.filter(s => activeSubs.includes(s)).map(s => (
                 <Line key={s} type="monotone" dataKey={s} stroke={SUBJECT_COLORS[s]} strokeWidth={2.5}
-                  dot={{ r:4, fill:SUBJECT_COLORS[s] }} activeDot={{ r:6 }} />
+                  dot={{ r:4, fill:SUBJECT_COLORS[s] }} activeDot={{ r:6 }} connectNulls />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -359,51 +316,42 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
       </div>
 
       {/* 레이더 차트 */}
+      {radarData.length >= 3 && (
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🎯 전체 평균 대비 나의 위치</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:8 }}>최근 시험 기준</p>
+          <p style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>🎯 과목별 균형</p>
+          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:8 }}>과목별 최근 점수와 지금까지의 내 평균</p>
           <ResponsiveContainer width="100%" height={210}>
             <RadarChart data={radarData}>
               <PolarGrid stroke="#E2E8F0" />
               <PolarAngleAxis dataKey="subject" tick={{ fontSize:12, fill:'#4A5568' }} />
-              <Radar name="나" dataKey="score" stroke="#1A56DB" fill="#1A56DB" fillOpacity={0.25} strokeWidth={2} />
-              <Radar name="전체평균" dataKey="avg" stroke="#94A3B8" fill="#94A3B8" fillOpacity={0.1} strokeWidth={1.5} strokeDasharray="4 4" />
+              <Radar name="최근 점수" dataKey="score" stroke="#1A56DB" fill="#1A56DB" fillOpacity={0.25} strokeWidth={2} />
+              <Radar name="내 평균" dataKey="avg" stroke="#94A3B8" fill="#94A3B8" fillOpacity={0.1} strokeWidth={1.5} strokeDasharray="4 4" />
               <Legend wrapperStyle={{ fontSize:12 }} />
               <Tooltip formatter={v => `${v}점`} />
             </RadarChart>
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* 과목별 리포트 */}
       <div style={{ margin:'12px 16px 0' }}>
         <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
           <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>📋 과목별 분석 리포트</p>
-          {isLatestMock && (
-            <p style={{ fontSize:11, color:'var(--color-text-muted)', marginBottom:12 }}>
-              최근 모의고사 · 평가원 방식 산출 (표준점수·백분위·9등급)
-            </p>
-          )}
+          <p style={{ fontSize:11, color:'var(--color-text-muted)', marginBottom:12 }}>과목마다 가장 최근 점수와 그 직전 점수를 비교해요</p>
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {reportData.map(r => {
-              const diff = r.score - r.prev
+              const diff = r.prev == null ? null : r.score - r.prev
               return (
                 <div key={r.subject} style={{ padding:'12px 14px', borderRadius:12, background:'var(--color-surface-2)', border:'1px solid var(--color-border)' }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       <span style={{ width:32, height:32, borderRadius:8, background:SUBJECT_COLORS[r.subject]+'18', color:SUBJECT_COLORS[r.subject], fontSize:11, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{r.subject}</span>
                       <div>
-                        {r.isMock ? (
-                          <>
-                            <span style={{ fontSize:15, fontWeight:800 }}>원점수 {r.score}점</span>
-                            <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:2 }}>표준점수 {r.standard}</p>
-                          </>
-                        ) : (
-                          <span style={{ fontSize:15, fontWeight:800 }}>{r.score}점</span>
-                        )}
+                        <span style={{ fontSize:15, fontWeight:800 }}>{r.score}점</span>
                         <span style={{ fontSize:12, fontWeight:600, marginLeft:6, color: diff>0 ? 'var(--color-success)' : diff<0 ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>
-                          {diff>0 ? `▲${diff}` : diff<0 ? `▼${Math.abs(diff)}` : '-'}
+                          {diff == null ? '첫 기록' : diff>0 ? `▲${diff}` : diff<0 ? `▼${Math.abs(diff)}` : '변동 없음'}
                         </span>
                       </div>
                     </div>
@@ -411,11 +359,11 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
                   </div>
                   <div>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                      <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>백분위</span>
-                      <span style={{ fontSize:11, fontWeight:600, color:SUBJECT_COLORS[r.subject] }}>{r.percentile}%</span>
+                      <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>점수</span>
+                      <span style={{ fontSize:11, fontWeight:600, color:SUBJECT_COLORS[r.subject] }}>{r.score} / 100</span>
                     </div>
                     <div style={{ height:6, background:'var(--color-border)', borderRadius:3, overflow:'hidden' }}>
-                      <div style={{ height:'100%', width:`${r.percentile}%`, background:SUBJECT_COLORS[r.subject], borderRadius:3 }} />
+                      <div style={{ height:'100%', width:`${r.score}%`, background:SUBJECT_COLORS[r.subject], borderRadius:3 }} />
                     </div>
                   </div>
                 </div>
@@ -424,6 +372,8 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
           </div>
         </div>
       </div>
+
+      </>}
 
       {/* 오답과 OCR 채점 결과는 '오답 · 채점' 화면에서 본다 */}
       <div style={{ height: 16 }} />

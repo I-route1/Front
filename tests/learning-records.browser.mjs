@@ -86,7 +86,7 @@ async function openPage(options = {}) {
     if (path.includes('study-pattern')) return respond({ goldenTime: '데이터 없음', subjectStudyMinutes: {} })
     if (path.includes('strengths')) return respond({ strongSubjectIds: [] })
     if (path.includes('risk')) return respond({ atRisk: false })
-    if (path.startsWith('/api/grades/')) return respond([])
+    if (path.startsWith('/api/grades/')) return respond(path.endsWith('/14') ? (state.grades || []) : [])
     return respond([])
   })
   return { page, context, state, errors }
@@ -102,6 +102,9 @@ test('학부모 성적 화면에서 학생별 오답·OCR 인식 글자·과목 
     await records.getByText('되지', { exact: true }).waitFor()
     await records.getByText('돼지', { exact: true }).waitFor()
     await records.getByText('1번', { exact: false }).first().waitFor()
+    const summary = records.getByLabel('오답·채점 한눈에 보기')
+    await summary.getByText('최근 국어 채점에서 2문항 중 1문항을 맞혔어요.', { exact: true }).waitFor()
+    await summary.getByText("'암기 부족' 유형의 오답이 가장 많아요.", { exact: true }).waitFor()
     await page.getByLabel('기록 과목').selectOption('수학')
     assert.equal(await records.getByText('국어 · 국어-1', { exact: true }).count(), 0)
     await records.getByText('수학 · 수학-1', { exact: true }).waitFor()
@@ -175,6 +178,34 @@ test('학습 탭은 위쪽 탭 3개와 세그먼트로 이동하고 예전 주�
     // 자녀는 이름 버튼으로 선택한다
     assert.equal(await page.getByRole('button', { name: '연결검증학생 · 중1', exact: true }).getAttribute('aria-pressed'), 'true')
     assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('성적 화면은 안 본 과목을 0점으로 계산하지 않고, 성적이 없으면 예시 점수 대신 안내를 보인다', async () => {
+  const grades = [
+    { subject: '수학', score: 66, examDate: '2025-09-11', examType: '9월모의고사' },
+    { subject: '수학', score: 67, examDate: '2025-07-08', examType: '기말고사' },
+    { subject: '국어', score: 70, examDate: '2025-07-08', examType: '기말고사' },
+    { subject: '영어', score: 72, examDate: '2025-07-08', examType: '기말고사' },
+    { subject: '국어', score: 68, examDate: '2025-05-10', examType: '중간고사' },
+    { subject: '영어', score: 70, examDate: '2025-05-10', examType: '중간고사' },
+  ]
+  const { page, context, errors } = await openPage({ grades })
+  try {
+    await page.goto(`${BASE}/learning?tab=grade`)
+    const summary = page.getByRole('region', { name: '성적 한눈에 보기' })
+    await summary.getByText('국어가 지난 시험보다 2점 올랐어요.', { exact: true }).waitFor()
+    await summary.getByText('수학이 1점 내려갔어요.', { exact: true }).waitFor()
+    await summary.getByText('69점', { exact: true }).waitFor()
+    await summary.getByText('최근 시험 · 2025.09.11 9월모의고사', { exact: true }).waitFor()
+    assert.equal(await page.getByText('0점', { exact: true }).count(), 0)
+    assert.equal(await page.getByRole('button', { name: '사회', exact: true }).count(), 0)
+    // 성적이 없는 자녀에게는 예시 점수를 보여주지 않는다
+    await page.getByRole('button', { name: '다른학생 · 중2', exact: true }).click()
+    await page.getByText('아직 등록된 성적이 없어요.', { exact: false }).waitFor()
+    assert.equal(await page.getByRole('region', { name: '성적 한눈에 보기' }).count(), 0)
+    assert.equal(await page.getByText('📈 성적 추이', { exact: true }).count(), 0)
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })

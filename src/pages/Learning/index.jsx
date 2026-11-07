@@ -222,7 +222,7 @@ export default function Learning() {
                 <SegmentControl group={activeGroup} active={active} onSelect={setActive} />
                 {isLoading && isParent ? <p role="status" style={{ padding:24 }}>자녀 정보를 불러오는 중...</p> : <div style={{ paddingTop: 12 }}>
                 {active === 'grade'      && <GradeTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
-                {active === 'records'    && <div style={{ margin: '0 16px 16px' }}><LearningResults key={studentId} studentId={studentId} /></div>}
+                {active === 'records'    && <div style={{ margin: '0 16px 16px' }}><LearningResults key={studentId} studentId={studentId} showSummary /></div>}
                 {active === 'pattern'    && <PatternTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'focus'      && <ConcentrationTab key={studentId} studentId={studentId} />}
                 {active === 'suggest'    && <SuggestTab    studentId={studentId} selectedChild={selectedChild} />}
