@@ -32,3 +32,12 @@
 .manual-evaluation input { width:100%; box-sizing:border-box; }
 
 .record-question-id { margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--color-text-muted); }
+
+.records-summary { background: var(--color-primary); color: #fff; border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+.records-summary__label { font-size: 12px; opacity: .8; }
+.records-summary__headline { margin-top: 4px; font-size: 16px; font-weight: 800; line-height: 1.45; }
+.records-summary__headline span { display: block; }
+.records-summary__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.records-summary__stats div { background: rgba(255,255,255,.14); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.records-summary__stats span { font-size: 11px; opacity: .85; }
+.records-summary__stats strong { font-size: 16px; font-weight: 800; }
