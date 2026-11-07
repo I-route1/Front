@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
-import { reviewAPI, studyPlanAPI, gradesAPI, checklistAPI } from '@/api'
+import { reviewAPI, studyPlanAPI, gradesAPI, checklistAPI, activitiesAPI } from '@/api'
 import { aiReportAPI } from '@/api/aiReport'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
-import {
-  SUBJECTS, SUBJECT_COLORS,
-  INIT_TREND,
-} from './data/mockData'
+import { SUBJECTS, SUBJECT_COLORS } from './data/mockData'
+import { normalizeGrades, summarizeGrades, averageDailyStudyHours, withPredictedPoint } from '@/utils/gradeSummary'
 import { useAuth } from '@/context/AuthContext'
 
 export default function PredictTab({ studentId: propStudentId, selectedChild }) {
@@ -29,9 +27,12 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
   const [roadmapError, setRoadmapError] = useState(null)
   const [reviewData, setReviewData]   = useState(null)
   const [reviewLoading, setReviewLoading] = useState(false)
-  const [trendData, setTrendData]     = useState(INIT_TREND)
+  const [gradeRecords, setGradeRecords] = useState([])
+  const [gradesState, setGradesState] = useState('loading') // loading | ready | error
+  const [studyHours, setStudyHours]   = useState(null)
   const [aiPrediction, setAiPrediction] = useState(null)
   const [predictionLoading, setPredictionLoading] = useState(false)
+  const [predictionError, setPredictionError] = useState(false)
 
   useEffect(() => {
     setGoal('')
@@ -77,45 +78,47 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
     fetchReview()
   }, [effectiveId])
 
-  // AI 성적 예측
+  // 실제 성적과 공부 시간을 불러온 뒤 AI 예측을 요청한다 (성적이 없으면 예측하지 않는다)
   useEffect(() => {
     if (!effectiveId) return
-    const fetchPrediction = async () => {
+    let cancelled = false
+    setGradesState('loading')
+    setGradeRecords([])
+    setAiPrediction(null)
+    setPredictionError(false)
+    setStudyHours(null)
+    ;(async () => {
+      let records
+      try {
+        records = normalizeGrades(await gradesAPI.getGrades(effectiveId))
+      } catch (e) {
+        console.error('성적 조회 실패:', e)
+        if (!cancelled) setGradesState('error')
+        return
+      }
+      if (cancelled) return
+      setGradeRecords(records)
+      setGradesState('ready')
+      const summary = summarizeGrades(records)
+      if (summary.average == null) return
+
+      const hours = averageDailyStudyHours(await activitiesAPI.getActivities(effectiveId).catch(() => []))
+      if (cancelled) return
+      setStudyHours(hours)
       setPredictionLoading(true)
       try {
-        const gradesData = await gradesAPI.getGrades(effectiveId).catch(() => [])
-        const avg = gradesData.length > 0
-          ? Math.round(gradesData.reduce((a, g) => a + (g.score || 0), 0) / gradesData.length)
-          : 0
-        const res = await aiReportAPI.predictScore(avg, 2)
-        setAiPrediction(res)
+        // 공부 시간 기록이 없으면 하루 2시간으로 가정한다 (화면에 표시)
+        const res = await aiReportAPI.predictScore(summary.average, hours ?? 2)
+        if (!cancelled) setAiPrediction(Number.isFinite(res?.expected_score) ? res : null)
+        if (!cancelled && !Number.isFinite(res?.expected_score)) setPredictionError(true)
       } catch (e) {
         console.error('AI 예측 실패:', e)
-        setAiPrediction(null)
+        if (!cancelled) setPredictionError(true)
       } finally {
-        setPredictionLoading(false)
+        if (!cancelled) setPredictionLoading(false)
       }
-    }
-    fetchPrediction()
-  }, [effectiveId])
-
-  // 성적 그래프
-  useEffect(() => {
-    if (!effectiveId) return
-    gradesAPI.getGrades(effectiveId)
-      .then(data => {
-        if (!data || data.length === 0) return
-        const grouped = {}
-        data.forEach(g => {
-          const d = new Date(g.examDate)
-          const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`
-          if (!grouped[label]) grouped[label] = { date: label, 국어:0, 수학:0, 영어:0, 사회:0, 과학:0 }
-          grouped[label][g.subject] = g.score
-        })
-        const trend = Object.values(grouped).sort((a,b) => a.date.localeCompare(b.date))
-        if (trend.length > 0) setTrendData(trend)
-      })
-      .catch(() => {})
+    })()
+    return () => { cancelled = true }
   }, [effectiveId])
 
   const handleDismissReview = async (index) => {
@@ -214,25 +217,11 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
 
   const doneCount = plan.filter(p => p.done).length
 
-  const PREDICT_DATA = (() => {
-    const last = trendData[trendData.length - 1]
-    const currentAvg = last
-      ? Math.round(SUBJECTS.reduce((a, s) => a + (last[s] || 0), 0) / SUBJECTS.length)
-      : 0
-    const delta = aiPrediction ? (aiPrediction.expected_score - currentAvg) : 0
-    const predictedPoint = { date: '25.06', predicted: true }
-    SUBJECTS.forEach(s => {
-      predictedPoint[s] = last
-        ? Math.min(100, Math.max(0, Math.round((last[s] || 0) + delta)))
-        : (aiPrediction?.expected_score ?? 80)
-    })
-    return [...trendData, predictedPoint]
-  })()
-
-  const latest  = PREDICT_DATA[PREDICT_DATA.length - 2]
-  const predicted = PREDICT_DATA[PREDICT_DATA.length - 1]
-  const avgNow  = Math.round(SUBJECTS.reduce((a, s) => a + (latest[s] || 0), 0) / SUBJECTS.length)
-  const avgPred = aiPrediction?.expected_score ?? Math.round(SUBJECTS.reduce((a, s) => a + (predicted[s] || 0), 0) / SUBJECTS.length)
+  const gradeSummary = summarizeGrades(gradeRecords)
+  const hasGrades = gradeSummary.subjects.length > 0
+  const PREDICT_DATA = withPredictedPoint(gradeSummary, aiPrediction?.expected_score)
+  const avgNow  = gradeSummary.average
+  const avgPred = aiPrediction?.expected_score ?? null
 
   return (
     <div>
@@ -242,21 +231,34 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
         <h2 style={{ fontSize: 20, fontWeight: 800 }}>성장 예측 · 목표 설계</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginTop: 18 }}>
           <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: '13px', border: '1px solid rgba(255,255,255,0.15)' }}>
-            <p style={{ fontSize: 11, opacity: 0.7 }}>현재 평균</p>
-            <p style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{avgNow}점</p>
+            <p style={{ fontSize: 11, opacity: 0.7 }}>과목별 최근 평균</p>
+            <p style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{gradesState === 'loading' ? '…' : avgNow == null ? '-' : `${avgNow}점`}</p>
+            {hasGrades && <p style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>{gradeSummary.subjects.length}과목 기준</p>}
           </div>
           <div style={{ background: 'rgba(0,196,154,0.2)', borderRadius: 12, padding: '13px', border: '1px solid rgba(0,196,154,0.4)' }}>
             <p style={{ fontSize: 11, opacity: 0.7 }}>{predictionLoading ? 'AI 예측 중...' : 'AI 예측 다음 시험'}</p>
             {predictionLoading ? (
               <p style={{ fontSize: 16, fontWeight: 700, marginTop: 4, color: '#7FFFD4', opacity: 0.7 }}>🤖 분석 중...</p>
-            ) : (
+            ) : avgPred != null ? (
               <>
                 <p style={{ fontSize: 22, fontWeight: 800, marginTop: 2, color: '#7FFFD4' }}>{avgPred}점</p>
-                <p style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>{avgPred >= avgNow ? `▲${avgPred - avgNow}점 상승 예측` : `▼${avgNow - avgPred}점 하락 예측`}</p>
+                <p style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>{avgPred > avgNow ? `▲${avgPred - avgNow}점 상승 예측` : avgPred < avgNow ? `▼${avgNow - avgPred}점 하락 예측` : '현재 수준 유지 예측'}</p>
               </>
+            ) : (
+              <p style={{ fontSize: 13, fontWeight: 600, marginTop: 4, lineHeight: 1.4 }}>
+                {gradesState === 'loading' ? '…'
+                  : !hasGrades ? '성적이 등록되면 예측해 드려요'
+                  : predictionError ? '지금은 예측할 수 없어요 (AI 서버 확인 필요)'
+                  : '-'}
+              </p>
             )}
           </div>
         </div>
+        {avgPred != null && !predictionLoading && (
+          <p style={{ marginTop: 10, fontSize: 11, opacity: 0.75 }}>
+            {studyHours != null ? `하루 평균 공부 ${studyHours}시간 기준` : '공부 시간 기록이 없어 하루 2시간으로 가정했어요'}
+          </p>
+        )}
         {aiPrediction?.message && !predictionLoading && (
           <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}>
             <p style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.5 }}>{aiPrediction.message}</p>
@@ -264,31 +266,40 @@ export default function PredictTab({ studentId: propStudentId, selectedChild }) 
         )}
       </div>
 
-      {/* 성적 예측 그래프 */}
+      {/* 성적 예측 그래프: 실제 성적이 있을 때만 */}
+      {gradesState === 'error' && (
+        <div role="alert" style={{ margin: '16px 16px 0', padding: '12px 14px', borderRadius: 12, background: '#FFF1F1', color: '#B42318', fontSize: 13 }}>
+          성적을 불러오지 못해 예측 그래프를 표시할 수 없어요.
+        </div>
+      )}
+      {hasGrades && (
       <div style={{ margin: '16px 16px 0' }}>
         <div style={{ background: 'var(--color-surface)', borderRadius: 16, border: '1px solid var(--color-border)', padding: 16 }}>
           <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>📈 성적 예측 그래프</p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>마지막 데이터가 AI 예측 값입니다</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+            {avgPred != null ? "마지막 '다음 시험'이 AI 예측 값입니다" : '지금까지의 실제 성적입니다'}
+          </p>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={PREDICT_DATA} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0F3FA" />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94A3B8' }} />
-              <YAxis domain={[40, 100]} tick={{ fontSize: 11, fill: '#94A3B8' }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#94A3B8' }} />
               <Tooltip
                 contentStyle={{ borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 12 }}
-                formatter={(v, n) => [`${v}점`, n]}
+                formatter={(v, n, p) => [v == null ? '응시 안 함' : `${v}점${p?.payload?.predicted ? ' (예측)' : ''}`, n]}
               />
-              {SUBJECTS.map(s => (
+              {gradeSummary.subjects.map(s => (
                 <Line
-                  key={s} type="monotone" dataKey={s}
+                  key={s} type="monotone" dataKey={s} name={s}
                   stroke={SUBJECT_COLORS[s]} strokeWidth={2.5}
-                  dot={{ r: 4, fill: SUBJECT_COLORS[s] }} activeDot={{ r: 6 }}
+                  dot={{ r: 4, fill: SUBJECT_COLORS[s] }} activeDot={{ r: 6 }} connectNulls
                 />
               ))}
             </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* 오늘의 학습 계획 */}
       <div style={{ margin: '12px 16px 0' }}>

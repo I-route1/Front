@@ -121,7 +121,7 @@ export function AnalysisReportSection() {
   const [reportLoading, setReportLoading] = useState(true)
   const [subject, setSubject]         = useState('수학')
 
-  const SUBJECTS = ['수학', '영어', '국어', '한국사', '사회탐구', '과학탐구']
+  const SUBJECTS = ['수학', '영어', '국어', '사회탐구', '과학탐구']
 
   const fetchReport = (sub) => {
     if (!user?.id) return

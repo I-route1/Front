@@ -65,3 +65,21 @@ test('과목 이름 뒤 조사', () => {
   assert.equal(subjectParticle('과학'), '이')
   assert.equal(subjectParticle('사회'), '가')
 })
+
+test('하루 평균 공부 시간과 다음 시험 예측 점', async () => {
+  const { averageDailyStudyHours, withPredictedPoint } = await import('../src/utils/gradeSummary.js')
+  assert.equal(averageDailyStudyHours([]), null)
+  assert.equal(averageDailyStudyHours([
+    { studyDate: '2026-11-01', studyDurationMinutes: 60 },
+    { studyDate: '2026-11-01', studyDurationMinutes: 30 },
+    { studyDate: '2026-11-02', studyDurationMinutes: 90 },
+    { studyDate: '2026-11-03', studyDurationMinutes: -5 },
+  ]), 1.5)
+  const s = summarizeGrades(normalizeGrades(rows)) // 평균 69, 국어 70 · 수학 66 · 영어 72
+  const data = withPredictedPoint(s, 72)
+  const next = data.at(-1)
+  assert.equal(next.date, '다음 시험')
+  assert.deepEqual([next.국어, next.수학, next.영어, next.사회], [73, 69, 75, null])
+  assert.equal(withPredictedPoint(s, undefined).length, s.trend.length)
+  assert.deepEqual(withPredictedPoint(summarizeGrades([]), 80), [])
+})

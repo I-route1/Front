@@ -3,6 +3,7 @@ import { analysisAPI } from '@/api'
 import { SUBJECT_COLORS } from '../../data/mockData'
 
 // subjectId → 과목명 매핑 (백엔드 확인 후 보정)
+// 4(한국사)는 더 이상 선택할 수 없지만, 예전에 저장된 기록의 이름을 보여주기 위해 남겨 둔다.
 const SUBJECT_NAME_BY_ID = {
   1: '국어',
   2: '수학',

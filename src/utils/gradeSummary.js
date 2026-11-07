@@ -78,3 +78,29 @@ export function gradeHeadline(summary) {
   if (!lines.length) lines.push('지난 시험과 같은 점수를 유지했어요.')
   return lines
 }
+
+// 학습 기록에서 하루 평균 공부 시간(시간). 기록이 없으면 null
+export function averageDailyStudyHours(activities) {
+  const byDay = new Map()
+  ;(Array.isArray(activities) ? activities : []).forEach(a => {
+    const minutes = Number(a?.studyDurationMinutes)
+    const day = typeof a?.studyDate === 'string' ? a.studyDate.slice(0, 10) : ''
+    if (!day || !Number.isFinite(minutes) || minutes <= 0) return
+    byDay.set(day, (byDay.get(day) ?? 0) + minutes)
+  })
+  if (byDay.size === 0) return null
+  const total = [...byDay.values()].reduce((a, b) => a + b, 0)
+  return Math.round((total / byDay.size / 60) * 10) / 10
+}
+
+// 성적 추이 끝에 '다음 시험' 예측 점을 붙인다.
+// 과목별 최근 점수에 (AI 예상 평균 - 현재 평균)만큼 더한다. 기록이 없는 과목은 비운다.
+export function withPredictedPoint(summary, expectedAverage) {
+  if (!summary || summary.subjects.length === 0 || !Number.isFinite(expectedAverage)) return summary?.trend ?? []
+  const delta = expectedAverage - summary.average
+  const point = { date: '다음 시험', predicted: true }
+  GRADE_SUBJECTS.forEach(s => {
+    point[s] = summary.current[s] == null ? null : Math.min(100, Math.max(0, Math.round(summary.current[s] + delta)))
+  })
+  return [...summary.trend, point]
+}
