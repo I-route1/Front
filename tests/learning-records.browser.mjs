@@ -61,6 +61,14 @@ async function openPage(options = {}) {
       if (state.fail) return respond({ error: '오답 서버 응답 실패' }, 503)
       return respond(path.endsWith('/14') && !state.empty ? (state.wrong || wrong) : [])
     }
+    if (path.startsWith('/api/gps/attendance/students/')) {
+      if (state.attendanceFail) return respond({ error: '출결 서버 오류' }, 500)
+      return respond((state.attendance || {})[path.split('/').pop()] || [])
+    }
+    if (path === '/api/ai/predict') {
+      if (!state.predict) return respond({ error: 'AI 서버 꺼짐' }, 503)
+      return respond(state.predict)
+    }
     if (path === '/api/ocr-results') {
       if (state.delay && url.searchParams.get('studentId') === '14') await state.delay
       return respond(url.searchParams.get('studentId') === '14' && !state.empty ? (state.ocr || ocr) : [])
@@ -206,6 +214,67 @@ test('성적 화면은 안 본 과목을 0점으로 계산하지 않고, 성적�
     await page.getByText('아직 등록된 성적이 없어요.', { exact: false }).waitFor()
     assert.equal(await page.getByRole('region', { name: '성적 한눈에 보기' }).count(), 0)
     assert.equal(await page.getByText('📈 성적 추이', { exact: true }).count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학부모 출결은 실제 자녀 목록과 인증 헤더로 조회하고, 실패해도 예시 자녀를 보여주지 않는다', async () => {
+  const { page, context, state, errors } = await openPage({ attendance: {
+    14: [{ attendanceId: 2, studentId: 14, studentName: '연결검증학생', busId: 1, eventType: 'BOARD', timestamp: '2026-11-07T08:10:00' }],
+  } })
+  try {
+    await page.goto(`${BASE}/attendance`)
+    await page.getByText('승차 — 버스 탑승 중', { exact: false }).waitFor()
+    assert.equal(await page.getByText('홍민준', { exact: false }).count(), 0)
+    const req = state.requests.find(r => r.path === '/api/gps/attendance/students/14')
+    assert.equal(req.auth, 'Bearer test-token')
+    // 오늘 날짜는 기기 시간대 기준
+    const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })
+    assert.equal(new URLSearchParams(req.query).get('date'), today)
+    assert.equal(state.requests.some(r => r.path.startsWith('/api/gps/parents/')), false)
+    // 다른 자녀로 바꾸면 그 자녀의 기록을 조회한다
+    await page.getByRole('button', { name: '다른학생', exact: true }).click()
+    await page.getByText('이날 출결 기록이 없습니다', { exact: true }).waitFor()
+    await page.getByText('기록 없음', { exact: true }).waitFor()
+    // 조회 실패 → 안내와 다시 불러오기
+    state.attendanceFail = true
+    await page.getByRole('button', { name: '연결검증학생', exact: true }).click()
+    await page.getByRole('alert').getByText('출결 이력을 불러오지 못했습니다.', { exact: false }).waitFor()
+    state.attendanceFail = false
+    await page.getByRole('button', { name: '다시 불러오기', exact: true }).click()
+    await page.getByText('승차 — 버스 탑승 중', { exact: false }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('성장 예측은 실제 성적으로만 예측하고, 성적이 없거나 AI 서버가 꺼지면 예시 점수를 보여주지 않는다', async () => {
+  const grades = [
+    { subject: '수학', score: 60, examDate: '2026-05-10', examType: '중간고사' },
+    { subject: '수학', score: 70, examDate: '2026-07-08', examType: '기말고사' },
+    { subject: '국어', score: 80, examDate: '2026-07-08', examType: '기말고사' },
+  ]
+  const { page, context, state, errors } = await openPage({ grades, predict: { expected_score: 78, message: '📈 성적 향상이 기대됩니다.' }, activities: [
+    { id: 1, subject: '수학', studyDate: '2026-11-01', studyStartTime: '19:00:00', studyDurationMinutes: 90, concentrationScore: 4, measurementSource: 'MANUAL' },
+  ] })
+  try {
+    await page.goto(`${BASE}/learning?tab=predict`)
+    await page.getByText('78점', { exact: true }).waitFor()
+    await page.getByText('75점', { exact: true }).waitFor() // 과목별 최근 평균 (70 + 80) / 2
+    await page.getByText('▲3점 상승 예측', { exact: true }).waitFor()
+    await page.getByText('하루 평균 공부 1.5시간 기준', { exact: true }).waitFor()
+    const body = state.requests.find(r => r.path === '/api/ai/predict').body
+    assert.deepEqual([body.past_score_avg, body.study_hours_per_day], [75, 1.5])
+    // 성적이 없는 자녀: 예측 요청도, 그래프도 없다
+    const before = state.requests.filter(r => r.path === '/api/ai/predict').length
+    await page.getByRole('button', { name: '다른학생 · 중2', exact: true }).click()
+    await page.getByText('성적이 등록되면 예측해 드려요', { exact: true }).waitFor()
+    assert.equal(await page.getByText('📈 성적 예측 그래프', { exact: true }).count(), 0)
+    assert.equal(state.requests.filter(r => r.path === '/api/ai/predict').length, before)
+    // AI 서버가 꺼져 있으면 숫자를 지어내지 않는다
+    state.predict = null
+    await page.getByRole('button', { name: '연결검증학생 · 중1', exact: true }).click()
+    await page.getByText('지금은 예측할 수 없어요 (AI 서버 확인 필요)', { exact: true }).waitFor()
+    assert.equal(await page.getByText('▲', { exact: false }).count(), 0)
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })

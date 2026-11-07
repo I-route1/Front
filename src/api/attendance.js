@@ -25,11 +25,14 @@ export async function tagNfc({ busId, nfcCardId }) {
 }
 
 /**
- * 2. 자녀 목록 조회
- * GET /api/gps/parents/{parentId}/children
+ * 2. 자녀 목록 조회 (로그인한 학부모의 자녀)
+ * GET /api/students/my-children
+ * (예전 GET /api/gps/parents/{parentId}/children 은 백엔드에 없다)
  */
-export async function getChildren(parentId) {
-  const res = await fetch(`${BASE_URL}/api/gps/parents/${parentId}/children`)
+export async function getChildren() {
+  const res = await fetch(`${BASE_URL}/api/students/my-children`, {
+    headers: { ...getAuthHeader() },
+  })
   if (!res.ok) throw new Error('자녀 목록 조회 실패')
   return res.json()
 }
@@ -40,7 +43,9 @@ export async function getChildren(parentId) {
  */
 export async function getAttendanceByParent(parentId, date) {
   const params = date ? `?date=${date}` : ''
-  const res = await fetch(`${BASE_URL}/api/gps/attendance/parents/${parentId}${params}`)
+  const res = await fetch(`${BASE_URL}/api/gps/attendance/parents/${parentId}${params}`, {
+    headers: { ...getAuthHeader() },
+  })
   if (!res.ok) throw new Error('출결 이력 조회 실패')
   return res.json()
 }
@@ -51,7 +56,9 @@ export async function getAttendanceByParent(parentId, date) {
  */
 export async function getAttendanceByStudent(studentId, date) {
   const params = date ? `?date=${date}` : ''
-  const res = await fetch(`${BASE_URL}/api/gps/attendance/students/${studentId}${params}`)
+  const res = await fetch(`${BASE_URL}/api/gps/attendance/students/${studentId}${params}`, {
+    headers: { ...getAuthHeader() },
+  })
   if (!res.ok) throw new Error('출결 이력 조회 실패')
   return res.json()
 }
@@ -95,28 +102,3 @@ export async function registerNfcCard(studentId, nfcCardId) {
   if (res.status === 409) throw new Error('이미 다른 학생에게 등록된 카드입니다.')
   if (!res.ok) throw new Error('NFC 카드 등록 실패')
 }
-
-// ─── Mock 데이터 (백엔드 연동 전 fallback) ───────────────────────────────────
-
-export const MOCK_ATTENDANCE = [
-  {
-    attendanceId: 6,
-    studentId: 1,
-    studentName: '홍민준',
-    busId: 1,
-    eventType: 'EXIT',
-    timestamp: new Date().toISOString().replace('Z', '').slice(0, 23),
-  },
-  {
-    attendanceId: 5,
-    studentId: 1,
-    studentName: '홍민준',
-    busId: 1,
-    eventType: 'BOARD',
-    timestamp: new Date(Date.now() - 8 * 60000).toISOString().replace('Z', '').slice(0, 23),
-  },
-]
-
-export const MOCK_CHILDREN = [
-  { gpsStudentId: 1, gradeStudentId: 'S-0155', name: '홍민준', busId: 1 },
-]

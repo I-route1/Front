@@ -1,8 +1,6 @@
 // src/pages/Attendance/ParentAttendance.jsx
 import { useState, useEffect } from 'react'
-import { getAttendanceByParent, getAttendanceByStudent, getChildren, MOCK_ATTENDANCE, MOCK_CHILDREN } from '@/api/attendance'
-
-const USE_MOCK = false
+import { getAttendanceByStudent, getChildren } from '@/api/attendance'
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -15,9 +13,12 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })
 }
 
-function getTodayStr() {
-  return new Date().toISOString().slice(0, 10)
+// 기기 시간대 기준 오늘 (toISOString은 UTC라서 한국 오전 9시 전에는 어제 날짜가 된다)
+function getTodayStr(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
+
+const toChild = c => ({ gpsStudentId: c.studentId ?? c.id, name: c.name, grade: c.grade ?? '' })
 
 export default function ParentAttendance({ user }) {
   const [children, setChildren] = useState([])
@@ -26,48 +27,46 @@ export default function ParentAttendance({ user }) {
   const [date, setDate] = useState(getTodayStr())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [childState, setChildState] = useState('loading') // loading | ready | error
+  const [reloadKey, setReloadKey] = useState(0)
 
+  // 자녀 목록: 로그인 정보에 있으면 바로 보여주고, 서버에서 최신 목록으로 다시 맞춘다.
+  // 실패해도 예시 자녀를 보여주지 않는다.
   useEffect(() => {
-    if (user?.children?.length > 0) {
-      const mapped = user.children.map(c => ({
-        gpsStudentId: c.id,
-        gradeStudentId: c.gradeStudentId,
-        name: c.name,
-      }))
-      setChildren(mapped)
-      setSelectedChild(mapped[0])
-      return
+    let cancelled = false
+    const cached = (user?.children ?? []).map(toChild).filter(c => c.gpsStudentId != null)
+    if (cached.length > 0) {
+      setChildren(cached)
+      setSelectedChild(prev => cached.find(c => c.gpsStudentId === prev?.gpsStudentId) ?? cached[0])
+      setChildState('ready')
+    } else {
+      setChildState('loading')
     }
-    getChildren(user.id)
+    getChildren()
       .then(data => {
-        setChildren(data)
-        if (data.length > 0) setSelectedChild(data[0])
+        if (cancelled) return
+        const list = (Array.isArray(data) ? data : []).map(toChild).filter(c => c.gpsStudentId != null)
+        setChildren(list)
+        setSelectedChild(prev => list.find(c => c.gpsStudentId === prev?.gpsStudentId) ?? list[0] ?? null)
+        setChildState('ready')
       })
-      .catch(() => {
-        setChildren(MOCK_CHILDREN)
-        setSelectedChild(MOCK_CHILDREN[0])
-      })
-  }, [user?.id])
+      .catch(() => { if (!cancelled && cached.length === 0) setChildState('error') })
+    return () => { cancelled = true }
+  }, [user?.id, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 출결 이력 로드
+  // 출결 이력 로드 (자녀나 날짜를 빨리 바꿔도 마지막 요청 결과만 반영)
   useEffect(() => {
     if (!selectedChild) return
+    let cancelled = false
     setLoading(true)
     setError(null)
-
-    if (USE_MOCK) {
-      setTimeout(() => {
-        setRecords(MOCK_ATTENDANCE)
-        setLoading(false)
-      }, 400)
-      return
-    }
-
+    setRecords([])
     getAttendanceByStudent(selectedChild.gpsStudentId, date)
-      .then(data => setRecords(data))
-      .catch(() => setError('출결 이력을 불러오지 못했습니다.'))
-      .finally(() => setLoading(false))
-  }, [selectedChild, date, user.id])
+      .then(data => { if (!cancelled) setRecords(Array.isArray(data) ? data : []) })
+      .catch(() => { if (!cancelled) setError('출결 이력을 불러오지 못했습니다.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [selectedChild, date, reloadKey])
 
   // 마지막 상태 계산
   const lastRecord = records[0]
@@ -87,12 +86,27 @@ export default function ParentAttendance({ user }) {
         />
       </div>
 
+      {childState === 'loading' && children.length === 0 && (
+        <div role="status" style={styles.center}><div style={styles.spinner} /></div>
+      )}
+      {childState === 'error' && (
+        <div role="alert" style={styles.errorBox}>
+          자녀 정보를 불러오지 못했습니다.{' '}
+          <button type="button" onClick={() => setReloadKey(k => k + 1)} style={styles.retryButton}>다시 불러오기</button>
+        </div>
+      )}
+      {childState === 'ready' && children.length === 0 && (
+        <div style={styles.empty}>등록된 자녀가 없습니다. 마이 › 자녀 관리에서 자녀를 추가해 주세요.</div>
+      )}
+
       {/* 자녀 선택 탭 (자녀 2명 이상일 때) */}
       {children.length > 1 && (
         <div style={styles.childTabs}>
           {children.map(child => (
             <button
               key={child.gpsStudentId}
+              type="button"
+              aria-pressed={selectedChild?.gpsStudentId === child.gpsStudentId}
               onClick={() => setSelectedChild(child)}
               style={{
                 ...styles.childTab,
@@ -120,12 +134,13 @@ export default function ParentAttendance({ user }) {
             </div>
           </div>
           <div style={{ ...styles.statusBadge, background: isOnBus ? '#3b82f6' : '#475569' }}>
-            {isOnBus ? '탑승중' : '하차'}
+            {!lastRecord ? '기록 없음' : isOnBus ? '탑승중' : '하차'}
           </div>
         </div>
       )}
 
       {/* 이력 목록 */}
+      {selectedChild && (
       <div style={styles.section}>
         <div style={styles.sectionTitle}>
           {formatDate(date)} 기록
@@ -136,7 +151,12 @@ export default function ParentAttendance({ user }) {
             <div style={styles.spinner} />
           </div>
         )}
-        {error && <div style={styles.errorBox}>{error}</div>}
+        {error && (
+          <div role="alert" style={styles.errorBox}>
+            {error}{' '}
+            <button type="button" onClick={() => setReloadKey(k => k + 1)} style={styles.retryButton}>다시 불러오기</button>
+          </div>
+        )}
 
         {!loading && !error && records.length === 0 && (
           <div style={styles.empty}>이날 출결 기록이 없습니다</div>
@@ -158,6 +178,7 @@ export default function ParentAttendance({ user }) {
           </div>
         ))}
       </div>
+      )}
 
       {/* 알림 안내 */}
       <div style={styles.noticeBox}>
@@ -171,6 +192,17 @@ export default function ParentAttendance({ user }) {
 }
 
 const styles = {
+  retryButton: {
+    border: 'none',
+    background: 'transparent',
+    color: 'inherit',
+    fontWeight: 700,
+    textDecoration: 'underline',
+    cursor: 'pointer',
+    padding: 0,
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+  },
   container: {
     padding: '16px',
     maxWidth: 430,

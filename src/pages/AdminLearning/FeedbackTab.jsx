@@ -107,7 +107,7 @@ export default function FeedbackTab() {
   // 과목별 색상
   const subjectColor = {
     국어: '#FF6B6B', 영어: '#4ECDC4', 수학: '#1A56DB',
-    한국사: '#FFB800', 사회탐구: '#9C88FF', 과학탐구: '#00C49A',
+    사회탐구: '#9C88FF', 과학탐구: '#00C49A',
   }
   
   return (

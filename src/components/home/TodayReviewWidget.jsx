@@ -4,7 +4,7 @@ import { reviewAPI, recommendationsAPI } from '@/api'
 
 const SUBJECT_COLORS = {
   국어:'#1A56DB', 수학:'#FF6B35', 영어:'#00C49A', 
-  사회:'#9B59B6', 과학:'#FFB800', 한국사:'#E11D48',
+  사회:'#9B59B6', 과학:'#FFB800',
 }
 
 const TABS = [

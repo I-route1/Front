@@ -9,13 +9,12 @@ const TENDENCY_INFO = {
   'KINESTHETIC':{ emoji: '🤸', label: '행동형',  color: '#FF6B35', description: '직접 손으로 쓰고 움직이며 학습할 때 효과적이에요' },
 }
 
-const SUBJECT_ID_BY_NAME = { '국어':1, '수학':2, '영어':3, '한국사':4, '사회탐구':5, '과학탐구':6 }
+const SUBJECT_ID_BY_NAME = { '국어':1, '수학':2, '영어':3, '사회탐구':5, '과학탐구':6 }
 
 const SUBJECT_TIPS = {
   '수학':    { tip: '개념 중심 — 도식화 및 색깔 펜으로 단계별 풀이 정리', emoji: '📐' },
   '영어':    { tip: '문제 풀이 위주 — 오답 노트 시각화, 마인드맵 활용', emoji: '🔤' },
   '국어':    { tip: '개념+문제 혼합 — 지문에 직접 표시하며 능동적 읽기', emoji: '📖' },
-  '한국사':  { tip: '시간 순 정리 — 연표와 사건 흐름을 도식화', emoji: '📜' },
   '사회탐구':{ tip: '개념 비교표 — 유사 개념을 표로 정리해 차이점 부각', emoji: '🌍' },
   '과학탐구':{ tip: '실험 시각화 — 그림과 다이어그램으로 원리 이해', emoji: '🔬' },
 }
@@ -247,7 +246,7 @@ export default function SuggestTab({ studentId: propStudentId, selectedChild }) 
           <div style={{ display:'flex', gap:8, marginBottom:8 }}>
             <select value={aiSubject} onChange={e => { setAiSubject(e.target.value); setAncestorDone(false); setAncestorResults([]) }}
               style={{ flex:'0 0 auto', padding:'9px 8px', borderRadius:8, border:'1px solid var(--color-border)', background:'var(--color-surface-2)', fontSize:13, fontFamily:'inherit', color:'var(--color-text-primary)' }}>
-              {['수학','영어','국어','한국사','사회탐구','과학탐구'].map(s => <option key={s} value={s}>{s}</option>)}
+              {['수학','영어','국어','사회탐구','과학탐구'].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <input
               value={aiConcept}

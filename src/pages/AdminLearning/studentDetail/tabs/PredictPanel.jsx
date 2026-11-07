@@ -3,7 +3,7 @@ import { analysisAPI, recommendationsAPI, studyPlanAPI } from '@/api'
 import { SUBJECT_COLORS } from '../../data/mockData'
 
 const SUBJECT_ID_BY_NAME = {
-  '국어': 1, '수학': 2, '영어': 3, '한국사': 4, '사회': 5, '과학': 6,
+  '국어': 1, '수학': 2, '영어': 3, '사회': 5, '과학': 6,
 }
 
 const PREDICT_SUBJECTS = ['국어', '수학', '영어', '사회', '과학']
