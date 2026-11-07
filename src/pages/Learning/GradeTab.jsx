@@ -12,7 +12,6 @@ import {
   getGrade, getPercentile,
 } from './data/mockData'
 import { calcMockExamScores } from './utils/mockExamScoring'
-import LearningResults from '@/components/learning/LearningResults'
 
 export default function GradeTab({ studentId: propStudentId, selectedChild }) {
   const { user } = useAuth()
@@ -426,10 +425,8 @@ export default function GradeTab({ studentId: propStudentId, selectedChild }) {
         </div>
       </div>
 
-      {/* 학생별 전체 오답 및 OCR 채점 결과 */}
-      <div style={{ margin:'12px 16px 16px' }}>
-        <LearningResults key={gradeKey} studentId={gradeKey} />
-      </div>
+      {/* 오답과 OCR 채점 결과는 '오답 · 채점' 화면에서 본다 */}
+      <div style={{ height: 16 }} />
     </div>
   )
 }

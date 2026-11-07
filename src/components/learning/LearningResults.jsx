@@ -72,8 +72,9 @@ function OcrResult({ result }) {
       <span>{result.gradedAt ? new Date(result.gradedAt).toLocaleString('ko-KR') : ''}</span>
     </summary>
     {open && <div className="ocr-questions">
-      {questions.slice(0, limit).map(question => <div key={question.questionId} className="ocr-question">
-        <div className="record-heading"><strong>문항 {question.questionId}</strong><span className={question.correct ? 'record-correct' : 'record-incorrect'}>{question.correct ? '정답' : '오답'}</span></div>
+      {questions.slice(0, limit).map((question, index) => <div key={question.questionId} className="ocr-question">
+        {/* 문항 ID 대신 워크시트 순서대로 번호를 보여주고, ID는 작게 남겨 둔다 */}
+        <div className="record-heading"><strong>{index + 1}번 <small className="record-question-id">{question.questionId}</small></strong><span className={question.correct ? 'record-correct' : 'record-incorrect'}>{question.correct ? '정답' : '오답'}</span></div>
         <dl><dt>인식된 글자</dt><dd>{question.recognizedText === '' ? '인식된 글자 없음' : question.recognizedText}</dd>
           <dt>정답</dt><dd>{question.expectedAnswer}</dd></dl>
         <p>{question.conceptTag} · 유사도 {Math.round(question.similarity * 100)}%</p>

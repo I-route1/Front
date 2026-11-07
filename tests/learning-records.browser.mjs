@@ -95,12 +95,13 @@ async function openPage(options = {}) {
 test('학부모 성적 화면에서 학생별 오답·OCR 인식 글자·과목 필터를 사용한다', async () => {
   const { page, context, state, errors } = await openPage()
   try {
-    await page.goto(`${BASE}/learning?tab=grade`)
+    await page.goto(`${BASE}/learning?tab=records`)
     const records = page.getByRole('region', { name: '오답 및 OCR 채점 기록' })
     await records.getByText('국어 · 국어-1', { exact: true }).waitFor()
     await records.getByText('국어 · 1 / 2문항 정답', { exact: true }).click()
     await records.getByText('되지', { exact: true }).waitFor()
     await records.getByText('돼지', { exact: true }).waitFor()
+    await records.getByText('1번', { exact: false }).first().waitFor()
     await page.getByLabel('기록 과목').selectOption('수학')
     assert.equal(await records.getByText('국어 · 국어-1', { exact: true }).count(), 0)
     await records.getByText('수학 · 수학-1', { exact: true }).waitFor()
@@ -117,6 +118,10 @@ test('직접 입력 자기평가 저장·재조회·메타인지 분석 실패�
   try {
     await page.goto(`${BASE}/learning?tab=pattern`)
     await page.getByText('아직 집중도 기록이 없어요.', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('dialog', { name: '오늘 공부 기록하기' }).count(), 0)
+    await page.getByRole('button', { name: '오늘 공부 기록하기', exact: true }).click()
+    await page.waitForURL(/sheet=record/)
+    await page.getByRole('dialog', { name: '오늘 공부 기록하기' }).waitFor()
     await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
     await page.getByText('학습일, 학습 시간(1분 이상), 이해도와 집중도를 입력해 주세요.', { exact: true }).waitFor()
     assert.equal(state.requests.filter(r => r.method === 'POST').length, 0)
@@ -140,6 +145,37 @@ test('직접 입력 자기평가 저장·재조회·메타인지 분석 실패�
     assert.equal(state.requests.filter(r => r.path === '/api/activities' && r.method === 'POST').length, 1)
     assert.deepEqual(errors, [])
     await page.screenshot({ path: 'test-results/attention-manual.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('학습 탭은 위쪽 탭 3개와 세그먼트로 이동하고 예전 주소도 새 위치로 연결한다', async () => {
+  const { page, context, errors } = await openPage({ empty: true })
+  try {
+    const current = () => page.getByRole('navigation', { name: '학습 메뉴' }).locator('[aria-current="page"]')
+    const selected = () => page.getByRole('tab', { selected: true })
+    // 예전 주소: AI 리포트 탭 → AI 코칭 › 리포트
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    assert.equal(await current().textContent(), 'AI 코칭')
+    assert.equal(await selected().textContent(), '리포트')
+    // 그룹 주소와 잘못된 주소
+    await page.goto(`${BASE}/learning?tab=habit`)
+    assert.equal(await current().textContent(), '공부 습관')
+    assert.equal(await selected().textContent(), '집중도')
+    await page.goto(`${BASE}/learning?tab=nope`)
+    assert.equal(await current().textContent(), '성적')
+    // 위쪽 탭은 3개만, 세그먼트로 화면 전환
+    assert.equal(await page.getByRole('navigation', { name: '학습 메뉴' }).getByRole('button').count(), 3)
+    await page.getByRole('button', { name: 'AI 코칭', exact: true }).click()
+    await page.getByRole('tab', { name: '질문', exact: true }).click()
+    await page.waitForURL(/tab=ask/)
+    await page.getByRole('button', { name: '성적', exact: true }).click()
+    await page.getByRole('tab', { name: '오답 · 채점', exact: true }).click()
+    await page.waitForURL(/tab=records/)
+    await page.getByRole('region', { name: '오답 및 OCR 채점 기록' }).waitFor()
+    // 자녀는 이름 버튼으로 선택한다
+    assert.equal(await page.getByRole('button', { name: '연결검증학생 · 중1', exact: true }).getAttribute('aria-pressed'), 'true')
+    assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false)
+    assert.deepEqual(errors, [])
   } finally { await context.close() }
 })
 
@@ -191,7 +227,7 @@ test('저장 응답 유실·재시도·새로고침에도 동일 자기평가가
     await page.getByLabel('학습 시간 (분)').fill('8')
   }
   try {
-    await page.goto(`${BASE}/learning?tab=pattern`)
+    await page.goto(`${BASE}/learning?tab=pattern&sheet=record`)
     await fill()
     await page.getByRole('button', { name: '자기평가 저장', exact: true }).click()
     await page.getByText('Failed to fetch', { exact: true }).waitFor()
@@ -213,7 +249,7 @@ test('저장 응답 유실·재시도·새로고침에도 동일 자기평가가
 test('비정상 학습 시간은 전송하지 않고 허용 최대값은 저장한다', async () => {
   const { page, context, state } = await openPage()
   try {
-    await page.goto(`${BASE}/learning?tab=pattern`)
+    await page.goto(`${BASE}/learning?tab=pattern&sheet=record`)
     await page.getByRole('button', { name: '이해도 1점', exact: true }).click()
     await page.getByRole('button', { name: '집중도 5점', exact: true }).click()
     for (const duration of ['0', '-1', '1.5', '1441', '']) {
@@ -234,8 +270,8 @@ test('자녀 전환 뒤 이전 학생의 늦은 응답이 화면을 덮어쓰지
   const delay = new Promise(resolve => { release = resolve })
   const { page, context, state, errors } = await openPage({ delay })
   try {
-    await page.goto(`${BASE}/learning?tab=grade`)
-    await page.getByRole('button', { name: '다음 자녀', exact: true }).click()
+    await page.goto(`${BASE}/learning?tab=records`)
+    await page.getByRole('button', { name: '다른학생 · 중2', exact: true }).click()
     const records = page.getByRole('region', { name: '오답 및 OCR 채점 기록' })
     await records.getByText('아직 저장된 오답이 없어요.', { exact: true }).waitFor()
     const oldResponse = page.waitForResponse(r => r.url().includes('/api/ocr-results?studentId=14'))
@@ -250,7 +286,7 @@ test('자녀 전환 뒤 이전 학생의 늦은 응답이 화면을 덮어쓰지
 test('조회 오류는 빈 기록과 구분하고 다시 불러올 수 있다', async () => {
   const { page, context, state } = await openPage({ fail: true })
   try {
-    await page.goto(`${BASE}/learning?tab=grade`)
+    await page.goto(`${BASE}/learning?tab=records`)
     await page.getByRole('alert').getByText('오답 서버 응답 실패', { exact: true }).waitFor()
     state.fail = false
     await page.getByRole('button', { name: '다시 불러오기', exact: true }).click()
@@ -267,7 +303,7 @@ test('많은 기록·1000문항·긴 인식 글자를 나누어 표시하며 HTM
     ocr: Array.from({ length: 30 }, (_, i) => ({ ...ocr[0], id: i + 1, questions, correctCount: 0, totalQuestions: 1000 })),
   })
   try {
-    await page.goto(`${BASE}/learning?tab=grade`)
+    await page.goto(`${BASE}/learning?tab=records`)
     const records = page.getByRole('region', { name: '오답 및 OCR 채점 기록' })
     await records.getByText('국어 · W0', { exact: true }).waitFor()
     assert.equal(await records.locator('details').count(), 20)

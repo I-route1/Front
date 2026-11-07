@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -6,6 +7,7 @@ import {
 import { activitiesAPI } from '@/api'
 import useStudentRecords from '@/hooks/useStudentRecords'
 import { RecordError } from '@/components/learning/LearningResults'
+import { RecordLauncher } from '@/components/common/BottomSheet'
 import {
   SCORE_MAX, STATE_COLORS, concentrationLevel, normalizeActivities,
   summarizeConcentration, concentrationInsights,
@@ -151,6 +153,9 @@ function CameraCard({ summary, activities }) {
 
 export default function ConcentrationTab({ studentId }) {
   const records = useStudentRecords(studentId, activitiesAPI.getActivities)
+  const [, setSearchParams] = useSearchParams()
+  // 입력 창은 학습 패턴 화면에 있다 (자기평가 저장 뒤 AI 메타인지 분석까지 이어서 보여준다)
+  const openRecordSheet = () => setSearchParams({ tab: 'pattern', sheet: 'record' }, { replace: true })
   const [limit, setLimit] = useState(PAGE)
 
   const activities = useMemo(() => normalizeActivities(records.data), [records.data])
@@ -178,7 +183,7 @@ export default function ConcentrationTab({ studentId }) {
   }
 
   return (
-    <div style={{ paddingBottom: 24 }}>
+    <div>
       {/* 헤더 */}
       <div style={{ background: 'linear-gradient(135deg, #1A1A2E 0%, #0F3460 100%)', padding: '24px 20px', color: 'white' }}>
         <p style={{ fontSize: 12, opacity: 0.65, marginBottom: 4 }}>최근 학습 기록 {summary.sessions}건 기준</p>
@@ -377,6 +382,8 @@ export default function ConcentrationTab({ studentId }) {
           </p>
         </>
       )}
+
+      <RecordLauncher onClick={openRecordSheet} />
     </div>
   )
 }

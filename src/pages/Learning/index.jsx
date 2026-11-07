@@ -8,18 +8,96 @@ import PredictTab from './PredictTab'
 import CounselingTab from './CounselingTab'
 import AskTab from './AskTab'
 import ConcentrationTab from './ConcentrationTab'
+import LearningResults from '@/components/learning/LearningResults'
 import { studentAPI } from '@/api/student'
 
-const TABS = [
-    { id: 'grade',      label: '📊 성적' },
-    { id: 'pattern',    label: '🧠 학습 패턴' },
-  { id: 'focus',      label: '🧘 집중도' },
-    { id: 'suggest',    label: '📚 맞춤 추천' },
-    { id: 'predict',    label: '🎯 성장 예측' },
-    { id: 'counseling', label: '🌱 AI 리포트' },
-    { id: 'ask',        label: '💬 AI 질문' },
+// 위쪽 탭 3개(그룹)와 그 안의 세그먼트.
+// URL의 ?tab= 값은 세그먼트 id를 그대로 써서 예전 주소(?tab=pattern 등)도 계속 동작한다.
+const GROUPS = [
+    { id: 'grades', label: '성적', segments: [
+        { id: 'grade',   label: '성적' },
+        { id: 'records', label: '오답 · 채점' },
+    ] },
+    { id: 'habit', label: '공부 습관', segments: [
+        { id: 'focus',   label: '집중도' },
+        { id: 'pattern', label: '학습 패턴' },
+    ] },
+    { id: 'coach', label: 'AI 코칭', segments: [
+        { id: 'counseling', label: '리포트' },
+        { id: 'suggest',    label: '추천' },
+        { id: 'predict',    label: '성장 예측' },
+        { id: 'ask',        label: '질문' },
+    ] },
 ]
-const VALID_TABS = TABS.map(t => t.id)
+const SEGMENT_IDS = GROUPS.flatMap(g => g.segments.map(s => s.id))
+
+// ?tab= 값을 세그먼트 id로 바꾼다. 그룹 id(?tab=habit)는 그 그룹의 첫 세그먼트로 연결한다.
+function resolveSegment(tab) {
+    if (SEGMENT_IDS.includes(tab)) return tab
+    return GROUPS.find(g => g.id === tab)?.segments[0].id ?? 'grade'
+}
+
+function GroupTabs({ activeGroup, onSelect, disabled = false }) {
+    return (
+        <nav aria-label="학습 메뉴" style={{
+            display: 'grid', gridTemplateColumns: `repeat(${GROUPS.length}, minmax(0, 1fr))`,
+            background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0,
+            opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto',
+        }}>
+            {GROUPS.map(g => {
+                const on = g.id === activeGroup?.id
+                return (
+                    <button
+                        key={g.id}
+                        type="button"
+                        aria-current={on ? 'page' : undefined}
+                        onClick={() => onSelect(g)}
+                        style={{
+                            padding: '13px 0', border: 'none', background: 'transparent', cursor: 'pointer',
+                            fontFamily: 'inherit', fontSize: 15, fontWeight: on ? 700 : 500,
+                            color: on ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                            borderBottom: `2px solid ${on ? 'var(--color-primary)' : 'transparent'}`,
+                            transition: 'color 0.15s, border-color 0.15s',
+                        }}
+                    >
+                        {g.label}
+                    </button>
+                )
+            })}
+        </nav>
+    )
+}
+
+function SegmentControl({ group, active, onSelect }) {
+    return (
+        <div role="tablist" aria-label={`${group.label} 보기`} style={{
+            margin: '12px 16px 0', padding: 4, borderRadius: 12, background: 'var(--color-surface-2)',
+            display: 'grid', gridTemplateColumns: `repeat(${group.segments.length}, minmax(0, 1fr))`, gap: 4,
+        }}>
+            {group.segments.map(s => {
+                const on = s.id === active
+                return (
+                    <button
+                        key={s.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={on}
+                        onClick={() => onSelect(s.id)}
+                        style={{
+                            height: 36, border: 'none', borderRadius: 9, cursor: 'pointer', whiteSpace: 'nowrap',
+                            fontFamily: 'inherit', fontSize: 13, fontWeight: on ? 700 : 500,
+                            background: on ? 'var(--color-surface)' : 'transparent',
+                            color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            boxShadow: on ? '0 1px 3px rgba(17,24,39,0.12)' : 'none',
+                        }}
+                    >
+                        {s.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
 
 function NoChildrenScreen() {
     const navigate = useNavigate()
@@ -37,80 +115,35 @@ function NoChildrenScreen() {
     )
 }
 
-// 자녀 선택 슬라이더/칩 컴포넌트
+// 자녀 선택: 이름 버튼을 한 줄로 보여준다 (많으면 가로 스크롤)
 function ChildSelector({ children, selectedIndex, onSelect }) {
     if (!children || children.length <= 1) return null
-
-    const isFirst = selectedIndex === 0
-    const isLast = selectedIndex === children.length - 1
-
     return (
-        <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: 12, padding: '10px 16px',
-            background: 'var(--color-surface)',
-            borderBottom: '1px solid var(--color-border)',
+        <div role="group" aria-label="자녀 선택" style={{
+            display: 'flex', gap: 8, padding: '10px 16px 12px', overflowX: 'auto',
+            background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0,
         }}>
-            {/* 이전 버튼 */}
-            <button
-                onClick={() => onSelect(selectedIndex - 1)}
-                aria-label="이전 자녀"
-                disabled={isFirst}
-                style={{
-                    width: 32, height: 32, borderRadius: '50%', border: 'none',
-                    background: isFirst ? 'var(--color-surface-2)' : 'var(--color-primary)',
-                    color: isFirst ? 'var(--color-text-muted)' : 'white',
-                    fontSize: 16, cursor: isFirst ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, transition: 'all 0.15s',
-                }}
-            >
-                ‹
-            </button>
-
-            {/* 자녀 정보 */}
-            <div style={{ textAlign: 'center', minWidth: 120 }}>
-                <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: 2 }}>
-                    {children[selectedIndex]?.name ?? '자녀'}
-                </p>
-                <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    {children[selectedIndex]?.grade ?? ''}
-                </p>
-                {/* 인디케이터 점 */}
-                {children.length > 1 && (
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 6 }}>
-                        {children.map((_, i) => (
-                            <button
-                                key={i}
-                                onClick={() => onSelect(i)}
-                                style={{
-                                    width: i === selectedIndex ? 16 : 6,
-                                    height: 6, borderRadius: 3, border: 'none',
-                                    background: i === selectedIndex ? 'var(--color-primary)' : 'var(--color-border)',
-                                    cursor: 'pointer', padding: 0, transition: 'all 0.2s',
-                                }}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* 다음 버튼 */}
-            <button
-                onClick={() => onSelect(selectedIndex + 1)}
-                aria-label="다음 자녀"
-                disabled={isLast}
-                style={{
-                    width: 32, height: 32, borderRadius: '50%', border: 'none',
-                    background: isLast ? 'var(--color-surface-2)' : 'var(--color-primary)',
-                    color: isLast ? 'var(--color-text-muted)' : 'white',
-                    fontSize: 16, cursor: isLast ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, transition: 'all 0.15s',
-                }}
-            >
-                ›
-            </button>
+            {children.map((child, i) => {
+                const on = i === selectedIndex
+                const label = [child?.name ?? `자녀 ${i + 1}`, child?.grade].filter(Boolean).join(' · ')
+                return (
+                    <button
+                        key={child?.studentId ?? child?.id ?? i}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => onSelect(i)}
+                        style={{
+                            flexShrink: 0, height: 36, padding: '0 14px', borderRadius: 18, cursor: 'pointer',
+                            fontFamily: 'inherit', fontSize: 13, fontWeight: on ? 700 : 500, whiteSpace: 'nowrap',
+                            border: on ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                            background: on ? 'var(--color-primary)' : 'var(--color-surface)',
+                            color: on ? 'white' : 'var(--color-text-secondary)',
+                        }}
+                    >
+                        {label}
+                    </button>
+                )
+            })}
         </div>
     )
 }
@@ -118,7 +151,8 @@ function ChildSelector({ children, selectedIndex, onSelect }) {
 export default function Learning() {
     const { user } = useAuth()
     const [searchParams, setSearchParams] = useSearchParams()
-    const active = VALID_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'grade'
+    const active = resolveSegment(searchParams.get('tab'))
+    const activeGroup = GROUPS.find(g => g.segments.some(s => s.id === active))
     const setActive = (id) => setSearchParams({ tab: id }, { replace: true })
 
     // 💡 백엔드에서 받아온 자녀 데이터 직접 관리
@@ -152,10 +186,6 @@ export default function Learning() {
             .finally(() => setIsLoading(false))
     }, [isParent, user?.children])
 
-    useEffect(() => {
-        document.querySelector(`[data-tab="${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-    }, [active])
-
     // 선택된 자녀 정보
     const selectedChild = isParent
         ? (childrenList?.[selectedChildIndex] ?? null)
@@ -167,13 +197,7 @@ export default function Learning() {
     if (hasNoChildren) {
         return (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0, overflowX: 'auto', opacity: 0.4, pointerEvents: 'none' }}>
-                    {TABS.map(t => (
-                        <button key={t.id} style={{ flex: '1 0 auto', padding: '13px 10px', whiteSpace: 'nowrap', border: 'none', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, background: 'transparent', color: 'var(--color-text-muted)', borderBottom: '2px solid transparent' }}>
-                            {t.label}
-                        </button>
-                    ))}
-                </div>
+                <GroupTabs activeGroup={activeGroup} onSelect={() => {}} disabled />
                 <div style={{ flex: 1, overflowY: 'auto' }}><NoChildrenScreen /></div>
             </div>
         )
@@ -181,29 +205,10 @@ export default function Learning() {
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* 탭 바 */}
-            <div style={{ display: 'flex', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', flexShrink: 0, overflowX: 'auto' }}>
-                {TABS.map(t => (
-                    <button
-                        key={t.id}
-                        data-tab={t.id}
-                        onClick={() => setActive(t.id)}
-                        style={{
-                            flex: '1 0 auto', padding: '13px 10px', whiteSpace: 'nowrap', border: 'none', cursor: 'pointer',
-                            fontFamily: 'inherit', fontSize: 13,
-                            fontWeight: active === t.id ? 700 : 500,
-                            background: 'transparent',
-                            color: active === t.id ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                            borderBottom: active === t.id ? '2px solid var(--color-primary)' : '2px solid transparent',
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        {t.label}
-                    </button>
-                ))}
-            </div>
+            {/* 위쪽 탭 3개 */}
+            <GroupTabs activeGroup={activeGroup} onSelect={g => setActive(g.segments[0].id)} />
 
-            {/* 자녀 슬라이더 (자녀 2명 이상일 때 표시) */}
+            {/* 자녀 선택 (자녀 2명 이상일 때 표시) */}
             {isParent && childrenList.length > 1 && (
                 <ChildSelector
                     children={childrenList}
@@ -214,15 +219,17 @@ export default function Learning() {
 
             {/* 탭 콘텐츠 */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
-                {isLoading && isParent ? <p role="status" style={{ padding:24 }}>자녀 정보를 불러오는 중...</p> : <>
+                <SegmentControl group={activeGroup} active={active} onSelect={setActive} />
+                {isLoading && isParent ? <p role="status" style={{ padding:24 }}>자녀 정보를 불러오는 중...</p> : <div style={{ paddingTop: 12 }}>
                 {active === 'grade'      && <GradeTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
+                {active === 'records'    && <div style={{ margin: '0 16px 16px' }}><LearningResults key={studentId} studentId={studentId} /></div>}
                 {active === 'pattern'    && <PatternTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'focus'      && <ConcentrationTab key={studentId} studentId={studentId} />}
                 {active === 'suggest'    && <SuggestTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'predict'    && <PredictTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'counseling' && <CounselingTab studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'ask'        && <AskTab        studentId={studentId} />}
-                </>}
+                </div>}
             </div>
         </div>
     )
