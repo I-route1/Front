@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { notificationTargets, notificationTargetKey } from '@/utils/notificationTargets'
 import { notificationsAPI } from '@/api'
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth, USER_ROLES, isAcademy } from '@/context/AuthContext'
@@ -30,11 +31,12 @@ export default function AppLayout() {
   const { user } = useAuth()
 
   useEffect(() => {
-    if (!user?.id) return
-    
-    notificationsAPI.trigger(user.id)
-      .catch(e => console.error('알림 트리거 실패:', e))
-  }, [user?.id])
+    // 복습 알림 생성은 학생 단위: 학부모는 자녀마다, 학생은 본인 (학부모 ID를 학생 ID로 보내지 않는다)
+    notificationTargets(user).forEach(t => {
+      notificationsAPI.trigger(t.studentId)
+        .catch(e => console.error('알림 트리거 실패:', e))
+    })
+  }, [notificationTargetKey(user)]) // eslint-disable-line react-hooks/exhaustive-deps
   
   const navItems = getNavItems(user?.role)
 

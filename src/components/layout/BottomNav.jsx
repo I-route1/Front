@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { notificationsAPI } from '@/api'
+import { notificationTargets, notificationTargetKey } from '@/utils/notificationTargets'
 import { useAuth, USER_ROLES, isAcademy } from '@/context/AuthContext'
 import { CalendarCheck } from 'lucide-react'
 
@@ -39,17 +40,14 @@ export default function BottomNav() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    // 학부모인 경우 첫 번째 자녀의 ID를, 그 외(학생 등)에는 본인 ID를 사용
-    const targetStudentId = (user?.role === 'PARENT' || user?.role === '학부모')
-      ? (user?.children?.[0]?.studentId || user?.children?.[0]?.studentId || user?.children?.[0]?.id)
-      : user?.id;
-
-    if (!targetStudentId) return;
-
-    notificationsAPI.getUnread(targetStudentId)
-      .then(data => setUnreadCount(Array.isArray(data) ? data.length : 0))
-      .catch(() => setUnreadCount(0))
-  }, [user?.id, user?.children])
+    // 학부모는 모든 자녀, 학생은 본인 알림의 안 읽은 개수 합
+    const targets = notificationTargets(user)
+    if (targets.length === 0) { setUnreadCount(0); return }
+    let cancelled = false
+    Promise.all(targets.map(t => notificationsAPI.getUnread(t.studentId).catch(() => [])))
+      .then(lists => { if (!cancelled) setUnreadCount(lists.reduce((a, d) => a + (Array.isArray(d) ? d.length : 0), 0)) })
+    return () => { cancelled = true }
+  }, [notificationTargetKey(user)]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const getNavItems = () => {
     if (user?.role === USER_ROLES.ADMIN)   return ADMIN_NAV

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { notificationsAPI } from '@/api'
 import { useAuth } from '@/context/AuthContext'
+import { notificationTargets, notificationTargetKey } from '@/utils/notificationTargets'
 
 // 알림 타입별 아이콘/색상
 const NOTI_TYPE = {
@@ -30,16 +31,6 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400)}일 전`
 }
 
-// mock 폴백 데이터
-const MOCK_NOTIFICATIONS = [
-  { id: 1, type: 'REVIEW',     title: '오늘의 복습 알림',       message: '분수 나눗셈 개념을 복습할 시간이에요! (3일 주기)', createdAt: new Date(Date.now() - 5 * 60000).toISOString(),  read: false },
-  { id: 2, type: 'GRADE',      title: '성적 분석 완료',          message: '이번 달 수학 성적이 72점으로 저번보다 8점 올랐어요.', createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), read: false },
-  { id: 3, type: 'FEEDBACK',   title: '새 피드백이 도착했어요',  message: '선생님이 학습 기록에 피드백을 남겼습니다.', createdAt: new Date(Date.now() - 5 * 3600000).toISOString(), read: false },
-  { id: 4, type: 'ATTENDANCE', title: '승차 완료',               message: '홍민준 학생이 오후 2:30에 버스에 탑승했습니다.', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), read: true },
-  { id: 5, type: 'ROADMAP',    title: 'AI 로드맵 업데이트',      message: '이번 주 학습 목표가 업데이트되었습니다.', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), read: true },
-  { id: 6, type: 'RISK',       title: '학습 위험 감지',          message: '최근 3일간 학습 기록이 없습니다. 확인이 필요해요.', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), read: true },
-]
-
 export default function Notifications() {
   const { user } = useAuth()
   const navigate  = useNavigate()
@@ -51,21 +42,37 @@ export default function Notifications() {
   const [markingAll, setMarkingAll]       = useState(false)
 
   // 알림 목록 불러오기
+  // 알림은 학생 단위: 학부모는 자녀들의 알림을 합쳐서 최신순으로 보여준다.
+  // 불러오지 못하면 예시 알림 대신 오류 안내를 보여준다.
+  const targetKey = notificationTargetKey(user)
   const fetchNotifications = useCallback(async () => {
-    if (!user?.id) return
+    const targets = notificationTargets(user)
     setLoading(true)
     setError(null)
-    try {
-      const data = await notificationsAPI.getAll(String(user.id))
-      const list = Array.isArray(data) ? data : (data?.notifications || data?.content || [])
-      setNotifications(list.length > 0 ? list : MOCK_NOTIFICATIONS)
-    } catch (e) {
-      console.error('알림 조회 실패:', e)
-      setNotifications(MOCK_NOTIFICATIONS)
-    } finally {
+    if (targets.length === 0) {
+      setNotifications([])
       setLoading(false)
+      return
     }
-  }, [user?.id])
+    const results = await Promise.allSettled(targets.map(t => notificationsAPI.getAll(t.studentId)))
+    const merged = []
+    results.forEach((r, i) => {
+      if (r.status !== 'fulfilled') return
+      const data = r.value
+      const list = Array.isArray(data) ? data : (data?.notifications || data?.content || [])
+      list.forEach(n => merged.push({ ...n, studentName: targets.length > 1 ? targets[i].name : '' }))
+    })
+    merged.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+    const failed = results.filter(r => r.status === 'rejected').length
+    if (failed === results.length) {
+      console.error('알림 조회 실패:', results[0].reason)
+      setError('알림을 불러오지 못했어요.')
+    } else if (failed > 0) {
+      setError('일부 자녀의 알림을 불러오지 못했어요.')
+    }
+    setNotifications(merged)
+    setLoading(false)
+  }, [targetKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchNotifications() }, [fetchNotifications])
 
@@ -199,7 +206,16 @@ export default function Notifications() {
           </div>
         )}
 
-        {!loading && filtered.length === 0 && (
+        {!loading && error && (
+          <div role="alert" style={{ padding: '12px 14px', borderRadius: 12, background: '#FFF1F1', color: '#B42318', fontSize: 13 }}>
+            {error}{' '}
+            <button type="button" onClick={fetchNotifications} style={{ border: 'none', background: 'none', color: 'inherit', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}>
+              다시 불러오기
+            </button>
+          </div>
+        )}
+
+        {!loading && filtered.length === 0 && !(error && notifications.length === 0) && (
           <div style={{ padding: '60px 16px', textAlign: 'center' }}>
             <p style={{ fontSize: 40, marginBottom: 12 }}>🎉</p>
             <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary, #1E293B)' }}>
@@ -262,6 +278,11 @@ export default function Notifications() {
                   }}>
                     {typeInfo.label}
                   </span>
+                  {noti.studentName && (
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'var(--color-surface-2, #F1F5F9)', color: 'var(--color-text-secondary, #475569)' }}>
+                      {noti.studentName}
+                    </span>
+                  )}
                   {time && (
                     <span style={{ fontSize: 10, color: 'var(--color-text-muted, #94A3B8)' }}>
                       {timeAgo(time)}
