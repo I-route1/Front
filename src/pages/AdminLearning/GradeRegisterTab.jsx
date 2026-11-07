@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { gradesAPI } from '@/api'
-import { STUDENTS, SUBJECTS, SUBJECT_COLORS } from './data/mockData'
+import { useState, useEffect, useCallback } from 'react'
+import { gradesAPI, studentAPI } from '@/api'
+import { SUBJECTS, SUBJECT_COLORS } from './data/mockData'
 
 const EXAM_TYPES = [
   { id: 'MIDTERM',   label: '중간고사' },
@@ -18,11 +18,31 @@ function getTodayString() {
   return `${yyyy}-${mm}-${dd}`
 }
 
-// 로컬 임시 ID 생성 (백엔드가 id 안 줄 때)
-let _localIdSeed = 1
-const genLocalId = () => `local-${Date.now()}-${_localIdSeed++}`
+// '중2' → 2, '고1' → 1 (백엔드 gradeLevel)
+function gradeLevelOf(grade) {
+  const m = String(grade ?? '').match(/(\d+)/)
+  return m ? Number(m[1]) : 1
+}
 
 export default function GradeRegisterTab() {
+  // 학원 학생 목록 (실제 API)
+  const [students, setStudents] = useState([])
+  const [studentsState, setStudentsState] = useState('loading') // loading | ready | error
+  const loadStudents = useCallback(() => {
+    setStudentsState('loading')
+    studentAPI.getAcademyStudents()
+      .then(data => {
+        const list = (Array.isArray(data) ? data : [])
+          .filter(s => s?.studentId != null)
+          .map(s => ({ id: s.studentId, name: s.name ?? `학생 ${s.studentId}`, grade: s.grade ?? '' }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+        setStudents(list)
+        setStudentsState('ready')
+      })
+      .catch(() => setStudentsState('error'))
+  }, [])
+  useEffect(() => { loadStudents() }, [loadStudents])
+
   // 폼 상태
   const [selectedStudent, setSelectedStudent] = useState('')
   const [subject, setSubject] = useState('수학')
@@ -45,7 +65,7 @@ export default function GradeRegisterTab() {
   
   const validate = () => {
     if (!selectedStudent) return '학생을 선택해주세요'
-    if (!score) return '점수를 입력해주세요'
+    if (score === '') return '점수를 입력해주세요'
     
     const scoreNum = Number(score)
     if (Number.isNaN(scoreNum)) return '점수는 숫자로 입력해주세요'
@@ -76,42 +96,36 @@ export default function GradeRegisterTab() {
     
     setSubmitting(true)
     
-    const studentInfo = STUDENTS.find(s => String(s.id) === String(selectedStudent))
-    
+    const studentInfo = students.find(s => String(s.id) === String(selectedStudent))
+    const examLabel = EXAM_TYPES.find(t => t.id === examType)?.label ?? examType
+
+    // 백엔드는 학생 ID를 숫자로, 시험 종류는 이름(중간고사 등)으로 받는다
     const payload = {
-      studentId: String(selectedStudent),
+      studentId: Number(selectedStudent),
       subject,
       score: Number(score),
+      gradeLevel: gradeLevelOf(studentInfo?.grade),
       examDate,
-      examType,
-      testName: EXAM_TYPES.find(t => t.id === examType)?.label,
+      examType: examLabel,
     }
     
     try {
       // 수정 모드 vs 등록 모드
       if (editingId) {
-        // 수정
-        try {
-          await gradesAPI.updateGrade(editingId, payload)
-          showToast('success', `✅ ${studentInfo?.name ?? '학생'} 성적이 수정되었어요`)
-        } catch (e) {
-          // 백엔드에 PATCH가 없거나 실패 → 로컬만 수정
-          console.warn('백엔드 수정 실패, 로컬만 반영:', e)
-          showToast('success', `✏️ 로컬에서 수정됨 (백엔드 API 미지원)`)
-        }
-        
-        // 로컬 이력 수정
-        setRecentRegistrations(prev => prev.map(r => 
-          r.gradeId === editingId 
-            ? { ...r, ...payload, studentName: studentInfo?.name ?? '학생' }
+        // 수정: 실패하면 아래 catch에서 오류를 보여주고 목록은 그대로 둔다
+        await gradesAPI.updateGrade(editingId, payload)
+        showToast('success', `✅ ${studentInfo?.name ?? '학생'} 성적이 수정되었어요`)
+        setRecentRegistrations(prev => prev.map(r =>
+          r.gradeId === editingId
+            ? { ...r, ...payload, examTypeId: examType, studentName: studentInfo?.name ?? '학생' }
             : r
         ))
       } else {
         // 신규 등록
         const response = await gradesAPI.postGrade(payload)
         
-        // 응답에서 id 추출 시도 (백엔드 응답 형식에 따라)
-        const gradeId = response?.id ?? response?.gradeId ?? response?.data?.id ?? genLocalId()
+ 
+        const gradeId = response?.id ?? response?.gradeId ?? null
         
         showToast('success', `✅ ${studentInfo?.name ?? '학생'} 성적이 등록되었어요`)
         
@@ -119,6 +133,7 @@ export default function GradeRegisterTab() {
           {
             ...payload,
             gradeId,
+            examTypeId: examType,
             studentName: studentInfo?.name ?? '학생',
             timestamp: new Date().toISOString(),
           },
@@ -128,8 +143,8 @@ export default function GradeRegisterTab() {
       
       resetForm()
     } catch (e) {
-      console.error('성적 등록 실패:', e)
-      showToast('error', '❌ 등록 실패 - 백엔드 응답을 확인해주세요')
+      console.error('성적 저장 실패:', e)
+      showToast('error', `❌ ${editingId ? '수정' : '등록'}하지 못했어요. 잠시 후 다시 시도해 주세요`)
     } finally {
       setSubmitting(false)
     }
@@ -142,7 +157,7 @@ export default function GradeRegisterTab() {
     setSubject(record.subject)
     setScore(String(record.score))
     setExamDate(record.examDate)
-    setExamType(record.examType)
+    setExamType(record.examTypeId ?? 'MIDTERM')
     // 폼 위로 스크롤
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -159,12 +174,17 @@ export default function GradeRegisterTab() {
     )
     if (!confirmed) return
     
+    if (record.gradeId == null) {
+      showToast('error', '서버 번호가 없는 기록이라 여기서 삭제할 수 없어요')
+      return
+    }
     try {
       await gradesAPI.deleteGrade(record.gradeId)
       showToast('success', `🗑️ 삭제되었어요`)
     } catch (e) {
-      console.warn('백엔드 삭제 실패, 로컬만 반영:', e)
-      showToast('success', `🗑️ 로컬에서 삭제됨 (백엔드 API 미지원)`)
+      console.error('성적 삭제 실패:', e)
+      showToast('error', '❌ 삭제하지 못했어요. 잠시 후 다시 시도해 주세요')
+      return
     }
     
     // 로컬 이력에서 제거
@@ -234,6 +254,7 @@ export default function GradeRegisterTab() {
         {/* 학생 선택 */}
         <FormField label="학생">
           <select
+            aria-label="학생"
             value={selectedStudent}
             onChange={e => setSelectedStudent(e.target.value)}
             disabled={!!editingId}  
@@ -243,13 +264,18 @@ export default function GradeRegisterTab() {
               cursor: editingId ? 'not-allowed' : 'pointer',
             }}
           >
-            <option value="">학생을 선택하세요</option>
-            {STUDENTS.map(s => (
+            <option value="">{studentsState === 'loading' ? '학생 목록을 불러오는 중...' : studentsState === 'error' ? '학생 목록을 불러오지 못했어요' : students.length ? '학생을 선택하세요' : '등록된 학생이 없어요'}</option>
+            {students.map(s => (
               <option key={s.id} value={s.id}>
-                {s.name} ({s.grade} {s.class})
+                {s.name}{s.grade ? ` (${s.grade})` : ''}
               </option>
             ))}
           </select>
+          {studentsState === 'error' && (
+            <button type="button" onClick={loadStudents} style={{ marginTop: 6, border: 'none', background: 'none', color: 'var(--color-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+              학생 목록 다시 불러오기
+            </button>
+          )}
         </FormField>
         
         {/* 과목 */}
@@ -392,7 +418,7 @@ export default function GradeRegisterTab() {
                       {r.studentName} · <span style={{ color }}>{r.score}점</span>
                     </p>
                     <p style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 1 }}>
-                      {r.examDate} · {EXAM_TYPES.find(t => t.id === r.examType)?.label}
+                      {r.examDate} · {r.examType}
                     </p>
                   </div>
                   

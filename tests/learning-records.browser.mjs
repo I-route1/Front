@@ -95,7 +95,11 @@ async function openPage(options = {}) {
       ? respond(state.metaResponse) : respond({ error: '분석 데이터가 부족합니다.' }, 400)
     if (path.includes('study-pattern')) return respond({ goldenTime: '데이터 없음', subjectStudyMinutes: {} })
     if (path.includes('strengths')) return respond({ strongSubjectIds: [] })
-    if (path.includes('risk')) return respond({ atRisk: false })
+    if (path.includes('risk')) return respond(state.risk?.[url.searchParams.get('studentId')] ?? { atRisk: false })
+    if (path === '/api/grades' && req.method() === 'POST') {
+      if (state.failGradeSave) return respond({ error: '저장 실패' }, 500)
+      return respond({ id: 501, ...req.postDataJSON() })
+    }
     if (path.startsWith('/api/grades/')) return respond(path.endsWith('/14') ? (state.grades || []) : [])
     return respond([])
   })
@@ -301,6 +305,63 @@ test('성장 예측은 실제 성적으로만 예측하고, 성적이 없거나 
     await page.getByRole('button', { name: '연결검증학생 · 중1', exact: true }).click()
     await page.getByText('지금은 예측할 수 없어요 (AI 서버 확인 필요)', { exact: true }).waitFor()
     assert.equal(await page.getByText('▲', { exact: false }).count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학원 전체현황은 예시 학생이 아니라 실제 학원 학생·성적·위험도로 계산한다', async () => {
+  const grades = [
+    { subject: '수학', score: 90, examDate: '2026-07-08', examType: '기말고사' },
+    { subject: '국어', score: 70, examDate: '2026-07-08', examType: '기말고사' },
+  ]
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', grades, risk: {
+    14: { studentId: 14, atRisk: true, riskLevel: 'HIGH', riskSummary: '수학 점수가 2회 연속 하락했어요.' },
+    15: { studentId: 15, atRisk: true, riskLevel: 'HIGH', riskSummary: '성적이 없는 학생은 위험도를 묻지 않는다' },
+  } })
+  try {
+    await page.goto(`${BASE}/admin/learning`)
+    await page.getByText('학생 2명 · 성적 등록 1명', { exact: true }).waitFor()
+    for (const fake of ['김위험', '이보통', '박우수', 'A반']) assert.equal(await page.getByText(fake, { exact: false }).count(), 0)
+    const stats = page.getByLabel('전체 통계')
+    await stats.getByText('2명', { exact: true }).waitFor()
+    await stats.getByText('80점', { exact: true }).waitFor() // (90 + 70) / 2
+    await stats.getByText('성적 미등록 1명', { exact: true }).waitFor()
+    const risk = page.getByRole('region', { name: '상담 필요 학생' })
+    await risk.getByText('연결검증학생', { exact: true }).waitFor()
+    await risk.getByText('수학 점수가 2회 연속 하락했어요.', { exact: false }).waitFor()
+    assert.equal(await risk.getByText('다른학생', { exact: true }).count(), 0)
+    assert.equal(state.requests.some(r => r.path === '/api/analysis/risk' && r.query.includes('studentId=15')), false)
+    // 학년 필터는 실제 학생 학년만
+    assert.deepEqual(await page.getByRole('group', { name: '학년 선택' }).getByRole('button').allTextContents(), ['전체', '중1', '중2'])
+    await page.getByRole('button', { name: '중2', exact: true }).click()
+    await page.getByLabel('중2 통계').getByText('1명', { exact: true }).first().waitFor()
+    assert.equal(await page.getByRole('region', { name: '상담 필요 학생' }).count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학원 성적 등록은 실제 학생을 숫자 ID로 저장하고, 실패를 성공처럼 보여주지 않는다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY' })
+  try {
+    await page.goto(`${BASE}/admin/learning`)
+    await page.getByRole('button', { name: /성적 등록/ }).click()
+    const select = page.getByRole('combobox', { name: '학생' })
+    await select.locator('option', { hasText: '다른학생 (중2)' }).waitFor({ state: 'attached' })
+    assert.equal(await select.locator('option', { hasText: '김위험' }).count(), 0)
+    await select.selectOption('15')
+    await page.getByPlaceholder('0 ~ 100').fill('88')
+    await page.getByRole('button', { name: /등록하기|성적 등록하기|등록/ }).last().click()
+    await page.getByText('다른학생 성적이 등록되었어요', { exact: false }).waitFor()
+    const body = state.requests.find(r => r.path === '/api/grades' && r.method === 'POST').body
+    assert.equal(body.studentId, 15)
+    assert.equal(body.gradeLevel, 2)
+    assert.equal(body.examType, '중간고사')
+    assert.equal(body.score, 88)
+    state.failGradeSave = true
+    await select.selectOption('14')
+    await page.getByPlaceholder('0 ~ 100').fill('70')
+    await page.getByRole('button', { name: /등록하기|성적 등록하기|등록/ }).last().click()
+    await page.getByText('등록하지 못했어요', { exact: false }).waitFor()
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })
