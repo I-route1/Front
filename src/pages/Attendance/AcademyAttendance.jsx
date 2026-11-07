@@ -2,26 +2,7 @@
 import { useState, useEffect } from 'react'
 import { getAttendanceByBus, registerNfcCard } from '@/api/attendance'
 import { studentAPI } from '@/api/student'
-
-const USE_MOCK = false
-
-const MOCK_BUS_LIST = [
-  { busId: 1, label: '1호차' },
-  { busId: 2, label: '2호차' },
-]
-
-const MOCK_BUS_RECORDS = [
-  { attendanceId: 5, studentId: 1, studentName: '홍민준', busId: 1, eventType: 'BOARD', timestamp: new Date(Date.now() - 8 * 60000).toISOString() },
-  { attendanceId: 6, studentId: 1, studentName: '홍민준', busId: 1, eventType: 'EXIT', timestamp: new Date(Date.now() - 2 * 60000).toISOString() },
-  { attendanceId: 7, studentId: 2, studentName: '이수연', busId: 1, eventType: 'BOARD', timestamp: new Date(Date.now() - 5 * 60000).toISOString() },
-]
-
-// 학생 목록 (실제로는 별도 API) — NFC 등록용
-const MOCK_STUDENTS = [
-  { gpsStudentId: 1, name: '홍민준' },
-  { gpsStudentId: 2, name: '이수연' },
-  { gpsStudentId: 3, name: '박준혁' },
-]
+import { busesFromStudents, latestStatusByStudent } from '@/utils/busAttendance'
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -31,7 +12,7 @@ function formatTime(ts) {
 
 export default function AcademyAttendance({ user }) {
   const [tab, setTab] = useState('records') // 'records' | 'nfc'
-  const [selectedBus, setSelectedBus] = useState(MOCK_BUS_LIST[0])
+  const [selectedBus, setSelectedBus] = useState(null)
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -42,54 +23,47 @@ export default function AcademyAttendance({ user }) {
   const [nfcLoading, setNfcLoading] = useState(false)
   const [nfcMsg, setNfcMsg] = useState(null) // { type: 'success'|'error', text }
 
-  // 학원 학생 목록
+  // 학원 학생 목록 (버스 목록과 NFC 등록에 같이 쓴다)
   const [students, setStudents] = useState([])
-  const [studentsLoading, setStudentsLoading] = useState(false)
+  const [studentsLoading, setStudentsLoading] = useState(true)
+  const [studentsError, setStudentsError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
-  // 버스 출결 로드
   useEffect(() => {
-    if (tab !== 'records') return
+    let cancelled = false
+    setStudentsLoading(true)
+    setStudentsError(false)
+    studentAPI.getAcademyStudents()
+      .then(data => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : []
+        setStudents(list)
+        const buses = busesFromStudents(list)
+        setSelectedBus(prev => buses.find(b => b.busId === prev?.busId) ?? buses[0] ?? null)
+      })
+      .catch(err => { console.error('학생 목록 로드 실패:', err); if (!cancelled) setStudentsError(true) })
+      .finally(() => { if (!cancelled) setStudentsLoading(false) })
+    return () => { cancelled = true }
+  }, [reloadKey])
+
+  const buses = busesFromStudents(students)
+
+  // 버스 출결 로드 (버스를 빨리 바꿔도 마지막 요청 결과만 반영)
+  useEffect(() => {
+    if (tab !== 'records' || !selectedBus) return
+    let cancelled = false
     setLoading(true)
     setError(null)
-
-    if (USE_MOCK) {
-      setTimeout(() => {
-        setRecords(MOCK_BUS_RECORDS.filter(r => r.busId === selectedBus.busId))
-        setLoading(false)
-      }, 400)
-      return
-    }
-
+    setRecords([])
     getAttendanceByBus(selectedBus.busId)
-      .then(setRecords)
-      .catch(() => setError('출결 정보를 불러오지 못했습니다.'))
-      .finally(() => setLoading(false))
-  }, [selectedBus, tab])
+      .then(data => { if (!cancelled) setRecords(Array.isArray(data) ? data : []) })
+      .catch(() => { if (!cancelled) setError('출결 정보를 불러오지 못했습니다.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [selectedBus, tab, reloadKey])
 
-  // 학원 학생 목록 로드
-  useEffect(() => {
-    if (tab !== 'nfc') return
-    setStudentsLoading(true)
-
-    if (USE_MOCK) {
-      setTimeout(() => {
-        setStudents(MOCK_STUDENTS)
-        setStudentsLoading(false)
-      }, 400)
-      return
-    }
-
-    studentAPI.getAcademyStudents()
-      .then(data => setStudents(data || []))
-      .catch(err => console.error('학생 목록 로드 실패:', err))
-      .finally(() => setStudentsLoading(false))
-  }, [tab])
-
-  // 학생별 마지막 상태 계산
-  const studentStatus = {}
-  ;[...records].reverse().forEach(r => {
-    studentStatus[r.studentId] = r.eventType
-  })
+  // 학생별 가장 최근 상태
+  const studentStatus = latestStatusByStudent(records)
 
   async function handleNfcRegister() {
     if (!nfcStudentId || !nfcCardId.trim()) {
@@ -98,14 +72,6 @@ export default function AcademyAttendance({ user }) {
     }
     setNfcLoading(true)
     setNfcMsg(null)
-
-    if (USE_MOCK) {
-      await new Promise(r => setTimeout(r, 600))
-      setNfcMsg({ type: 'success', text: 'NFC 카드가 등록되었습니다.' })
-      setNfcCardId('')
-      setNfcLoading(false)
-      return
-    }
 
     try {
       await registerNfcCard(Number(nfcStudentId), nfcCardId.trim())
@@ -139,21 +105,36 @@ export default function AcademyAttendance({ user }) {
       {/* ─── 출결 현황 탭 ─── */}
       {tab === 'records' && (
         <>
-          {/* 버스 선택 */}
+          {studentsLoading && <div style={styles.center}><div style={styles.spinner} /></div>}
+          {studentsError && (
+            <div role="alert" style={styles.errorBox}>
+              학원 학생 정보를 불러오지 못했습니다.{' '}
+              <button type="button" onClick={() => setReloadKey(k => k + 1)} style={styles.retryButton}>다시 불러오기</button>
+            </div>
+          )}
+          {!studentsLoading && !studentsError && buses.length === 0 && (
+            <div style={styles.empty}>버스가 배정된 학생이 없습니다</div>
+          )}
+
+          {/* 버스 선택: 학생에게 배정된 버스만 */}
+          {buses.length > 0 && (
           <div style={styles.busRow}>
-            {MOCK_BUS_LIST.map(bus => (
+            {buses.map(bus => (
               <button
                 key={bus.busId}
+                type="button"
+                aria-pressed={selectedBus?.busId === bus.busId}
                 onClick={() => setSelectedBus(bus)}
                 style={{
                   ...styles.busBtn,
-                  ...(selectedBus.busId === bus.busId ? styles.busBtnActive : {}),
+                  ...(selectedBus?.busId === bus.busId ? styles.busBtnActive : {}),
                 }}
               >
-                🚌 {bus.label}
+                🚌 {bus.label} <span style={{ opacity: 0.7, fontWeight: 500 }}>· {bus.count}명</span>
               </button>
             ))}
           </div>
+          )}
 
           {/* 요약 카드 */}
           <div style={styles.summaryRow}>
@@ -184,12 +165,17 @@ export default function AcademyAttendance({ user }) {
             {loading && (
               <div style={styles.center}><div style={styles.spinner} /></div>
             )}
-            {error && <div style={styles.errorBox}>{error}</div>}
-            {!loading && records.length === 0 && (
+            {error && (
+              <div role="alert" style={styles.errorBox}>
+                {error}{' '}
+                <button type="button" onClick={() => setReloadKey(k => k + 1)} style={styles.retryButton}>다시 불러오기</button>
+              </div>
+            )}
+            {!loading && !error && selectedBus && records.length === 0 && (
               <div style={styles.empty}>오늘 기록이 없습니다</div>
             )}
 
-            {!loading && records.map(r => (
+            {!loading && [...records].sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp))).map(r => (
               <div key={r.attendanceId} style={styles.record}>
                 <div style={{
                   ...styles.eventBadge,
@@ -223,7 +209,7 @@ export default function AcademyAttendance({ user }) {
               style={styles.select}
               disabled={studentsLoading}
             >
-              <option value="">{studentsLoading ? '로딩 중...' : '-- 학생을 선택하세요 --'}</option>
+              <option value="">{studentsLoading ? '로딩 중...' : studentsError ? '학생 목록을 불러오지 못했어요' : '-- 학생을 선택하세요 --'}</option>
               {students.map(s => (
                 <option key={s.studentId} value={s.studentId}>
                   {s.name}
@@ -271,6 +257,10 @@ export default function AcademyAttendance({ user }) {
 }
 
 const styles = {
+  retryButton: {
+    border: 'none', background: 'transparent', color: 'inherit', fontWeight: 700,
+    textDecoration: 'underline', cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 'inherit',
+  },
   container: {
     padding: '16px',
     maxWidth: 430,

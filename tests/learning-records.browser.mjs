@@ -55,7 +55,14 @@ async function openPage(options = {}) {
     state.requests.push({ path, query: url.search, method: req.method(), body: req.postDataJSON(), auth: req.headers().authorization })
     const respond = (json, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) })
     if (path === '/api/auth/token/refresh') return respond({ accessToken: 'renewed' })
-    if (path === '/api/students/my-children' || path === '/api/students/academy/students') return respond(children)
+    if (path === '/api/students/my-children') return respond(children)
+    if (path === '/api/students/academy/students') return respond(state.academyStudents || children)
+    if (path === '/api/notifications' || path === '/api/notifications/unread') {
+      if (state.notiFail) return respond({ error: '알림 서버 오류' }, 500)
+      const list = (state.notifications || {})[url.searchParams.get('studentId')] || []
+      return respond(path.endsWith('unread') ? list.filter(n => !n.isRead) : list)
+    }
+    if (path.startsWith('/api/gps/attendance/buses/')) return respond((state.busRecords || {})[path.split('/').pop()] || [])
     if (path.startsWith('/api/wrong-answer/')) {
       if (state.delay && path.endsWith('/14')) await state.delay
       if (state.fail) return respond({ error: '오답 서버 응답 실패' }, 503)
@@ -362,6 +369,60 @@ test('학원 성적 등록은 실제 학생을 숫자 ID로 저장하고, 실패
     await page.getByPlaceholder('0 ~ 100').fill('70')
     await page.getByRole('button', { name: /등록하기|성적 등록하기|등록/ }).last().click()
     await page.getByText('등록하지 못했어요', { exact: false }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('알림은 자녀별 학생 ID로 불러와 합치고, 없거나 실패하면 예시 알림을 보여주지 않는다', async () => {
+  const { page, context, state, errors } = await openPage({ notifications: {
+    14: [{ id: 1, studentId: 14, title: '오늘의 복습', message: '받침 복습', isRead: false, createdAt: '2026-11-07T09:00:00' }],
+    15: [{ id: 2, studentId: 15, title: '함수 복습', message: '일차함수', isRead: true, createdAt: '2026-11-07T10:00:00' }],
+  } })
+  try {
+    await page.goto(`${BASE}/notifications`)
+    await page.getByText('함수 복습', { exact: true }).waitFor()
+    await page.getByText('오늘의 복습', { exact: true }).waitFor()
+    await page.getByText('다른학생', { exact: true }).waitFor() // 자녀 이름 표시
+    const ids = state.requests.filter(r => r.path === '/api/notifications').map(r => new URLSearchParams(r.query).get('studentId')).sort()
+    assert.deepEqual([...new Set(ids)], ['14', '15'])
+    // 학부모 본인 계정 ID(700)를 학생 ID로 보내지 않는다 (목록·안읽음·생성 모두)
+    assert.equal(state.requests.some(r => r.path.startsWith('/api/notifications') && r.query.includes('studentId=700')), false)
+    for (const fake of ['학습 위험 감지', '홍민준', '분수 나눗셈']) assert.equal(await page.getByText(fake, { exact: false }).count(), 0)
+    // 알림이 없으면 빈 화면, 실패하면 오류 안내
+    state.notifications = {}
+    await page.reload()
+    await page.getByText('알림이 없어요!', { exact: true }).waitFor()
+    state.notiFail = true
+    await page.reload()
+    await page.getByRole('alert').getByText('알림을 불러오지 못했어요.', { exact: false }).waitFor()
+    assert.equal(await page.getByText('학습 위험 감지', { exact: false }).count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학원 출결은 학생에게 배정된 버스만 보여주고, 학생별 가장 최근 승하차로 집계한다', async () => {
+  const { page, context, errors } = await openPage({ role: 'ACADEMY',
+    academyStudents: [
+      { studentId: 14, name: '연결검증학생', grade: '중1', busId: 3 },
+      { studentId: 15, name: '다른학생', grade: '중2', busId: 3 },
+      { studentId: 16, name: '세번째학생', grade: '중2', busId: 5 },
+    ],
+    busRecords: { 3: [
+      { attendanceId: 1, studentId: 14, studentName: '연결검증학생', busId: 3, eventType: 'BOARD', timestamp: '2026-11-07T08:00:00' },
+      { attendanceId: 2, studentId: 15, studentName: '다른학생', busId: 3, eventType: 'BOARD', timestamp: '2026-11-07T08:05:00' },
+      { attendanceId: 3, studentId: 14, studentName: '연결검증학생', busId: 3, eventType: 'EXIT', timestamp: '2026-11-07T08:30:00' },
+    ] },
+  })
+  try {
+    await page.goto(`${BASE}/attendance`)
+    await page.getByRole('button', { name: /3호차/ }).waitFor()
+    assert.equal(await page.getByRole('button', { name: /1호차/ }).count(), 0)
+    assert.equal(await page.getByRole('button', { name: /5호차/ }).count(), 1)
+    await page.getByText('하차 완료', { exact: true }).waitFor()
+    const nums = await page.locator('text=현재 탑승').locator('xpath=preceding-sibling::div[1]').textContent()
+    assert.equal(nums.trim(), '1') // 14번은 승차 후 하차 → 탑승 중은 15번 한 명
+    const exits = await page.locator('text=하차 완료').locator('xpath=preceding-sibling::div[1]').textContent()
+    assert.equal(exits.trim(), '1')
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })

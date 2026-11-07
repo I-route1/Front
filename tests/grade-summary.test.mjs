@@ -83,3 +83,18 @@ test('하루 평균 공부 시간과 다음 시험 예측 점', async () => {
   assert.equal(withPredictedPoint(s, undefined).length, s.trend.length)
   assert.deepEqual(withPredictedPoint(summarizeGrades([]), 80), [])
 })
+
+test('학원 출결: 학생 배정으로 버스 목록을 만들고 학생별 최신 승하차를 고른다', async () => {
+  const { busesFromStudents, latestStatusByStudent } = await import('../src/utils/busAttendance.js')
+  assert.deepEqual(busesFromStudents([{ busId: 2 }, { busId: 1 }, { busId: 2 }, { busId: null }, { busId: 'x' }, {}]),
+    [{ busId: 1, label: '1호차', count: 1 }, { busId: 2, label: '2호차', count: 2 }])
+  assert.deepEqual(busesFromStudents([]), [])
+  // 서버는 오래된 순으로 준다: 승차 후 하차한 학생은 '하차'여야 한다
+  const records = [
+    { studentId: 1, eventType: 'BOARD', timestamp: '2026-11-07T08:00:00' },
+    { studentId: 2, eventType: 'BOARD', timestamp: '2026-11-07T08:05:00' },
+    { studentId: 1, eventType: 'EXIT', timestamp: '2026-11-07T08:30:00' },
+  ]
+  assert.deepEqual(latestStatusByStudent(records), { 1: 'EXIT', 2: 'BOARD' })
+  assert.deepEqual(latestStatusByStudent([...records].reverse()), { 1: 'EXIT', 2: 'BOARD' })
+})

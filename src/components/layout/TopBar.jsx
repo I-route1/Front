@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { notificationsAPI } from '@/api'
+import { notificationTargets, notificationTargetKey } from '@/utils/notificationTargets'
 
 const PAGE_TITLES = {
   '/home': null,
@@ -27,20 +28,14 @@ export default function TopBar() {
   
   // 안 읽은 알림 확인
   useEffect(() => {
-    // 학부모인 경우 첫 번째 자녀의 ID를, 그 외(학생 등)에는 본인 ID를 사용
-    const targetStudentId = (user?.role === 'PARENT' || user?.role === '학부모')
-      ? (user?.children?.[0]?.studentId || user?.children?.[0]?.studentId || user?.children?.[0]?.id)
-      : user?.id;
-
-    if (!targetStudentId) return;
-    
-    notificationsAPI.getUnread(targetStudentId)
-      .then(data => {
-        const count = Array.isArray(data) ? data.length : (data?.count ?? 0)
-        setHasUnread(count > 0)
-      })
-      .catch(() => setHasUnread(false))
-  }, [user?.id, user?.children])  // pathname 의존성 제거: 페이지 이동 시마다 무의미한 API 반복 호출(스팸) 방지
+    // 학부모는 모든 자녀, 학생은 본인 알림 중 하나라도 안 읽었으면 표시
+    const targets = notificationTargets(user)
+    if (targets.length === 0) { setHasUnread(false); return }
+    let cancelled = false
+    Promise.all(targets.map(t => notificationsAPI.getUnread(t.studentId).catch(() => [])))
+      .then(lists => { if (!cancelled) setHasUnread(lists.some(d => (Array.isArray(d) ? d.length : (d?.count ?? 0)) > 0)) })
+    return () => { cancelled = true }
+  }, [notificationTargetKey(user)]) // eslint-disable-line react-hooks/exhaustive-deps  // pathname 의존성 제거: 페이지 이동 시마다 무의미한 API 반복 호출(스팸) 방지
   
   const title = getPageTitle(pathname)
   
