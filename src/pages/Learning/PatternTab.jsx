@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   SUBJECTS,
@@ -7,6 +7,7 @@ import { activitiesAPI, analysisAPI, gradesAPI } from '@/api'
 import { useAuth, isAcademy } from '@/context/AuthContext'
 import useStudentRecords from '@/hooks/useStudentRecords'
 import ConcentrationSummaryCard from '@/components/learning/ConcentrationSummaryCard'
+import BottomSheet, { RecordLauncher } from '@/components/common/BottomSheet'
 import { hourlyConcentration, localStudyDate, metaCognitionPresentation } from '@/components/learning/recordUtils'
 import { evaluationSubmissionId } from '@/components/learning/evaluationSubmission'
 
@@ -35,7 +36,11 @@ export default function PatternTab({ studentId: propStudentId }) {
   const effectiveId = propStudentId ?? user?.id
   const gradeKey = effectiveId
   const activityRecords = useStudentRecords(effectiveId, activitiesAPI.getActivities)
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // '오늘 공부 기록하기' 창은 주소(?sheet=record)로 열고 닫아서 뒤로 가기·새로고침에도 상태가 맞게 한다.
+  const sheetOpen = searchParams.get('sheet') === 'record'
+  const openSheet = () => setSearchParams({ tab: 'pattern', sheet: 'record' }, { replace: true })
+  const closeSheet = useCallback(() => setSearchParams({ tab: 'pattern' }, { replace: true }), [setSearchParams])
   const hourlyData = useMemo(() => hourlyConcentration(activityRecords.data), [activityRecords.data])
   const [activitySubject, setActivitySubject] = useState('수학')
   const [duration, setDuration] = useState(60)
@@ -251,11 +256,9 @@ export default function PatternTab({ studentId: propStudentId }) {
         </div>
       </div>
 
-      {/* 자기평가 + AI 메타인지 분석 */}
-      <div style={{ margin:'12px 16px 0' }}>
-        <div style={{ background:'var(--color-surface)', borderRadius:16, border:'1px solid var(--color-border)', padding:16 }}>
-          <p style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>🌟 오늘의 자기평가 (메타인지)</p>
-          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:16 }}>학습 직후 솔직하게 체크해 주세요</p>
+      {/* 자기평가 + AI 메타인지 분석: '오늘 공부 기록하기' 버튼으로 여는 창 */}
+      <BottomSheet open={sheetOpen} onClose={closeSheet} title="오늘 공부 기록하기" description="공부가 끝난 뒤 솔직하게 남겨 주세요">
+        <div>
           <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
             {['이해도','집중도'].map(key => (
               <div key={key}>
@@ -346,7 +349,7 @@ export default function PatternTab({ studentId: propStudentId }) {
             </div>
           )}
         </div>
-      </div>
+      </BottomSheet>
 
       {/* 강사 피드백 */}
       <div style={{ margin:'12px 16px 0' }}>
@@ -484,6 +487,8 @@ export default function PatternTab({ studentId: propStudentId }) {
         </div>
 
       </div>
+
+      <RecordLauncher onClick={openSheet} />
     </div>
   )
 }
