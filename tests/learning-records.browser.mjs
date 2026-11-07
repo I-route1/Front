@@ -62,6 +62,8 @@ async function openPage(options = {}) {
       return respond(path.endsWith('/14') && !state.empty ? (state.wrong || wrong) : [])
     }
     if (path.startsWith('/api/gps/attendance/students/')) {
+      if (state.expiredAttendance && req.headers().authorization === 'Bearer test-token') return respond({}, 401)
+      if (state.attendanceStatus) return respond({ error: '접근 권한이 없습니다.' }, state.attendanceStatus)
       if (state.attendanceFail) return respond({ error: '출결 서버 오류' }, 500)
       return respond((state.attendance || {})[path.split('/').pop()] || [])
     }
@@ -242,6 +244,30 @@ test('학부모 출결은 실제 자녀 목록과 인증 헤더로 조회하고,
     await page.getByRole('alert').getByText('출결 이력을 불러오지 못했습니다.', { exact: false }).waitFor()
     state.attendanceFail = false
     await page.getByRole('button', { name: '다시 불러오기', exact: true }).click()
+    await page.getByText('승차 — 버스 탑승 중', { exact: false }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('출결 조회 토큰 만료는 갱신하고 권한 거부 후 이전 자녀 기록은 표시하지 않는다', async () => {
+  const { page, context, state, errors } = await openPage({ expiredAttendance: true, attendance: {
+    14: [{ attendanceId: 2, studentId: 14, studentName: '연결검증학생', busId: 1, eventType: 'BOARD', timestamp: '2026-11-07T08:10:00' }],
+  } })
+  try {
+    await page.goto(`${BASE}/attendance`)
+    await page.getByText('승차 — 버스 탑승 중', { exact: false }).waitFor()
+    const requests = state.requests.filter(r => r.path === '/api/gps/attendance/students/14')
+    assert.equal(requests.length, 2)
+    assert.deepEqual(requests.map(r => r.auth), ['Bearer test-token', 'Bearer renewed'])
+    assert.equal(requests[0].query, requests[1].query)
+    assert.equal(state.requests.filter(r => r.path === '/api/auth/token/refresh').length, 1)
+    state.attendanceStatus = 403
+    await page.getByRole('button', { name: '다른학생', exact: true }).click()
+    await page.getByRole('alert').getByText('출결 이력을 불러오지 못했습니다.', { exact: false }).waitFor()
+    assert.equal(await page.getByText('승차 — 버스 탑승 중', { exact: false }).count(), 0)
+    assert.equal(await page.getByText('🚌 승차', { exact: true }).count(), 0)
+    state.attendanceStatus = 0
+    await page.getByRole('button', { name: '연결검증학생', exact: true }).click()
     await page.getByText('승차 — 버스 탑승 중', { exact: false }).waitFor()
     assert.deepEqual(errors, [])
   } finally { await context.close() }

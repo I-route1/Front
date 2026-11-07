@@ -1,4 +1,5 @@
 // src/api/attendance.js
+import { apiCall } from './client'
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 function getAuthHeader() {
@@ -30,11 +31,7 @@ export async function tagNfc({ busId, nfcCardId }) {
  * (예전 GET /api/gps/parents/{parentId}/children 은 백엔드에 없다)
  */
 export async function getChildren() {
-  const res = await fetch(`${BASE_URL}/api/students/my-children`, {
-    headers: { ...getAuthHeader() },
-  })
-  if (!res.ok) throw new Error('자녀 목록 조회 실패')
-  return res.json()
+  return apiCall('/api/students/my-children')
 }
 
 /**
@@ -43,11 +40,7 @@ export async function getChildren() {
  */
 export async function getAttendanceByParent(parentId, date) {
   const params = date ? `?date=${date}` : ''
-  const res = await fetch(`${BASE_URL}/api/gps/attendance/parents/${parentId}${params}`, {
-    headers: { ...getAuthHeader() },
-  })
-  if (!res.ok) throw new Error('출결 이력 조회 실패')
-  return res.json()
+  return apiCall(`/api/gps/attendance/parents/${parentId}${params}`)
 }
 
 /**
@@ -56,11 +49,7 @@ export async function getAttendanceByParent(parentId, date) {
  */
 export async function getAttendanceByStudent(studentId, date) {
   const params = date ? `?date=${date}` : ''
-  const res = await fetch(`${BASE_URL}/api/gps/attendance/students/${studentId}${params}`, {
-    headers: { ...getAuthHeader() },
-  })
-  if (!res.ok) throw new Error('출결 이력 조회 실패')
-  return res.json()
+  return apiCall(`/api/gps/attendance/students/${studentId}${params}`)
 }
 
 /**
@@ -68,11 +57,7 @@ export async function getAttendanceByStudent(studentId, date) {
  * GET /api/gps/attendance/buses/{busId}
  */
 export async function getAttendanceByBus(busId) {
-  const res = await fetch(`${BASE_URL}/api/gps/attendance/buses/${busId}`, {
-    headers: { ...getAuthHeader() },
-  })
-  if (!res.ok) throw new Error('버스 출결 조회 실패')
-  return res.json()
+  return apiCall(`/api/gps/attendance/buses/${busId}`)
 }
 
 /**
