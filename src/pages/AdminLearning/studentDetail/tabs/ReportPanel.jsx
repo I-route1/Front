@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import useSavedCounselingReports from '@/hooks/useSavedCounselingReports'
+import { SavedReportPicker, SavedReportStatus } from '@/components/learning/SavedReportControls'
+import { UNCLASSIFIED_REPORT } from '@/utils/savedReports'
 import { counselingAPI, studyPlanAPI, aiReportAPI, gradesAPI } from '@/api'
 import MathText, { mathToHtml, KATEX_CSS_LINK } from '@/components/common/MathText'
 
@@ -82,17 +85,13 @@ const REPORT_TYPES = [
 ]
 
 export default function ReportPanel({ student }) {
-  const studentId = student ? String(student.id) : null
-  const storageKey   = `admin-report-results-${studentId}`
-  const collapsedKey = `admin-report-collapsed-${studentId}`
+  const studentId = student ? String(student.studentId ?? student.id) : null
+  const history = useSavedCounselingReports(studentId)
+  const reports = history.results
+  const reportTypes = history.groups.unclassified?.length ? [...REPORT_TYPES, UNCLASSIFIED_REPORT] : REPORT_TYPES
 
   const [loading, setLoading] = useState({})
-  const [reports, setReports] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem(storageKey)) ?? {} } catch { return {} }
-  })
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem(collapsedKey)) ?? {} } catch { return {} }
-  })
+  const [collapsed, setCollapsed] = useState({})
   const [errors, setErrors] = useState({})
   const [selectedSubject, setSelectedSubject] = useState({})
   const [subjectsWithGrades, setSubjectsWithGrades] = useState([])
@@ -101,31 +100,26 @@ export default function ReportPanel({ student }) {
   // 학생이 바뀌면 상태 초기화
   useEffect(() => {
     if (!studentId) return
-    try { setReports(JSON.parse(sessionStorage.getItem(storageKey)) ?? {}) } catch { setReports({}) }
-    try { setCollapsed(JSON.parse(sessionStorage.getItem(collapsedKey)) ?? {}) } catch { setCollapsed({}) }
+    setCollapsed({})
+    setLoading({})
     setErrors({})
     setSelectedSubject({})
   }, [studentId])
 
   useEffect(() => {
-    if (Object.keys(reports).length > 0)
-      sessionStorage.setItem(storageKey, JSON.stringify(reports))
-  }, [reports, storageKey])
-
-  useEffect(() => {
-    sessionStorage.setItem(collapsedKey, JSON.stringify(collapsed))
-  }, [collapsed, collapsedKey])
-
-  useEffect(() => {
     if (!studentId) return
+    let active = true
+    setSubjectsWithGrades([])
     setGradesLoading(true)
     gradesAPI.getGrades(studentId)
       .then(data => {
+        if (!active) return
         const list = Array.isArray(data) ? data : []
         setSubjectsWithGrades([...new Set(list.map(g => normalizeReportSubject(g.subject)).filter(s => SUBJECT_OPTIONS.includes(s)))])
       })
-      .catch(() => setSubjectsWithGrades([]))
-      .finally(() => setGradesLoading(false))
+      .catch(() => { if (active) setSubjectsWithGrades([]) })
+      .finally(() => { if (active) setGradesLoading(false) })
+    return () => { active = false }
   }, [studentId])
 
   if (!student) return null
@@ -134,16 +128,13 @@ export default function ReportPanel({ student }) {
     setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
 
   const clearResult = (id) => {
-    setReports(prev => {
-      const next = { ...prev }
-      delete next[id]
-      sessionStorage.setItem(storageKey, JSON.stringify(next))
-      return next
-    })
+    if (reports[id]?._saved) setCollapsed(prev => ({ ...prev, [id]: true }))
+    else history.clear(id)
   }
 
   const generateReport = async (reportType) => {
     const { id, api, apiSource } = reportType
+    if (!history.enabled) return
 
     setLoading(prev => ({ ...prev, [id]: true }))
     setErrors(prev => ({ ...prev, [id]: null }))
@@ -160,15 +151,17 @@ export default function ReportPanel({ student }) {
       }
       const now = new Date()
       const ts = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
-      setReports(prev => ({ ...prev, [id]: { ...res, _generatedAt: ts } }))
+      if (!history.isCurrent()) return
+      history.generated(id, { ...res, _generatedAt: ts }, apiSource === 'counseling')
       setCollapsed(prev => ({ ...prev, [id]: false }))
     } catch (e) {
+      if (!history.isCurrent()) return
       setErrors(prev => ({
         ...prev,
         [id]: e.message === 'HTTP 503' ? 'Python AI 서버가 실행 중이지 않습니다' : e.message,
       }))
     } finally {
-      setLoading(prev => ({ ...prev, [id]: false }))
+      if (history.isCurrent()) setLoading(prev => ({ ...prev, [id]: false }))
     }
   }
 
@@ -191,13 +184,15 @@ export default function ReportPanel({ student }) {
       </div>
 
       {/* 리포트 카드들 */}
-      {REPORT_TYPES.map(type => {
+      <SavedReportStatus history={history} />
+      {reportTypes.map(type => {
         const hasResult  = !!reports[type.id]
         const isCollapsed = collapsed[type.id] ?? false
 
         return (
           <div
             key={type.id}
+            data-testid={`saved-report-${type.id}`}
             style={{
               borderRadius: 12,
               background: 'var(--color-surface)',
@@ -260,6 +255,7 @@ export default function ReportPanel({ student }) {
             {/* 본문 — 결과 없거나 펼쳐진 경우만 */}
             {!isCollapsed && (
               <div style={{ padding: '0 14px 14px' }}>
+                <SavedReportPicker history={history} type={type.id} />
 
                 {/* 과목 선택 드롭다운 */}
                 {type.needsSubject && (
@@ -278,10 +274,12 @@ export default function ReportPanel({ student }) {
                   </select>
                 )}
 
-                {(() => {
+                {!type.readOnly && (() => {
                   const currentSubject = selectedSubject[type.id] || '수학'
                   const hasGrade = !type.needsSubject || subjectsWithGrades.includes(currentSubject)
-                  const isDisabled = loading[type.id] || (type.needsSubject && (gradesLoading || !hasGrade))
+                  const isDisabled = !history.enabled || loading[type.id]
+                      || (type.apiSource === 'counseling' && (history.loading || !!history.error))
+                      || (type.needsSubject && (gradesLoading || !hasGrade))
                   return (
                     <>
                       {type.needsSubject && !gradesLoading && !hasGrade && (
@@ -338,13 +336,13 @@ export default function ReportPanel({ student }) {
                 <span style={{ fontSize: 11, color: type.color, fontWeight: 600 }}>결과 저장됨</span>
                 <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>— 헤더를 눌러 펼치세요</span>
                 <button
-                  onClick={() => clearResult(type.id)}
+                  onClick={() => reports[type.id]?._saved ? toggleCollapse(type.id) : clearResult(type.id)}
                   style={{
                     marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-muted)',
                     background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px',
                   }}
                 >
-                  삭제
+                  {reports[type.id]?._saved ? '펼치기' : '삭제'}
                 </button>
               </div>
             )}
@@ -614,7 +612,7 @@ function ResultBlock({ result, reportType, onClear }) {
               color: 'var(--color-text-muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            삭제
+            {result._saved ? '결과 닫기' : '삭제'}
           </button>
         )}
       </div>

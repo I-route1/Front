@@ -18,6 +18,12 @@ const ocr = [{ id: 1, studentId: 14, subject: '국어', totalQuestions: 2, corre
 ] }]
 const camera = { id: 1, subject: '국어', studyDate: '2026-11-04', studyStartTime: '10:00:00', studyDurationMinutes: 30,
   concentrationScore: 5, understandingScore: 4, measurementSource: 'CAMERA', focusedRatio: 1, drowsyRatio: 0 }
+const savedReports = [
+  { id: 101, subject: '수학', title: '최신 수학 리포트', careerAnalysis: '저장된 수학 분석', learningGuide: '수학 학습 안내', createdAt: '2026-11-08T10:00:00' },
+  { id: 100, subject: '수학', title: '이전 수학 리포트', careerAnalysis: '이전 수학 분석', learningGuide: null, createdAt: '2026-11-07T10:00:00' },
+  { id: 99, subject: '영어', title: '영어 리포트', careerAnalysis: '저장된 영어 분석', learningGuide: '영어 학습 안내', createdAt: '2026-11-08T09:00:00' },
+  { id: 98, subject: null, title: '과목 없는 옛 리포트', careerAnalysis: '미분류 분석', learningGuide: null, createdAt: null },
+]
 
 before(async () => {
   server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4178', '--strictPort'], {
@@ -57,6 +63,24 @@ async function openPage(options = {}) {
     if (path === '/api/auth/token/refresh') return respond({ accessToken: 'renewed' })
     if (path === '/api/students/my-children') return respond(children)
     if (path === '/api/students/academy/students') return respond(state.academyStudents || children)
+    if (path === '/api/counseling/reports') {
+      if (state.expiredReports && req.headers().authorization === 'Bearer test-token') return respond({}, 401)
+      if (state.reportStatus) return respond({ error: '리포트에 접근할 수 없습니다.' }, state.reportStatus)
+      const studentId = url.searchParams.get('studentId')
+      const rows = (state.reportsByStudent || {})[studentId] || []
+      if (state.reportDelay && studentId === '14') await state.reportDelay
+      return respond('reportResponse' in state ? state.reportResponse : rows)
+    }
+    if (path.startsWith('/api/counseling/') && req.method() === 'POST') {
+      const studentId = url.searchParams.get('studentId')
+      if (state.reportGenerationDelay) await state.reportGenerationDelay
+      const subject = { math: '수학', writing: '국어', premium: '통합' }[path.split('/').pop()] || decodeURIComponent(path.split('/').pop())
+      const row = { id: 1001, title: '새로 생성한 리포트', subject, careerAnalysis: '생성 후 저장된 분석',
+        learningGuide: '생성 후 저장된 학습 안내', createdAt: '2026-11-08T15:00:00' }
+      state.reportsByStudent ||= {}
+      state.reportsByStudent[studentId] = [row, ...(state.reportsByStudent[studentId] || [])]
+      return respond({ studentId: Number(studentId), ...row })
+    }
     if (path === '/api/notifications' || path === '/api/notifications/unread') {
       if (state.notiFail) return respond({ error: '알림 서버 오류' }, 500)
       const list = (state.notifications || {})[url.searchParams.get('studentId')] || []
@@ -595,6 +619,133 @@ async function openAcademyPattern(page, name = '연결검증학생') {
   await page.getByRole('button', { name: /^🧠\s*패턴$/ }).click()
   await page.getByRole('form', { name: '학생 자기평가 입력', exact: true }).waitFor()
 }
+
+async function openAcademyReports(page) {
+  await page.goto(`${BASE}/admin/learning`)
+  await page.getByRole('button', { name: '👥 학생관리', exact: true }).click()
+  await page.getByText('연결검증학생', { exact: true }).click()
+  await page.getByRole('button', { name: /^📋\s*리포트$/ }).click()
+}
+
+test('학부모는 서버 저장 리포트를 과목별로 조회하고 이전 이력과 새로고침을 사용한다', async () => {
+  const { page, context, state, errors } = await openPage({ reportsByStudent: { 14: savedReports } })
+  try {
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    const math = page.getByTestId('saved-report-math'), english = page.getByTestId('saved-report-english')
+    await math.getByText('저장된 수학 분석', { exact: true }).waitFor()
+    await english.getByText('저장된 영어 분석', { exact: true }).waitFor()
+    assert.equal(await english.getByText('저장된 수학 분석', { exact: true }).count(), 0)
+    await page.getByTestId('saved-report-unclassified').getByText('미분류 분석', { exact: true }).waitFor()
+    await math.getByLabel('저장된 수학 리포트', { exact: true }).selectOption('100')
+    await math.getByText('이전 수학 분석', { exact: true }).waitFor()
+    await page.reload()
+    await math.getByText('저장된 수학 분석', { exact: true }).waitFor()
+    await math.getByRole('button', { name: '결과 닫기', exact: true }).click()
+    await math.getByRole('button', { name: '펼치기', exact: true }).click()
+    await math.getByText('저장된 수학 분석', { exact: true }).waitFor()
+    assert(state.requests.some(r => r.path === '/api/counseling/reports' && r.query === '?studentId=14' && r.auth === 'Bearer test-token'))
+    assert(!state.requests.some(r => r.path.startsWith('/api/counseling/') && r.method !== 'GET'))
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/saved-reports-parent.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('학원 학생 상세에서도 같은 저장 리포트 ID·과목·이전을 조회하고 새로 진입해도 유지한다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', reportsByStudent: { 14: savedReports } })
+  try {
+    await openAcademyReports(page)
+    const math = page.getByTestId('saved-report-math')
+    await math.getByText('과목: 수학 · 리포트 #101', { exact: true }).waitFor()
+    await page.getByTestId('saved-report-english').getByText('저장된 영어 분석', { exact: true }).waitFor()
+    await math.getByLabel('저장된 수학 리포트', { exact: true }).selectOption('100')
+    await math.getByText('이전 수학 분석', { exact: true }).waitFor()
+    await page.reload()
+    await openAcademyReports(page)
+    await math.getByText('저장된 수학 분석', { exact: true }).waitFor()
+    assert(state.requests.filter(r => r.path === '/api/counseling/reports').every(r => r.query === '?studentId=14'))
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/saved-reports-academy.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('리포트 만료 토큰을 갱신하고 403·잘못된 응답에 이전 이력과 브라우저 캐시를 표시하지 않는다', async () => {
+  const { page, context, state, errors } = await openPage({ expiredReports: true, reportsByStudent: { 14: savedReports } })
+  try {
+    await context.addInitScript(() => sessionStorage.setItem('counseling-results-14', JSON.stringify({ math: { careerAnalysis: '신뢰하면 안 되는 브라우저 캐시' } })))
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    await page.getByText('저장된 수학 분석', { exact: true }).waitFor()
+    assert.deepEqual([...new Set(state.requests.filter(r => r.path === '/api/counseling/reports').map(r => r.auth))], ['Bearer test-token', 'Bearer renewed'])
+    assert.equal(state.requests.filter(r => r.path === '/api/auth/token/refresh').length, 1)
+    assert.equal(await page.getByText('신뢰하면 안 되는 브라우저 캐시', { exact: true }).count(), 0)
+    state.reportStatus = 403
+    await page.getByRole('button', { name: '저장된 리포트 새로고침', exact: true }).click()
+    await page.getByRole('alert').getByText('저장된 AI 리포트를 불러오지 못했습니다.', { exact: true }).waitFor()
+    assert.equal(await page.getByText('저장된 수학 분석', { exact: true }).count(), 0)
+    state.reportStatus = 0; state.reportResponse = {}
+    await page.getByRole('button', { name: '저장된 리포트 새로고침', exact: true }).click()
+    await page.getByRole('alert').getByText('리포트 응답 형식을 확인할 수 없습니다.', { exact: true }).waitFor()
+    delete state.reportResponse
+    await page.getByRole('button', { name: '저장된 리포트 새로고침', exact: true }).click()
+    await page.getByText('저장된 수학 분석', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('이전 학생 리포트의 늦은 응답이 새 학생 과목에 섞이지 않는다', async () => {
+  let release
+  const delay = new Promise(resolve => { release = resolve })
+  const { page, context, state, errors } = await openPage({ reportDelay: delay, reportsByStudent: {
+    14: savedReports, 15: [{ id: 200, subject: '국어', title: '다른 학생 국어', careerAnalysis: '다른 학생 분석', createdAt: null }],
+  } })
+  try {
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    await page.getByRole('status', { name: '저장된 AI 리포트 조회' }).getByText('저장된 리포트를 불러오는 중...', { exact: true }).waitFor()
+    await page.getByRole('button', { name: '다른학생 · 중2', exact: true }).click()
+    await page.getByTestId('saved-report-writing').getByText('다른 학생 분석', { exact: true }).waitFor()
+    release()
+    await page.getByRole('button', { name: '저장된 리포트 새로고침', exact: true }).click()
+    await page.getByTestId('saved-report-writing').getByText('다른 학생 분석', { exact: true }).waitFor()
+    assert.equal(await page.getByText('저장된 수학 분석', { exact: true }).count(), 0)
+    assert(!state.requests.some(r => /studentId=(914|915|700)\b/.test(r.query)))
+    assert.deepEqual(errors, [])
+  } finally { release(); await context.close() }
+})
+
+test('상담 리포트 생성 성공 후 저장 API를 재조회하고 새로고침에도 같은 리포트를 표시한다', async () => {
+  const { page, context, state, errors } = await openPage()
+  try {
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    await page.getByText('아직 저장된 상담 리포트가 없습니다.', { exact: true }).waitFor()
+    await page.getByTestId('saved-report-math').getByRole('button', { name: '🧠 리포트 생성', exact: true }).click()
+    await page.getByText('생성 후 저장된 분석', { exact: true }).waitFor()
+    await page.reload()
+    await page.getByTestId('saved-report-math').getByText('과목: 수학 · 리포트 #1001', { exact: true }).waitFor()
+    assert.equal(state.requests.filter(r => r.path === '/api/counseling/math' && r.method === 'POST').length, 1)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('생성 중 학생을 바꾸면 늦은 생성 결과는 원래 학생 이력에만 남는다', async () => {
+  let release
+  const delay = new Promise(resolve => { release = resolve })
+  const { page, context, state, errors } = await openPage({ reportGenerationDelay: delay })
+  try {
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    await page.getByText('아직 저장된 상담 리포트가 없습니다.', { exact: true }).waitFor()
+    await page.getByTestId('saved-report-math').getByRole('button', { name: '🧠 리포트 생성', exact: true }).click()
+    await page.getByRole('button', { name: '다른학생 · 중2', exact: true }).click()
+    await page.getByText('아직 저장된 상담 리포트가 없습니다.', { exact: true }).waitFor()
+    const response = page.waitForResponse(r => r.url().includes('/api/counseling/math?studentId=14'))
+    release(); await response
+    await page.getByRole('button', { name: '저장된 리포트 새로고침', exact: true }).click()
+    await page.getByText('아직 저장된 상담 리포트가 없습니다.', { exact: true }).waitFor()
+    assert.equal(await page.getByText('생성 후 저장된 분석', { exact: true }).count(), 0)
+    await page.getByRole('button', { name: '연결검증학생 · 중1', exact: true }).click()
+    await page.getByText('생성 후 저장된 분석', { exact: true }).waitFor()
+    assert.equal(state.reportsByStudent['15'], undefined)
+    assert.deepEqual(errors, [])
+  } finally { release(); await context.close() }
+})
 
 async function fillAcademyEvaluation(page, duration = '27') {
   const form = page.getByRole('form', { name: '학생 자기평가 입력', exact: true })
