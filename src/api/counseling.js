@@ -9,6 +9,7 @@ const getSubjectReport = (studentId, subject) =>
 // 서버 다운 시 503 에러 발생
 
 export const counselingAPI = {
+  getReports: (studentId) => apiCall(`/api/counseling/reports?studentId=${encodeURIComponent(studentId)}`),
   // 3-1. 수학 메타인지 분석 리포트
   getMathReport: (studentId) =>
     apiCall(`/api/counseling/math?studentId=${studentId}`, {
