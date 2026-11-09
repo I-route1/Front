@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import useSavedCounselingReports from '@/hooks/useSavedCounselingReports'
+import { SavedReportPicker, SavedReportStatus } from '@/components/learning/SavedReportControls'
+import { UNCLASSIFIED_REPORT } from '@/utils/savedReports'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
 import { paymentAPI } from '@/api/payment'
 import { RecommendRoadmapSection, AnalysisReportSection } from './RecommendRoadmap'
 import { counselingAPI, studyPlanAPI, aiReportAPI, gradesAPI } from '@/api'
@@ -87,21 +89,15 @@ const REPORT_TYPES = [
 const RETURN_TO = '/learning?tab=counseling'
 
 export default function CounselingTab({ studentId: propStudentId, selectedChild }) {
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const effectiveId = propStudentId ?? user?.id
-  const gradeKey = selectedChild?.id ?? selectedChild?.studentId ?? effectiveId
-  const storageKey = `counseling-results-${gradeKey}`
-
-  const collapsedKey = `counseling-collapsed-${gradeKey}`
+  const effectiveId = propStudentId ?? selectedChild?.studentId ?? selectedChild?.id
+  const gradeKey = effectiveId
+  const history = useSavedCounselingReports(gradeKey)
+  const results = history.results
+  const reportTypes = history.groups.unclassified?.length ? [...REPORT_TYPES, UNCLASSIFIED_REPORT] : REPORT_TYPES
 
   const [loading, setLoading] = useState({})
-  const [results, setResults] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem(storageKey)) ?? {} } catch { return {} }
-  })
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem(collapsedKey)) ?? {} } catch { return {} }
-  })
+  const [collapsed, setCollapsed] = useState({})
   const [errors, setErrors] = useState({})
   const [credits, setCredits] = useState(null)
   const [selectedSubject, setSelectedSubject] = useState({})
@@ -109,34 +105,27 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
   const [gradesLoading, setGradesLoading] = useState(true)
 
   useEffect(() => {
-    try { setResults(JSON.parse(sessionStorage.getItem(storageKey)) ?? {}) } catch { setResults({}) }
-    try { setCollapsed(JSON.parse(sessionStorage.getItem(collapsedKey)) ?? {}) } catch { setCollapsed({}) }
+    setCollapsed({})
+    setLoading({})
     setErrors({})
     setSelectedSubject({})
   }, [gradeKey])
 
-  // results 변경 시 sessionStorage 동기화
-  useEffect(() => {
-    if (Object.keys(results).length > 0)
-      sessionStorage.setItem(storageKey, JSON.stringify(results))
-  }, [results, storageKey])
-
-  // collapsed 변경 시 sessionStorage 동기화
-  useEffect(() => {
-    sessionStorage.setItem(collapsedKey, JSON.stringify(collapsed))
-  }, [collapsed, collapsedKey])
-
   useEffect(() => {
     if (!gradeKey) return
+    let active = true
+    setSubjectsWithGrades([])
     setGradesLoading(true)
     gradesAPI.getGrades(gradeKey)
       .then(data => {
+        if (!active) return
         const list = Array.isArray(data) ? data : []
         const subjects = [...new Set(list.map(g => normalizeReportSubject(g.subject)).filter(s => SUBJECT_OPTIONS.includes(s)))]
         setSubjectsWithGrades(subjects)
       })
-      .catch(() => setSubjectsWithGrades([]))
-      .finally(() => setGradesLoading(false))
+      .catch(() => { if (active) setSubjectsWithGrades([]) })
+      .finally(() => { if (active) setGradesLoading(false) })
+    return () => { active = false }
   }, [gradeKey])
 
   useEffect(() => {
@@ -149,16 +138,13 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
     setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
 
   const clearResult = (id) => {
-    setResults(prev => {
-      const next = { ...prev }
-      delete next[id]
-      sessionStorage.setItem(storageKey, JSON.stringify(next))
-      return next
-    })
+    if (results[id]?._saved) setCollapsed(prev => ({ ...prev, [id]: true }))
+    else history.clear(id)
   }
 
   const handleGenerate = async (reportType) => {
     const { id, api, apiSource } = reportType
+    if (!history.enabled) return
 
     // 프리미엄 리포트는 크레딧 필요
     if (id === 'premium') {
@@ -192,13 +178,15 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
       }
       const now = new Date()
       const ts = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
-      setResults(prev => ({ ...prev, [id]: { ...res, _generatedAt: ts } }))
+      if (!history.isCurrent()) return
+      history.generated(id, { ...res, _generatedAt: ts }, apiSource === 'counseling')
       setCollapsed(prev => ({ ...prev, [id]: false }))
     } catch (e) {
+      if (!history.isCurrent()) return
       setErrors(prev => ({ ...prev, [id]: e.message }))
       if (id === 'premium') setCredits(prev => (prev ?? 0) + 1)
     } finally {
-      setLoading(prev => ({ ...prev, [id]: false }))
+      if (history.isCurrent()) setLoading(prev => ({ ...prev, [id]: false }))
     }
   }
 
@@ -215,11 +203,12 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
 
       {/* 리포트 카드들 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, margin: '16px 16px' }}>
-        {REPORT_TYPES.map(r => {
+        <SavedReportStatus history={history} />
+      {reportTypes.map(r => {
           const hasResult = !!results[r.id]
           const isCollapsed = collapsed[r.id] ?? false
           return (
-            <div key={r.id} style={{ background: 'var(--color-surface)', borderRadius: 16, border: `1px solid ${hasResult ? r.color + '50' : 'var(--color-border)'}`, overflow: 'hidden' }}>
+            <div key={r.id} data-testid={`saved-report-${r.id}`} style={{ background: 'var(--color-surface)', borderRadius: 16, border: `1px solid ${hasResult ? r.color + '50' : 'var(--color-border)'}`, overflow: 'hidden' }}>
               {/* 카드 헤더 */}
               <div
                 style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 14, cursor: hasResult ? 'pointer' : 'default' }}
@@ -247,6 +236,7 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
               {/* 본문 — 결과 없거나 펼쳐진 경우만 */}
               {!isCollapsed && (
                 <div style={{ padding: '0 16px 16px' }}>
+                  <SavedReportPicker history={history} type={r.id} />
                   {/* 프리미엄 크레딧 표시 */}
                   {r.id === 'premium' && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -279,10 +269,12 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
                     </select>
                   )}
 
-                  {(() => {
+                  {!r.readOnly && (() => {
                     const currentSubject = selectedSubject[r.id] || '수학'
                     const hasGrade = !r.needsSubject || subjectsWithGrades.includes(currentSubject)
-                    const isDisabled = loading[r.id] || (r.needsSubject && (gradesLoading || !hasGrade))
+                    const isDisabled = !history.enabled || loading[r.id]
+                      || (r.apiSource === 'counseling' && (history.loading || !!history.error))
+                      || (r.needsSubject && (gradesLoading || !hasGrade))
                     return (
                       <>
                         {r.needsSubject && !gradesLoading && !hasGrade && (
@@ -333,10 +325,10 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
                   <span style={{ fontSize: 11, color: r.color, fontWeight: 600 }}>결과 저장됨</span>
                   <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>— 헤더를 눌러 펼치세요</span>
                   <button
-                    onClick={() => clearResult(r.id)}
+                    onClick={() => results[r.id]?._saved ? toggleCollapse(r.id) : clearResult(r.id)}
                     style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
                   >
-                    삭제
+                    {results[r.id]?._saved ? '펼치기' : '삭제'}
                   </button>
                 </div>
               )}
@@ -348,7 +340,7 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
       {/* 안내 */}
       <div style={{ margin: '0 16px 24px', padding: '12px 14px', borderRadius: 12, background: '#FFF8E0', border: '1px solid #FFB80040' }}>
         <p style={{ fontSize: 12, color: '#8A6500', lineHeight: 1.5 }}>
-  ⚠️ AI 상담 리포트는 Python AI 서버가 실행 중일 때만 사용 가능합니다. 서버 오류 시 백엔드팀에 문의하세요.
+  저장된 리포트는 언제든 조회할 수 있습니다. 새 리포트 생성에는 AI 서버 연결이 필요합니다.
 </p>
       </div>
     </div>
@@ -611,7 +603,7 @@ function ResultBlock({ result, reportType, onClear }) {
               fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            삭제
+            {result._saved ? '결과 닫기' : '삭제'}
           </button>
         )}
       </div>
