@@ -96,7 +96,11 @@ export default function EditProfile() {
     academies: normalizeAcademies(user),
   })
 
+  // 내 원래 기존 정보 저장 (내 정보와 일치 여부 비교용)
   const [initialEmail, setInitialEmail] = useState('')
+  const [initialNickname, setInitialNickname] = useState('')
+  const [initialPhone, setInitialPhone] = useState('')
+
   const [isEmailVerified, setIsEmailVerified] = useState(true)
   const [emailSending, setEmailSending] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
@@ -110,14 +114,21 @@ export default function EditProfile() {
         .then((res) => {
           const userData = res?.data ?? res ?? {}
           const fetchedEmail = userData.email ?? user?.email ?? ''
+          const fetchedNickname = userData.nickname ?? userData.nickName ?? user?.nickname ?? ''
+          const fetchedPhone = (userData.phoneNumber ?? userData.phone ?? user?.phoneNumber ?? user?.phone ?? '').replace(/\D/g, '')
+
           setForm((prev) => ({
             ...prev,
             name: userData.name ?? prev.name,
-            nickname: userData.nickname ?? userData.nickName ?? prev.nickname,
+            nickname: fetchedNickname,
             email: fetchedEmail,
-            phone: userData.phoneNumber ?? userData.phone ?? prev.phone,
+            phone: fetchedPhone,
           }))
+
+          // 기존 본인 정보 저장
           setInitialEmail(fetchedEmail)
+          setInitialNickname(fetchedNickname)
+          setInitialPhone(fetchedPhone)
         })
         .catch((err) => console.error('내 정보 로드 실패:', err))
 
@@ -149,7 +160,7 @@ export default function EditProfile() {
             }
           })
           .catch((err) => {
-            console.error('자녀 정보 로드 실패:', err)
+            console.warn('자녀 정보 로드 실패 (토큰 만료 또는 자녀 없음):', err)
             setForm((prev) => ({ ...prev, children: [] }))
           })
     }
@@ -279,7 +290,7 @@ export default function EditProfile() {
     }))
   }
 
-  // 💡 [인증 요청] 버튼 클릭 시: 중복 체크 후 인증 메일 발송
+  // [인증 요청] 버튼 클릭 시
   const handleSendEmailVerification = async () => {
     const email = form.email.trim()
 
@@ -288,11 +299,17 @@ export default function EditProfile() {
       return
     }
 
+    // 💡 내가 기존에 사용하던 이메일과 같으면 바로 인증 성공 처리
+    if (email === initialEmail.trim()) {
+      setIsEmailVerified(true)
+      alert('현재 사용 중인 본인 이메일입니다.')
+      return
+    }
+
     setEmailSending(true)
     setErrors((prev) => ({ ...prev, email: '' }))
 
     try {
-      // 1. 이메일 중복 체크 (POST /api/auth/check)
       if (profileAPI.checkDuplicate) {
         const checkRes = await profileAPI.checkDuplicate('email', email)
         const isDup = checkRes?.duplicate ?? checkRes?.isDuplicate ?? checkRes?.data?.duplicate
@@ -304,8 +321,7 @@ export default function EditProfile() {
         }
       }
 
-      // 2. 중복 통과 시 인증 메일 발송 (POST /api/auth/email/send)
-      if (authAPI.sendVerificationEmail) {
+      if (authAPI?.sendVerificationEmail) {
         await authAPI.sendVerificationEmail(email)
       }
 
@@ -320,10 +336,10 @@ export default function EditProfile() {
     }
   }
 
-  // 💡 [인증 완료 확인] 버튼 클릭 시
+  // [인증 완료 확인] 버튼 클릭 시
   const handleCheckEmailStatus = async () => {
     try {
-      if (authAPI.checkEmailStatus) {
+      if (authAPI?.checkEmailStatus) {
         const res = await authAPI.checkEmailStatus(form.email.trim())
         if (res?.verified || res?.data?.verified) {
           setIsEmailVerified(true)
@@ -406,8 +422,10 @@ export default function EditProfile() {
         phoneNumber: formattedPhone,
       }
 
+      // 💡 내 기존 정보와 다를 때만 중복 검사 실행 (자신의 정보 중복 오인 방지!)
       if (profileAPI.checkDuplicate) {
-        if (updated.nickname !== (user?.nickname ?? '')) {
+        // 닉네임이 기존 내 닉네임과 다를 때만 체크
+        if (updated.nickname !== initialNickname) {
           const nickCheck = await profileAPI.checkDuplicate('nickname', updated.nickname)
           const isDup = nickCheck?.duplicate ?? nickCheck?.isDuplicate ?? nickCheck?.data?.duplicate
           if (isDup) {
@@ -417,8 +435,8 @@ export default function EditProfile() {
           }
         }
 
-        const currentPhone = (user?.phoneNumber ?? user?.phone ?? '').replace(/\D/g, '')
-        if (formattedPhone !== currentPhone) {
+        // 전화번호가 기존 내 번호와 다를 때만 체크
+        if (formattedPhone !== initialPhone) {
           const phoneCheck = await profileAPI.checkDuplicate('phoneNumber', formattedPhone)
           const isDup = phoneCheck?.duplicate ?? phoneCheck?.isDuplicate ?? phoneCheck?.data?.duplicate
           if (isDup) {
@@ -491,14 +509,15 @@ export default function EditProfile() {
       const formattedPhone = form.phone.replace(/\D/g, '')
 
       if (errorMsg.includes('Duplicate entry')) {
-        if (errorMsg.includes(`'${form.nickname.trim()}'`)) {
+        // 기존 내 닉네임/전화번호가 아닐 때에만 에러 출력
+        if (errorMsg.includes(`'${form.nickname.trim()}'`) && form.nickname.trim() !== initialNickname) {
           setErrors((prev) => ({ ...prev, nickname: '이미 사용 중인 닉네임입니다.' }))
-        } else if (errorMsg.includes(`'${formattedPhone}'`)) {
+        } else if (errorMsg.includes(`'${formattedPhone}'`) && formattedPhone !== initialPhone) {
           setErrors((prev) => ({ ...prev, phone: '이미 등록된 휴대폰 번호입니다.' }))
-        } else if (errorMsg.includes(`'${form.email.trim()}'`)) {
+        } else if (errorMsg.includes(`'${form.email.trim()}'`) && form.email.trim() !== initialEmail) {
           setErrors((prev) => ({ ...prev, email: '이미 사용 중인 이메일입니다.' }))
         } else {
-          setErrors({ submit: '이미 사용 중인 정보(닉네임/전화번호/이메일)입니다.' })
+          setErrors({ submit: '프로필 변경을 저장하는 중 오류가 발생했습니다.' })
         }
       } else {
         setErrors({ submit: errorMsg || '프로필 저장에 실패했습니다.' })
@@ -528,7 +547,7 @@ export default function EditProfile() {
               <input className="input-field" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="이름을 입력해 주세요" />
             </Field>
 
-            {/* 💡 항상 표시되는 [인증 요청] 버튼 이메일 필드 */}
+            {/* 💡 이메일 입력 및 상시 [인증 요청] 버튼 */}
             <Field label="이메일" error={errors.email}>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
