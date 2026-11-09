@@ -92,7 +92,6 @@ export default function EditProfile() {
     return `${raw.slice(0, 3)}-${raw.slice(3, 5)}-${raw.slice(5)}`
   }
 
-  // 💡 form 상태에 nickname 및 name 분리 지정
   const [form, setForm] = useState({
     name: user?.name ?? '',
     nickname: user?.nickname ?? '',
@@ -107,18 +106,18 @@ export default function EditProfile() {
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
+  // 컴포넌트 마운트 시 초기 프로필 및 자녀 정보 조회
   useEffect(() => {
     profileAPI
         .getMyProfile()
         .then((res) => {
           const userData = res?.data ?? res ?? {}
-          // 💡 userData.nickname과 userData.name을 혼용하지 않고 각각 매핑
           setForm((prev) => ({
             ...prev,
-            name: userData.name ?? user?.name ?? prev.name,
-            nickname: userData.nickname ?? user?.nickname ?? prev.nickname,
-            email: userData.email ?? user?.email ?? prev.email,
-            phone: userData.phoneNumber ?? userData.phone ?? user?.phoneNumber ?? user?.phone ?? prev.phone,
+            name: userData.name ?? prev.name,
+            nickname: userData.nickname ?? userData.nickName ?? prev.nickname,
+            email: userData.email ?? prev.email,
+            phone: userData.phoneNumber ?? userData.phone ?? prev.phone,
           }))
         })
         .catch((err) => console.error('내 정보 로드 실패:', err))
@@ -139,7 +138,9 @@ export default function EditProfile() {
                     name: child.name ?? '',
                     grade: child.grade ?? '',
                     academyCodeInput: child.academyCode ?? '',
-                    academies: child.academyName ? [{ id: child.academyId ?? `aca-${index}`, name: child.academyName, code: child.academyCode }] : [],
+                    academies: child.academyName
+                        ? [{ id: child.academyId ?? `aca-${index}`, name: child.academyName, code: child.academyCode }]
+                        : [],
                     isNew: false,
                   }
                 }),
@@ -153,7 +154,7 @@ export default function EditProfile() {
             setForm((prev) => ({ ...prev, children: [] }))
           })
     }
-  }, [user])
+  }, []) // 💡 빈 의존성 배열로 마운트 시 1회만 호출
 
   const update = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -197,7 +198,7 @@ export default function EditProfile() {
     if (!targetChild.isNew && targetStudentId && !isNaN(Number(targetStudentId))) {
       try {
         await studentAPI.deleteChild(Number(targetStudentId))
-        alert('자녀 정보가 DB에서 삭제되었습니다.')
+        alert('자녀 정보가 삭제되었습니다.')
       } catch (err) {
         console.error('자녀 DB 삭제 실패:', err)
         alert('자녀 삭제에 실패했습니다.')
@@ -326,25 +327,44 @@ export default function EditProfile() {
     try {
       const updated = {
         name: form.name.trim(),
-        nickname: form.nickname.trim(), // 💡 닉네임 저장 반영
+        nickname: form.nickname.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
         phoneNumber: form.phone.trim(),
       }
 
-      if (user?.role === USER_ROLES.PARENT) {
-        const newChildren = form.children.filter((c) => c.isNew)
+      // 1️⃣ 유저 기본 프로필 (닉네임 등) 백엔드 DB 업데이트 API 호출
+      if (profileAPI.updateMyProfile) {
+        await profileAPI.updateMyProfile({
+          name: updated.name,
+          nickname: updated.nickname,
+          email: updated.email,
+          phoneNumber: updated.phoneNumber,
+        })
+      }
 
-        if (newChildren.length > 0) {
-          const childPromises = newChildren.map((child) => {
+      // 2️⃣ 학부모인 경우 자녀 신규 추가 및 기존 자녀 정보 수정 API 호출
+      if (user?.role === USER_ROLES.PARENT) {
+        if (form.children.length > 0) {
+          const childPromises = form.children.map((child) => {
             const formattedGrade = normalizeGrade(child.grade)
             const code = child.academyCodeInput || child.academies[0]?.code || ''
 
-            return studentAPI.addChild({
-              name: child.name.trim(),
-              grade: formattedGrade,
-              academies: code ? [{ code }] : [],
-            })
+            if (child.isNew) {
+              // 신규 자녀 추가 API
+              return studentAPI.addChild({
+                name: child.name.trim(),
+                grade: formattedGrade,
+                academies: code ? [{ code }] : [],
+              })
+            } else if (studentAPI.updateChild) {
+              // 기존 자녀 수정 API (백엔드에 updateChild API가 마련되어 있는 경우)
+              return studentAPI.updateChild(child.studentId, {
+                name: child.name.trim(),
+                grade: formattedGrade,
+              })
+            }
+            return Promise.resolve()
           })
 
           await Promise.all(childPromises)
@@ -354,6 +374,7 @@ export default function EditProfile() {
         updated.children = Array.isArray(freshRes) ? freshRes : freshRes?.data ?? []
       }
 
+      // 3️⃣ 학원 회원 정보 구성
       if (user?.role === USER_ROLES.ACADEMY) {
         const nextAcademies = (form.academies ?? []).map((academy) => ({
           id: academy.id,
@@ -370,6 +391,7 @@ export default function EditProfile() {
         updated.academyCode = nextAcademies[0]?.academyCode ?? '발급 예정'
       }
 
+      // 4️⃣ 클라이언트 Context 최신화
       await updateUser(updated)
       alert('프로필 및 자녀 정보가 성공적으로 저장되었습니다.')
       navigate('/profile')
@@ -393,12 +415,10 @@ export default function EditProfile() {
           </div>
 
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {/* 💡 닉네임 입력 필드 */}
             <Field label="닉네임" error={errors.nickname}>
               <input className="input-field" value={form.nickname} onChange={(e) => update('nickname', e.target.value)} placeholder="닉네임을 입력해 주세요" />
             </Field>
 
-            {/* 💡 이름 입력 필드 */}
             <Field label="이름" error={errors.name}>
               <input className="input-field" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="이름을 입력해 주세요" />
             </Field>

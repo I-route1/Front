@@ -7,7 +7,7 @@ export const profileAPI = {
 
     updateMyProfile(data) {
         return apiCall('/api/users/me', {
-            method: 'PUT',
+            method: 'PATCH',
             body: JSON.stringify(data),
         })
     },

@@ -166,6 +166,10 @@ export default function Profile() {
         }
     }
 
+    // 💡 아바타 또는 닉네임/이름의 첫 글자 추출
+    const displayName = user?.nickname ?? user?.name ?? '사용자'
+    const displayInitial = displayName[0] ?? '?'
+
     return (
         <div>
             {/* 프로필 헤더 */}
@@ -197,7 +201,7 @@ export default function Profile() {
                         {user?.avatar ? (
                             <img
                                 src={user.avatar}
-                                alt={user.name}
+                                alt={displayName}
                                 style={{
                                     width: '100%',
                                     height: '100%',
@@ -205,12 +209,13 @@ export default function Profile() {
                                 }}
                             />
                         ) : (
-                            user?.name?.[0] ?? '?'
+                            displayInitial
                         )}
                     </div>
 
                     <div>
-                        <h2 style={{ fontSize: 20, fontWeight: 800 }}>{user?.name ?? '사용자'}</h2>
+                        {/* 💡 닉네임 최우선 표시 (없을 경우 이름) */}
+                        <h2 style={{ fontSize: 20, fontWeight: 800 }}>{displayName}</h2>
                         <p style={{ fontSize: 13, opacity: 0.75, marginTop: 3 }}>
                             {ROLE_LABEL[user?.role] ?? '사용자'} · {user?.username ?? '계정'}
                         </p>
@@ -326,8 +331,8 @@ export default function Profile() {
                                                                 whiteSpace: 'nowrap',
                                                             }}
                                                         >
-                              {academy.name ?? academy.academyName ?? academy.code ?? '학원'}
-                            </span>
+                                                            {academy.name ?? academy.academyName ?? academy.code ?? '학원'}
+                                                        </span>
                                                     ))}
 
                                                     {child.academies.length > 2 && (
@@ -342,8 +347,8 @@ export default function Profile() {
                                                                 border: '1px solid var(--color-border)',
                                                             }}
                                                         >
-                              +{child.academies.length - 2}
-                            </span>
+                                                            +{child.academies.length - 2}
+                                                        </span>
                                                     )}
                                                 </div>
                                             ) : (
@@ -370,8 +375,8 @@ export default function Profile() {
                                                 flexShrink: 0,
                                             }}
                                         >
-                      {index + 1}
-                    </span>
+                                            {index + 1}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -470,21 +475,21 @@ export default function Profile() {
                                         transition: 'background 0.1s',
                                     }}
                                 >
-                  <span
-                      style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 9,
-                          background: item.color + '15',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 17,
-                          flexShrink: 0,
-                      }}
-                  >
-                    {item.icon}
-                  </span>
+                                    <span
+                                        style={{
+                                            width: 34,
+                                            height: 34,
+                                            borderRadius: 9,
+                                            background: item.color + '15',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: 17,
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        {item.icon}
+                                    </span>
                                     <span
                                         style={{
                                             flex: 1,
@@ -493,8 +498,8 @@ export default function Profile() {
                                             color: item.danger ? 'var(--color-danger)' : 'var(--color-text-primary)',
                                         }}
                                     >
-                    {item.label}
-                  </span>
+                                        {item.label}
+                                    </span>
                                     <svg
                                         width="16"
                                         height="16"
