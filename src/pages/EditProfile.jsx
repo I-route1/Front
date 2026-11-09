@@ -4,6 +4,7 @@ import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import BackButton from '../components/common/BackButton'
 import { studentAPI } from '@/api/student'
 import { profileAPI } from '@/api/profile'
+import { authAPI } from '@/api/auth'
 
 export default function EditProfile() {
   const navigate = useNavigate()
@@ -84,14 +85,6 @@ export default function EditProfile() {
     return [makeDefaultAcademy()]
   }
 
-  const formatBusinessNumber = (value) => {
-    const raw = String(value ?? '').replace(/\D/g, '').slice(0, 10)
-
-    if (raw.length <= 3) return raw
-    if (raw.length <= 5) return `${raw.slice(0, 3)}-${raw.slice(3)}`
-    return `${raw.slice(0, 3)}-${raw.slice(3, 5)}-${raw.slice(5)}`
-  }
-
   const [form, setForm] = useState({
     name: user?.name ?? '',
     nickname: user?.nickname ?? '',
@@ -103,22 +96,28 @@ export default function EditProfile() {
     academies: normalizeAcademies(user),
   })
 
+  const [initialEmail, setInitialEmail] = useState('')
+  const [isEmailVerified, setIsEmailVerified] = useState(true)
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
-  // 컴포넌트 마운트 시 초기 프로필 및 자녀 정보 조회
   useEffect(() => {
     profileAPI
         .getMyProfile()
         .then((res) => {
           const userData = res?.data ?? res ?? {}
+          const fetchedEmail = userData.email ?? user?.email ?? ''
           setForm((prev) => ({
             ...prev,
             name: userData.name ?? prev.name,
             nickname: userData.nickname ?? userData.nickName ?? prev.nickname,
-            email: userData.email ?? prev.email,
+            email: fetchedEmail,
             phone: userData.phoneNumber ?? userData.phone ?? prev.phone,
           }))
+          setInitialEmail(fetchedEmail)
         })
         .catch((err) => console.error('내 정보 로드 실패:', err))
 
@@ -154,11 +153,20 @@ export default function EditProfile() {
             setForm((prev) => ({ ...prev, children: [] }))
           })
     }
-  }, []) // 💡 빈 의존성 배열로 마운트 시 1회만 호출
+  }, [])
 
   const update = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
-    setErrors((prev) => ({ ...prev, [key]: '' }))
+    setErrors((prev) => ({ ...prev, [key]: '', submit: '' }))
+
+    if (key === 'email') {
+      if (value.trim() !== initialEmail.trim()) {
+        setIsEmailVerified(false)
+        setEmailSent(false)
+      } else {
+        setIsEmailVerified(true)
+      }
+    }
   }
 
   const updateChild = (childId, key, value) => {
@@ -271,12 +279,76 @@ export default function EditProfile() {
     }))
   }
 
+  // 💡 [인증 요청] 버튼 클릭 시: 중복 체크 후 인증 메일 발송
+  const handleSendEmailVerification = async () => {
+    const email = form.email.trim()
+
+    if (!email || !email.includes('@')) {
+      setErrors((prev) => ({ ...prev, email: '올바른 이메일 주소를 입력해 주세요.' }))
+      return
+    }
+
+    setEmailSending(true)
+    setErrors((prev) => ({ ...prev, email: '' }))
+
+    try {
+      // 1. 이메일 중복 체크 (POST /api/auth/check)
+      if (profileAPI.checkDuplicate) {
+        const checkRes = await profileAPI.checkDuplicate('email', email)
+        const isDup = checkRes?.duplicate ?? checkRes?.isDuplicate ?? checkRes?.data?.duplicate
+
+        if (isDup) {
+          setErrors((prev) => ({ ...prev, email: '이미 사용 중인 이메일입니다.' }))
+          setEmailSending(false)
+          return
+        }
+      }
+
+      // 2. 중복 통과 시 인증 메일 발송 (POST /api/auth/email/send)
+      if (authAPI.sendVerificationEmail) {
+        await authAPI.sendVerificationEmail(email)
+      }
+
+      setEmailSent(true)
+      alert('인증 메일이 발송되었습니다. 수신함에서 인증 링크를 클릭해 주세요.')
+    } catch (err) {
+      console.error('인증 메일 발송 실패:', err)
+      const msg = err?.response?.data?.message || err?.message || '인증 메일 발송에 실패했습니다.'
+      setErrors((prev) => ({ ...prev, email: msg }))
+    } finally {
+      setEmailSending(false)
+    }
+  }
+
+  // 💡 [인증 완료 확인] 버튼 클릭 시
+  const handleCheckEmailStatus = async () => {
+    try {
+      if (authAPI.checkEmailStatus) {
+        const res = await authAPI.checkEmailStatus(form.email.trim())
+        if (res?.verified || res?.data?.verified) {
+          setIsEmailVerified(true)
+          alert('이메일 인증이 성공적으로 완료되었습니다!')
+          setErrors((prev) => ({ ...prev, email: '' }))
+        } else {
+          alert('아직 이메일 인증이 완료되지 않았습니다. 메일함의 인증 링크를 확인해 주세요.')
+        }
+      }
+    } catch (err) {
+      alert('인증 상태 확인 중 오류가 발생했습니다.')
+    }
+  }
+
   const validate = () => {
     const nextErrors = {}
 
     if (!form.name.trim()) nextErrors.name = '이름을 입력해 주세요'
     if (!form.nickname.trim()) nextErrors.nickname = '닉네임을 입력해 주세요'
     if (!form.email.includes('@')) nextErrors.email = '올바른 이메일을 입력해 주세요'
+
+    if (form.email.trim() !== initialEmail.trim() && !isEmailVerified) {
+      nextErrors.email = '이메일 변경을 위해 인증이 필요합니다.'
+    }
+
     if (form.phone.replace(/\D/g, '').length < 10) nextErrors.phone = '올바른 전화번호를 입력해 주세요'
 
     if (user?.role === USER_ROLES.PARENT) {
@@ -325,15 +397,38 @@ export default function EditProfile() {
     setLoading(true)
 
     try {
+      const formattedPhone = form.phone.replace(/\D/g, '')
       const updated = {
         name: form.name.trim(),
         nickname: form.nickname.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
-        phoneNumber: form.phone.trim(),
+        phoneNumber: formattedPhone,
       }
 
-      // 1️⃣ 유저 기본 프로필 (닉네임 등) 백엔드 DB 업데이트 API 호출
+      if (profileAPI.checkDuplicate) {
+        if (updated.nickname !== (user?.nickname ?? '')) {
+          const nickCheck = await profileAPI.checkDuplicate('nickname', updated.nickname)
+          const isDup = nickCheck?.duplicate ?? nickCheck?.isDuplicate ?? nickCheck?.data?.duplicate
+          if (isDup) {
+            setErrors((prev) => ({ ...prev, nickname: '이미 사용 중인 닉네임입니다.' }))
+            setLoading(false)
+            return
+          }
+        }
+
+        const currentPhone = (user?.phoneNumber ?? user?.phone ?? '').replace(/\D/g, '')
+        if (formattedPhone !== currentPhone) {
+          const phoneCheck = await profileAPI.checkDuplicate('phoneNumber', formattedPhone)
+          const isDup = phoneCheck?.duplicate ?? phoneCheck?.isDuplicate ?? phoneCheck?.data?.duplicate
+          if (isDup) {
+            setErrors((prev) => ({ ...prev, phone: '이미 등록된 휴대폰 번호입니다.' }))
+            setLoading(false)
+            return
+          }
+        }
+      }
+
       if (profileAPI.updateMyProfile) {
         await profileAPI.updateMyProfile({
           name: updated.name,
@@ -343,7 +438,6 @@ export default function EditProfile() {
         })
       }
 
-      // 2️⃣ 학부모인 경우 자녀 신규 추가 및 기존 자녀 정보 수정 API 호출
       if (user?.role === USER_ROLES.PARENT) {
         if (form.children.length > 0) {
           const childPromises = form.children.map((child) => {
@@ -351,14 +445,12 @@ export default function EditProfile() {
             const code = child.academyCodeInput || child.academies[0]?.code || ''
 
             if (child.isNew) {
-              // 신규 자녀 추가 API
               return studentAPI.addChild({
                 name: child.name.trim(),
                 grade: formattedGrade,
                 academies: code ? [{ code }] : [],
               })
             } else if (studentAPI.updateChild) {
-              // 기존 자녀 수정 API (백엔드에 updateChild API가 마련되어 있는 경우)
               return studentAPI.updateChild(child.studentId, {
                 name: child.name.trim(),
                 grade: formattedGrade,
@@ -374,7 +466,6 @@ export default function EditProfile() {
         updated.children = Array.isArray(freshRes) ? freshRes : freshRes?.data ?? []
       }
 
-      // 3️⃣ 학원 회원 정보 구성
       if (user?.role === USER_ROLES.ACADEMY) {
         const nextAcademies = (form.academies ?? []).map((academy) => ({
           id: academy.id,
@@ -391,13 +482,27 @@ export default function EditProfile() {
         updated.academyCode = nextAcademies[0]?.academyCode ?? '발급 예정'
       }
 
-      // 4️⃣ 클라이언트 Context 최신화
       await updateUser(updated)
       alert('프로필 및 자녀 정보가 성공적으로 저장되었습니다.')
       navigate('/profile')
     } catch (err) {
       console.error('프로필 저장 실패:', err)
-      setErrors({ submit: err.message || '프로필 저장에 실패했습니다.' })
+      const errorMsg = err?.response?.data?.message || err?.message || String(err)
+      const formattedPhone = form.phone.replace(/\D/g, '')
+
+      if (errorMsg.includes('Duplicate entry')) {
+        if (errorMsg.includes(`'${form.nickname.trim()}'`)) {
+          setErrors((prev) => ({ ...prev, nickname: '이미 사용 중인 닉네임입니다.' }))
+        } else if (errorMsg.includes(`'${formattedPhone}'`)) {
+          setErrors((prev) => ({ ...prev, phone: '이미 등록된 휴대폰 번호입니다.' }))
+        } else if (errorMsg.includes(`'${form.email.trim()}'`)) {
+          setErrors((prev) => ({ ...prev, email: '이미 사용 중인 이메일입니다.' }))
+        } else {
+          setErrors({ submit: '이미 사용 중인 정보(닉네임/전화번호/이메일)입니다.' })
+        }
+      } else {
+        setErrors({ submit: errorMsg || '프로필 저장에 실패했습니다.' })
+      }
     } finally {
       setLoading(false)
     }
@@ -423,8 +528,66 @@ export default function EditProfile() {
               <input className="input-field" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="이름을 입력해 주세요" />
             </Field>
 
+            {/* 💡 항상 표시되는 [인증 요청] 버튼 이메일 필드 */}
             <Field label="이메일" error={errors.email}>
-              <input className="input-field" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="example@email.com" />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                    className="input-field"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => update('email', e.target.value)}
+                    placeholder="example@email.com"
+                />
+                <button
+                    type="button"
+                    onClick={handleSendEmailVerification}
+                    disabled={emailSending}
+                    style={{
+                      padding: '0 12px',
+                      borderRadius: 10,
+                      background: 'var(--color-primary)',
+                      color: '#fff',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      border: 'none',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                >
+                  {emailSending ? '발송 중...' : '인증 요청'}
+                </button>
+              </div>
+
+              {emailSent && !isEmailVerified && (
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F0F7FF', padding: '8px 12px', borderRadius: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+                  📩 인증 메일이 발송되었습니다.
+                </span>
+                    <button
+                        type="button"
+                        onClick={handleCheckEmailStatus}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--color-primary)',
+                          color: 'var(--color-primary)',
+                          borderRadius: 6,
+                          padding: '4px 8px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                    >
+                      인증 완료 확인
+                    </button>
+                  </div>
+              )}
+
+              {isEmailVerified && form.email.trim() !== initialEmail.trim() && (
+                  <p style={{ fontSize: 12, color: '#166534', marginTop: 4 }}>
+                    ✓ 이메일 인증이 완료되었습니다.
+                  </p>
+              )}
             </Field>
 
             <Field label="전화번호" error={errors.phone}>
@@ -540,7 +703,7 @@ function Field({ label, error, children }) {
       <div className="input-group">
         <label className="input-label">{label}</label>
         {children}
-        {error && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</p>}
+        {error && <p style={{ fontSize: 12, color: 'var(--color-danger)', marginTop: 4 }}>{error}</p>}
       </div>
   )
 }

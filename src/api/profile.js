@@ -22,4 +22,8 @@ export const profileAPI = {
             body: JSON.stringify(data),
         })
     },
+
+    checkDuplicate(type, value) {
+        return apiCall(`/api/users/check-duplicate?type=${type}&value=${encodeURIComponent(value)}`)
+    },
 }
