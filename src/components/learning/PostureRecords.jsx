@@ -11,6 +11,9 @@ export default function PostureRecords({ studentId }) {
   const records = useStudentRecords(studentId, postureAPI.getAll)
   const [subject, setSubject] = useState('')
   useEffect(() => setSubject(''), [studentId])
+  useEffect(() => {
+    if (!records.loading && !records.error && subject && !records.data.some(row => row.subject === subject)) setSubject('')
+  }, [records.data, records.loading, records.error, subject])
   const subjects = [...new Set(records.data.map(row => row.subject))]
   const rows = records.data.filter(row => !subject || row.subject === subject)
   return <section className="learning-records record-card" aria-label="자세 분석 기록">
@@ -20,7 +23,7 @@ export default function PostureRecords({ studentId }) {
       : records.error ? <RecordError message={records.error} retry={records.reload} />
         : records.data.length === 0 ? <p className="record-empty">아직 자세 분석 기록이 없어요. 측정 결과가 전송되면 여기에 표시됩니다.</p>
           : <>
-            <label>과목 <select aria-label="자세 기록 과목" value={subject} onChange={event => setSubject(event.target.value)}>
+            <label>과목 <select aria-label="자세 기록 과목" style={{ maxWidth: 'calc(100% - 3em)' }} value={subject} onChange={event => setSubject(event.target.value)}>
               <option value="">전체 과목</option>{subjects.map(name => <option key={name}>{name}</option>)}
             </select></label>
             <div className="record-scroll">{rows.map(row => <article className="record-item" key={row.id}>
