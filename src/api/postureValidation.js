@@ -14,7 +14,7 @@ export function validatePostureRecords(rows, studentId) {
   const ids = new Set()
   const valid = row => {
     if (!row || !integer(row.id, 1, Number.MAX_SAFE_INTEGER) || ids.has(row.id) || row.studentId !== studentId
-      || typeof row.subject !== 'string' || row.subject.length > 255 || !row.subject.replace(/[\s\p{Cf}\p{Cc}]/gu, '')
+      || typeof row.subject !== 'string' || row.subject.length > 255 || /\p{Cs}/u.test(row.subject) || !row.subject.replace(/[\s\p{Cf}\p{Cc}]/gu, '')
       || typeof row.modelName !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(row.modelName)
       || typeof row.submissionId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(row.submissionId)
       || !instant(row.startedAt) || !instant(row.createdAt) || !integer(row.durationSeconds, 1, 86400)

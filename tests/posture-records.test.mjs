@@ -15,7 +15,7 @@ test('유효한 자세 결과와 빈 목록을 보존한다', () => {
 })
 
 test('형식·날짜·출처·학생·중복 ID가 잘못되면 결과 전체를 거부한다', () => {
-  const changes = [{ subject: {} }, { subject: '\u200b\u00a0' }, { subject: '수'.repeat(256) }, { id: null },
+  const changes = [{ subject: {} }, { subject: '\u200b\u00a0' }, { subject: '수\ud800' }, { subject: '수'.repeat(256) }, { id: null },
     { studentId: 3 }, { startedAt: '2026-02-31T01:00:00Z' }, { createdAt: '2026-11-11' },
     { startedAt: '2026-11-11T24:00:00Z' }, { startedAt: 123 }, { modelName: 123 }, { submissionId: null },
     { measurementSource: 'MANUAL' }, { inputSource: 'other' }, { durationSeconds: 0 }, { durationSeconds: 86401 }]
