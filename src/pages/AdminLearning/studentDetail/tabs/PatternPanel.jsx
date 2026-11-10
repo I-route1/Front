@@ -7,6 +7,7 @@ import { analysisAPI, activitiesAPI } from '@/api'
 import { SUBJECTS } from '../../data/mockData'
 import useStudentRecords from '@/hooks/useStudentRecords'
 import AttentionRecords from '@/components/learning/AttentionRecords'
+import PostureRecords from '@/components/learning/PostureRecords'
 import ManualEvaluationForm from '@/components/learning/ManualEvaluationForm'
 import { hourlyConcentration, metaCognitionPresentation } from '@/components/learning/recordUtils'
 
@@ -52,6 +53,7 @@ export default function PatternPanel({ student }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <AttentionRecords records={activityRecords} />
+      <PostureRecords studentId={studentId} />
       
       {/* 1. 골든타임 강조 */}
       {goldenHour && (
