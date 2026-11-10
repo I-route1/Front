@@ -146,6 +146,7 @@ async function openPage(options = {}) {
 }
 
 const poseRecord = { id: 901, studentId: 14, subject: '수학', startedAt: '2026-11-11T01:00:00Z',
+  createdAt: '2026-11-11T01:01:00Z', submissionId: 'pose-test-901', modelName: 'yolov8s_pose_h8',
   durationSeconds: 20, inputSource: 'VIDEO', measurementSource: 'AI_HAT', totalSamples: 10, classifiedSamples: 8,
   uprightSamples: 4, slouchedSamples: 2, headDownSamples: 1, tiltedSamples: 1, unknownSamples: 1,
   noPersonSamples: 1, multiplePeopleSamples: 0, uprightRatio: 0.5, slouchedRatio: 0.25,
@@ -232,6 +233,54 @@ test('자세 조회의 토큰 만료를 갱신하고 권한 오류나 다른 학
     state.poseStatus = 0; state.poses[14] = [{ ...poseRecord, studentId: 15 }]
     await region.getByRole('button', { name: '자세 기록 새로고침' }).click()
     await region.getByText('학생의 자세 기록 응답을 확인할 수 없습니다.', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('잘못된 자세 응답은 화면을 깨뜨리지 않고 이전 기록을 숨긴 뒤 정상 재조회로 복구한다', async () => {
+  const { page, context, state, errors } = await openPage({ poses: { 14: [poseRecord] } })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus`)
+    const region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByText('바른 자세 50%', { exact: true }).waitFor()
+    for (const change of [{ subject: {} }, { uprightRatio: null }, { totalSamples: 11 }, { startedAt: 'bad-date' }]) {
+      state.poses[14] = [{ ...poseRecord, ...change }]
+      await region.getByRole('button', { name: '자세 기록 새로고침' }).click()
+      await region.getByText('학생의 자세 기록 응답을 확인할 수 없습니다.', { exact: true }).waitFor()
+      assert.equal(await region.getByText('바른 자세 50%', { exact: true }).count(), 0)
+    }
+    state.poses[14] = [poseRecord]
+    await region.getByRole('button', { name: '자세 기록 새로고침' }).click()
+    await region.getByText('바른 자세 50%', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('새 자세 목록에 선택했던 과목이 없어지면 전체 과목으로 복구한다', async () => {
+  const { page, context, state, errors } = await openPage({ poses: { 14: [poseRecord, { ...poseRecord, id: 902, subject: '국어' }] } })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus`)
+    const region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByLabel('자세 기록 과목').selectOption('국어')
+    state.poses[14] = [poseRecord]
+    await region.getByRole('button', { name: '자세 기록 새로고침' }).click()
+    await region.locator('article').getByText('수학', { exact: true }).waitFor()
+    assert.equal(await region.getByLabel('자세 기록 과목').inputValue(), '')
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('자세 기록 100개와 긴 과목은 좁은 화면에 넘치지 않고 HTML을 문자로 표시한다', async () => {
+  const subject = '<img src=x onerror=alert(1)>' + '수'.repeat(220)
+  const poses = Array.from({ length: 100 }, (_, index) => ({ ...poseRecord, id: 1000 + index, subject }))
+  const { page, context, errors } = await openPage({ poses: { 14: poses } })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus`)
+    const region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.locator('article').last().waitFor({ state: 'attached' })
+    assert.equal(await region.locator('article').count(), 100)
+    assert.equal(await region.locator('img').count(), 0)
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })
