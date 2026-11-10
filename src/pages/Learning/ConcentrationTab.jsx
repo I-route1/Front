@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { activitiesAPI } from '@/api'
 import useStudentRecords from '@/hooks/useStudentRecords'
+import PostureRecords from '@/components/learning/PostureRecords'
 import { RecordError } from '@/components/learning/LearningResults'
 import { RecordLauncher } from '@/components/common/BottomSheet'
 import {
@@ -383,6 +384,7 @@ export default function ConcentrationTab({ studentId }) {
         </>
       )}
 
+      <div style={{ margin: '16px 20px' }}><PostureRecords studentId={studentId} /></div>
       <RecordLauncher onClick={openRecordSheet} />
     </div>
   )

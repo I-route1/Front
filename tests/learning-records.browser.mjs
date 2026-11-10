@@ -50,6 +50,7 @@ async function openPage(options = {}) {
     : route.fulfill({ status: 200, contentType: route.request().resourceType() === 'stylesheet' ? 'text/css' : 'application/javascript', body: '' }))
   const page = await context.newPage()
   page.setDefaultTimeout(10_000)
+  page.setDefaultNavigationTimeout(30_000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   const state = { requests: [], activities: options.camera ? [camera] : [], fail: false, ...options }
@@ -63,6 +64,13 @@ async function openPage(options = {}) {
     if (path === '/api/auth/token/refresh') return respond({ accessToken: 'renewed' })
     if (path === '/api/students/my-children') return respond(children)
     if (path === '/api/students/academy/students') return respond(state.academyStudents || children)
+    if (path === '/api/posture-records') {
+      const studentId = url.searchParams.get('studentId')
+      if (state.poseDelay && studentId === '14') await state.poseDelay
+      if (state.expiredPose && req.headers().authorization === 'Bearer test-token') return respond({}, 401)
+      if (state.poseStatus) return respond({ error: '자세 기록에 접근할 수 없습니다.' }, state.poseStatus)
+      return respond((state.poses || {})[studentId] || [])
+    }
     if (path === '/api/counseling/reports') {
       if (state.expiredReports && req.headers().authorization === 'Bearer test-token') return respond({}, 401)
       if (state.reportStatus) return respond({ error: '리포트에 접근할 수 없습니다.' }, state.reportStatus)
@@ -136,6 +144,97 @@ async function openPage(options = {}) {
   })
   return { page, context, state, errors }
 }
+
+const poseRecord = { id: 901, studentId: 14, subject: '수학', startedAt: '2026-11-11T01:00:00Z',
+  durationSeconds: 20, inputSource: 'VIDEO', measurementSource: 'AI_HAT', totalSamples: 10, classifiedSamples: 8,
+  uprightSamples: 4, slouchedSamples: 2, headDownSamples: 1, tiltedSamples: 1, unknownSamples: 1,
+  noPersonSamples: 1, multiplePeopleSamples: 0, uprightRatio: 0.5, slouchedRatio: 0.25,
+  headDownRatio: 0.125, tiltedRatio: 0.125 }
+
+test('학부모는 AI HAT 자세 비율과 영상 출처를 조회하고 새로고침 후에도 유지한다', async () => {
+  const { page, context, state, errors } = await openPage({ poses: { 14: [poseRecord] } })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus`)
+    let region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByText('바른 자세 50%', { exact: true }).waitFor()
+    await region.getByText('AI HAT · 영상 파일', { exact: true }).waitFor()
+    await region.getByText('판정 8 / 전체 10표본', { exact: true }).waitFor()
+    await page.reload()
+    region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByText('바른 자세 50%', { exact: true }).waitFor()
+    assert(state.requests.filter(r => r.path === '/api/posture-records' && r.auth === 'Bearer test-token').length >= 2)
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/posture-parent.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('학원 학생 상세에서도 같은 자세 기록을 보고 과목을 구분한다', async () => {
+  const { page, context, errors } = await openPage({ role: 'ACADEMY', poses: { 14: [poseRecord,
+    { ...poseRecord, id: 902, subject: '국어', inputSource: 'IMAGE' }] } })
+  try {
+    await openAcademyPattern(page)
+    const region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByText('AI HAT · 영상 파일', { exact: true }).waitFor()
+    await region.getByLabel('자세 기록 과목').selectOption('국어')
+    await region.getByText('AI HAT · 사진 파일', { exact: true }).waitFor()
+    assert.equal(await region.getByText('AI HAT · 영상 파일', { exact: true }).count(), 0)
+    await region.getByRole('button', { name: '자세 기록 새로고침' }).click()
+    await region.getByText('AI HAT · 사진 파일', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/posture-academy.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('사람 미검출과 여러 명 검출만 있으면 바른 자세 비율을 만들어 표시하지 않는다', async () => {
+  const unknown = { ...poseRecord, classifiedSamples: 0, uprightSamples: 0, slouchedSamples: 0, headDownSamples: 0,
+    tiltedSamples: 0, unknownSamples: 0, noPersonSamples: 5, multiplePeopleSamples: 5,
+    uprightRatio: null, slouchedRatio: null, headDownRatio: null, tiltedRatio: null }
+  const { page, context, errors } = await openPage({ poses: { 14: [unknown] } })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus`)
+    const region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByText('판정 가능한 자세 표본이 없어요.', { exact: true }).waitFor()
+    await region.getByText('사람 미검출 5 · 여러 명 검출 5 · 판단불가 0', { exact: true }).waitFor()
+    assert.equal(await region.getByText(/바른 자세/).count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('자세 기록의 늦은 응답이 다른 학생에게 섞이지 않는다', async () => {
+  let release
+  const delayed = new Promise(resolve => { release = resolve })
+  const { page, context, errors } = await openPage({ poses: { 14: [poseRecord] }, poseDelay: delayed })
+  try {
+    const requested = page.waitForRequest(request => request.url().includes('/api/posture-records?studentId=14'))
+    await page.goto(`${BASE}/learning?tab=focus`)
+    await requested
+    await page.getByRole('button', { name: '다른학생 · 중2', exact: true }).click()
+    const response = page.waitForResponse(response => response.url().includes('/api/posture-records?studentId=14'))
+    release(); await response
+    const region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByText('아직 자세 분석 기록이 없어요. 측정 결과가 전송되면 여기에 표시됩니다.', { exact: true }).waitFor()
+    assert.equal(await region.getByText('바른 자세 50%', { exact: true }).count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { release(); await context.close() }
+})
+
+test('자세 조회의 토큰 만료를 갱신하고 권한 오류나 다른 학생 응답에서는 이전 기록을 숨긴다', async () => {
+  const { page, context, state, errors } = await openPage({ expiredPose: true, poses: { 14: [poseRecord] } })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus`)
+    const region = page.getByRole('region', { name: '자세 분석 기록', exact: true })
+    await region.getByText('바른 자세 50%', { exact: true }).waitFor()
+    assert(state.requests.some(r => r.path === '/api/posture-records' && r.auth === 'Bearer renewed'))
+    state.poseStatus = 403
+    await region.getByRole('button', { name: '자세 기록 새로고침' }).click()
+    await region.getByText('자세 기록에 접근할 수 없습니다.', { exact: true }).waitFor()
+    assert.equal(await region.getByText('바른 자세 50%', { exact: true }).count(), 0)
+    state.poseStatus = 0; state.poses[14] = [{ ...poseRecord, studentId: 15 }]
+    await region.getByRole('button', { name: '자세 기록 새로고침' }).click()
+    await region.getByText('학생의 자세 기록 응답을 확인할 수 없습니다.', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
 
 test('학부모 성적 화면에서 학생별 오답·OCR 인식 글자·과목 필터를 사용한다', async () => {
   const { page, context, state, errors } = await openPage()
