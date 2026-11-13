@@ -29,9 +29,23 @@ export const boardAPI = {
     })
   },
 
-  // 게시판별 게시글 목록
+  // 특정 게시판별 게시글 목록
   getPostsByBoard(boardId, userId) {
-    return apiCall(withUserId(`/api/posts`, userId), {
+    return apiCall(withUserId(`/api/boards/${boardId}/posts`, userId), {
+      method: 'GET',
+    })
+  },
+
+  // 학원별 게시글 목록
+  getPostsByAcademy(academyId, userId) {
+    return apiCall(withUserId(`/api/academies/${academyId}/posts`, userId), {
+      method: 'GET',
+    })
+  },
+
+  // 전체 게시글 목록
+  getAllPosts(userId) {
+    return apiCall(withUserId('/api/posts', userId), {
       method: 'GET',
     })
   },
@@ -73,12 +87,9 @@ export const boardAPI = {
 
   // 게시글 삭제
   deletePost(postId, userId) {
-    return apiCall(
-        `/api/posts/${postId}?userId=${userId}`,
-        {
-          method: 'DELETE',
-        }
-    )
+    return apiCall(`/api/posts/${postId}?userId=${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    })
   },
 
   // 좋아요
@@ -130,4 +141,13 @@ export const boardAPI = {
       method: 'POST',
     })
   },
+
+  updateBoard(boardId, payload, userId) {
+    return apiCall(withUserId(`/api/boards/${boardId}`, userId), {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
 }
+
+export default boardAPI

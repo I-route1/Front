@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { boardAPI } from '../api'
 import BackButton from '../components/common/BackButton'
 
 const CATEGORIES = ['공지', '자유', '질문', '건의']
-const DEFAULT_BOARD_ID = 1
 
 export default function BoardWrite() {
+  const { boardId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
 
@@ -61,6 +61,7 @@ export default function BoardWrite() {
       const userId = user?.id ?? user?.userId
 
       const payload = {
+        boardId: Number(boardId),
         title: form.title.trim(),
         content: form.content.trim(),
         category: form.category,
@@ -78,11 +79,11 @@ export default function BoardWrite() {
           response?.data?.postId
 
       if (createdPostId) {
-        navigate(`/board/${createdPostId}`, { replace: true })
+        navigate(`/posts/${createdPostId}`, { replace: true })
         return
       }
 
-      navigate('/board', { replace: true })
+      navigate(`/board/${boardId}`, { replace: true })
     } catch (error) {
       console.error('게시글 등록 실패:', error)
 
@@ -97,17 +98,14 @@ export default function BoardWrite() {
   return (
       <div>
         <section
-    style={{
-      padding: '16px 20px',
-      background: 'var(--color-surface)',
-      borderBottom: '1px solid var(--color-border)',
-    }}
->
-  <BackButton
-      label="뒤로가기"
-      style={{ color: 'var(--color-primary)' }}
-  />
-</section>
+            style={{
+              padding: '16px 20px',
+              background: 'var(--color-surface)',
+              borderBottom: '1px solid var(--color-border)',
+            }}
+        >
+          <BackButton label="뒤로가기" style={{ color: 'var(--color-primary)' }} />
+        </section>
 
         <section className="section">
           <div className="section__header">
@@ -152,9 +150,7 @@ export default function BoardWrite() {
               </div>
 
               {errors.category && (
-                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                    {errors.category}
-                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.category}</p>
               )}
             </div>
 
@@ -168,9 +164,7 @@ export default function BoardWrite() {
                   style={{ borderColor: errors.title ? 'var(--color-danger)' : '' }}
               />
               {errors.title && (
-                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                    {errors.title}
-                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.title}</p>
               )}
             </div>
 
@@ -189,9 +183,7 @@ export default function BoardWrite() {
                   }}
               />
               {errors.content && (
-                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                    {errors.content}
-                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.content}</p>
               )}
             </div>
 

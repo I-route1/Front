@@ -26,9 +26,11 @@ import DriverMapPage from '@/pages/DriverMapPage'
 import AdminLearning from '@/pages/AdminLearning'
 
 import Board from '@/pages/Board'
+import BoardPostList from '@/pages/BoardPostList'
 import BoardDetail from '@/pages/BoardDetail'
 import BoardWrite from '@/pages/BoardWrite'
 import BoardEdit from '@/pages/BoardEdit'
+import BoardManageEdit from '@/pages/BoardManageEdit'
 
 import Payment from '@/pages/Payment'
 import PaymentSuccess from '@/pages/PaymentSuccess'
@@ -68,15 +70,17 @@ export const router = createBrowserRouter([
       { index: true, element: <RoleHomeRedirect /> },
       // 자녀 수에 상관없이 누구나 접근 가능
       { path: 'home', element: <Home /> },
-      { path: 'map', element: <Map /> },
+      { path: 'map', element:  <Map />},
       { path: 'learning', element: <Learning /> },
       { path: 'notice', element: <Notice /> },
 
-      // 커뮤니티 / 게시판 (자녀가 0명이어도 자유롭게 이용)
+      // 커뮤니티 / 게시판 (에브리타임식 2단계 구조)
       { path: 'board', element: <Board /> },
-      { path: 'board/write', element: <BoardWrite /> },
-      { path: 'board/:postId/edit', element: <BoardEdit /> },
-      { path: 'board/:postId', element: <BoardDetail /> },
+      { path: 'board/:boardId', element: <BoardPostList /> },
+      { path: 'board/:boardId/write', element: <BoardWrite /> },
+      { path: 'board/:boardId/manage', element: <BoardManageEdit /> },
+      { path: 'posts/:postId', element: <BoardDetail /> },
+      { path: 'posts/:postId/edit', element: <BoardEdit /> },
 
       // 프로필 및 설정
       { path: 'profile', element: <Profile /> },

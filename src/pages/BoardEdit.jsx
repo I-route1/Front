@@ -141,7 +141,7 @@ export default function BoardEdit() {
       await boardAPI.updatePost(postId, payload, user?.id ?? user?.userId)
 
       alert('게시글이 수정되었습니다.')
-      navigate(`/board/${postId}`, { replace: true })
+      navigate(`/posts/${postId}`, { replace: true })
     } catch (error) {
       console.error('게시글 수정 실패:', error)
 
@@ -185,17 +185,14 @@ export default function BoardEdit() {
   return (
       <div>
         <section
-    style={{
-      padding: '16px 20px',
-      background: 'var(--color-surface)',
-      borderBottom: '1px solid var(--color-border)',
-    }}
->
-  <BackButton
-      label="뒤로가기"
-      style={{ color: 'var(--color-primary)' }}
-  />
-</section>
+            style={{
+              padding: '16px 20px',
+              background: 'var(--color-surface)',
+              borderBottom: '1px solid var(--color-border)',
+            }}
+        >
+          <BackButton label="뒤로가기" style={{ color: 'var(--color-primary)' }} />
+        </section>
 
         {noticeMessage && (
             <div
@@ -257,9 +254,7 @@ export default function BoardEdit() {
               </div>
 
               {errors.category && (
-                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                    {errors.category}
-                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.category}</p>
               )}
             </div>
 
@@ -273,9 +268,7 @@ export default function BoardEdit() {
                   style={{ borderColor: errors.title ? 'var(--color-danger)' : '' }}
               />
               {errors.title && (
-                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                    {errors.title}
-                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.title}</p>
               )}
             </div>
 
@@ -294,9 +287,7 @@ export default function BoardEdit() {
                   }}
               />
               {errors.content && (
-                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>
-                    {errors.content}
-                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.content}</p>
               )}
             </div>
 
