@@ -1123,3 +1123,32 @@ test('학원에서 저장 중 학생을 바꾸면 이전 입력·성공 메시�
     assert.deepEqual(errors, [])
   } finally { release(); await context.close() }
 })
+
+test('AI 코칭 한눈에 보기는 최신 리포트의 할 일을 보여 주고 과목을 누르면 그 리포트를 연다', async () => {
+  const { page, context, errors } = await openPage({ reportsByStudent: { 14: savedReports } })
+  try {
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    const card = page.getByTestId('coaching-summary')
+    await card.waitFor()
+    await card.getByText('최근 수학 리포트 · 11.08', { exact: true }).waitFor()
+    assert.equal(await card.getByTestId('coaching-key-line').innerText(), '수학 학습 안내')
+    await card.getByText('아직 리포트가 없는 과목: 국어 · 과학 · 사회', { exact: true }).waitFor()
+    const english = page.getByTestId('saved-report-english')
+    await english.getByText('영어 메타인지 리포트', { exact: true }).click()
+    assert.equal(await english.getByText('저장된 영어 분석', { exact: true }).count(), 0)
+    await card.getByRole('button', { name: /영어/ }).click()
+    await english.getByText('저장된 영어 분석', { exact: true }).waitFor()
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/coaching-summary.png' })
+  } finally { await context.close() }
+})
+
+test('저장된 리포트가 없으면 한눈에 보기 카드를 그리지 않는다', async () => {
+  const { page, context, errors } = await openPage({ reportsByStudent: { 14: [] } })
+  try {
+    await page.goto(`${BASE}/learning?tab=counseling`)
+    await page.getByText('아직 저장된 상담 리포트가 없습니다.', { exact: true }).waitFor()
+    assert.equal(await page.getByTestId('coaching-summary').count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})

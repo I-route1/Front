@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeSavedReports, groupSavedReports, reportDate } from '../src/utils/savedReports.js'
+import { normalizeSavedReports, groupSavedReports, reportDate, reportKeyLine, summarizeSavedReports } from '../src/utils/savedReports.js'
 
 test('저장된 과목 필드로 분류하고 같은 시각은 ID 내림차순, 날짜 없음은 마지막이다', () => {
   const rows = normalizeSavedReports([
@@ -43,4 +43,37 @@ test('잘못된 응답이나 중복·안전하지 않은 ID는 정상 이력으�
     [{ id: 1 }, { id: 1 }], [{ id: 1, careerAnalysis: {} }]]) {
     assert.throws(() => normalizeSavedReports(input), /응답 형식/)
   }
+})
+
+test('한눈에 보기: 가장 최근 리포트에서 학업 수준·학습 강도·실천 문장을 뽑는다', () => {
+  const rows = normalizeSavedReports([
+    { id: 1, subject: '국어', createdAt: '2026-11-01T09:00:00', careerAnalysis: '● 국어 학업 수준: 상위권', learningGuide: null },
+    { id: 2, subject: '수학', createdAt: '2026-11-08T10:00:00',
+      careerAnalysis: '[수학 사고력 및 오답 패턴 분석]\n\n● 현재 학업 수준: 중위권 (국어 백분위 50%)\n● 학습 강도: 학습량 보강 필요 (일 1.0시간)\n',
+      learningGuide: '[수학 맞춤 학습 전략]\n\n1단계 — 오답 유형 분류: 계산 실수 / 개념 미이해\n2단계 — 취약 개념 집중' },
+    { id: 3, subject: '수학', createdAt: '2026-11-02T10:00:00', careerAnalysis: '', learningGuide: '' },
+  ])
+  const s = summarizeSavedReports(rows, Date.parse('2026-11-10T10:00:00'))
+  assert.equal(s.latest.id, 2)
+  assert.equal(s.level, '중위권')
+  assert.equal(s.intensity, '학습량 보강 필요 (일 1.0시간)')
+  assert.equal(s.keyLine, '1단계 — 오답 유형 분류: 계산 실수 / 개념 미이해')
+  assert.deepEqual(s.subjects.map(x => [x.label, x.row.id, x.count]), [['수학', 2, 2], ['국어', 1, 1]])
+  assert.deepEqual(s.missing, ['영어', '과학', '사회'])
+  assert.equal(s.days, 2)
+  assert.equal(s.stale, false)
+})
+
+test('한눈에 보기: 소제목·구분선은 건너뛰고, 형식이 다르면 null, 오래되면 stale', () => {
+  assert.equal(reportKeyLine({ learningGuide: '[프리미엄]\n\n━━ 로드맵 ━━\n주간 학습 계획:\n  - 월: 수학 오답 정리' }), '월: 수학 오답 정리')
+  assert.equal(reportKeyLine({ learningGuide: '', careerAnalysis: '[제목]\n자유 형식 분석' }), '자유 형식 분석')
+  assert.equal(reportKeyLine({}), null)
+  const s = summarizeSavedReports(normalizeSavedReports([{ id: 5, subject: null, careerAnalysis: '자유 형식', createdAt: '2026-06-05T01:58:52.25684' }]),
+    Date.parse('2026-11-14T00:00:00'))
+  assert.equal(s.level, null)
+  assert.equal(s.intensity, null)
+  assert.deepEqual(s.subjects, [])
+  assert.equal(s.stale, true)
+  assert.equal(summarizeSavedReports([]), null)
+  assert.equal(summarizeSavedReports(normalizeSavedReports([{ id: 6, subject: '영어', createdAt: null }])).days, null)
 })

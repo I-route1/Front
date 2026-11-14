@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import useSavedCounselingReports from '@/hooks/useSavedCounselingReports'
 import { SavedReportPicker, SavedReportStatus } from '@/components/learning/SavedReportControls'
 import { UNCLASSIFIED_REPORT } from '@/utils/savedReports'
+import CoachingSummaryCard from '@/components/learning/CoachingSummaryCard'
 import { useNavigate } from 'react-router-dom'
 import { paymentAPI } from '@/api/payment'
 import { RecommendRoadmapSection, AnalysisReportSection } from './RecommendRoadmap'
@@ -134,6 +135,13 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
       .catch(() => setCredits(0))
   }, [])
 
+  // 한눈에 보기에서 과목을 누르면 그 리포트 카드를 펼치고 그 위치로 이동한다
+  const openReport = (id) => {
+    setCollapsed(prev => ({ ...prev, [id]: false }))
+    requestAnimationFrame(() => document.querySelector(`[data-testid="saved-report-${id}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
   const toggleCollapse = (id) =>
     setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
 
@@ -203,12 +211,13 @@ export default function CounselingTab({ studentId: propStudentId, selectedChild 
 
       {/* 리포트 카드들 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, margin: '16px 16px' }}>
+        <CoachingSummaryCard history={history} onOpen={openReport} />
         <SavedReportStatus history={history} />
       {reportTypes.map(r => {
           const hasResult = !!results[r.id]
           const isCollapsed = collapsed[r.id] ?? false
           return (
-            <div key={r.id} data-testid={`saved-report-${r.id}`} style={{ background: 'var(--color-surface)', borderRadius: 16, border: `1px solid ${hasResult ? r.color + '50' : 'var(--color-border)'}`, overflow: 'hidden' }}>
+            <div key={r.id} data-testid={`saved-report-${r.id}`} style={{ scrollMarginTop: 72, background: 'var(--color-surface)', borderRadius: 16, border: `1px solid ${hasResult ? r.color + '50' : 'var(--color-border)'}`, overflow: 'hidden' }}>
               {/* 카드 헤더 */}
               <div
                 style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 14, cursor: hasResult ? 'pointer' : 'default' }}
