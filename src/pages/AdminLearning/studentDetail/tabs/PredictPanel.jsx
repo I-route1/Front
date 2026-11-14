@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
-import { analysisAPI, recommendationsAPI, studyPlanAPI } from '@/api'
+import { activitiesAPI, aiReportAPI, gradesAPI, recommendationsAPI, studyPlanAPI } from '@/api'
 import { SUBJECT_COLORS } from '../../data/mockData'
+import { normalizeGrades, summarizeGrades, averageDailyStudyHours, withPredictedPoint, GRADE_SUBJECTS } from '@/utils/gradeSummary'
+import { normalizeRoadmap, dateAfterWeeks } from '@/utils/roadmap'
 
-const SUBJECT_ID_BY_NAME = {
-  '국어': 1, '수학': 2, '영어': 3, '사회': 5, '과학': 6,
-}
-
-const PREDICT_SUBJECTS = ['국어', '수학', '영어', '사회', '과학']
+// 학부모 학습 탭의 '성장 예측'과 같은 방식으로 예측한다.
+// 실제 성적 평균과 하루 평균 공부 시간을 AI 서버(POST /api/ai/predict)에 보내 예상 평균을 받고,
+// 과목별 최근 점수에 (예상 평균 - 현재 평균)만큼 더한다.
+// (/api/analysis/predict는 성적 등록 화면과 다른 grade_entity 테이블을 읽어서 쓰지 않는다)
 
 export default function PredictPanel({ student }) {
-  const [predictions, setPredictions] = useState({})
-  const [loading, setLoading] = useState(true)
+  // { studentId, status: loading | ready | error, summary, prediction, hours }
+  const [forecast, setForecast] = useState({ studentId: null, status: 'loading' })
   
   // 로드맵 상태
   const [roadmap, setRoadmap] = useState(null)
@@ -22,48 +23,50 @@ export default function PredictPanel({ student }) {
   const [targetSubject, setTargetSubject] = useState('수학')
   const [targetWeeks, setTargetWeeks] = useState(4)
   
-  // 예측 점수 조회 (기존)
+  // 실제 성적 + 공부 시간 → AI 예상 평균
   useEffect(() => {
-    if (!student?.id) return
-    
-    setLoading(true)
+    if (student?.id == null) return
+    let cancelled = false
     const studentId = String(student.id)
-    
-    Promise.all(
-      PREDICT_SUBJECTS.map(subject => {
-        const subjectId = SUBJECT_ID_BY_NAME[subject]
-        if (!subjectId) return Promise.resolve([subject, null])
-        
-        return analysisAPI.getPredictedScore(studentId, subjectId)
-          .then(data => [subject, data])
-          .catch(() => [subject, null])
-      })
-    ).then(entries => {
-      const map = {}
-      entries.forEach(([subject, data]) => {
-        if (data) map[subject] = data
-      })
-      setPredictions(map)
-    })
-    .finally(() => setLoading(false))
+    setForecast({ studentId, status: 'loading' })
+    ;(async () => {
+      let summary
+      try {
+        summary = summarizeGrades(normalizeGrades(await gradesAPI.getGrades(studentId)))
+      } catch {
+        if (!cancelled) setForecast({ studentId, status: 'error' })
+        return
+      }
+      if (summary.average == null) {
+        if (!cancelled) setForecast({ studentId, status: 'ready', summary, prediction: null })
+        return
+      }
+      const hours = averageDailyStudyHours(await activitiesAPI.getActivities(studentId).catch(() => []))
+      const prediction = await aiReportAPI.predictScore(summary.average, hours ?? 2).catch(() => null)
+      if (!cancelled) {
+        setForecast({ studentId, status: 'ready', summary, hours,
+          prediction: Number.isFinite(prediction?.expected_score) ? prediction : null })
+      }
+    })()
+    return () => { cancelled = true }
   }, [student?.id])
   
   // 기존 로드맵 조회 (페이지 진입 시)
   useEffect(() => {
     if (!student?.id) return
     
+    let active = true
+    setRoadmap(null)
+    setRoadmapError(null)
+    setShowRoadmapForm(false)
     recommendationsAPI.getRoadmap(String(student.id))
-      .then(data => {
-        // 빈 응답이 아닐 때만 set
-        if (data && (data.weeks?.length > 0 || data.steps?.length > 0 || data.roadmap)) {
-          setRoadmap(data)
-        }
-      })
-      .catch(e => {
-        console.log('기존 로드맵 없음 (정상)')
-      })
+      .then(data => { if (active) setRoadmap(normalizeRoadmap(data)) })
+      .catch(() => {}) // 저장된 로드맵이 없으면 생성 버튼만 보여 준다
+    return () => { active = false }
   }, [student?.id])
   
+  const current = forecast.studentId === String(student?.id) ? forecast : { status: 'loading' }
+
   // 로드맵 생성 핸들러
   const handleGenerateRoadmap = async () => {
     setRoadmapLoading(true)
@@ -71,68 +74,24 @@ export default function PredictPanel({ student }) {
     
     try {
       const data = await studyPlanAPI.generateRoadmap(String(student.id), {
-        targetSubject,
-        weeks: targetWeeks,
-        // 백엔드가 받는 필드명 확정되면 조정
+        targetKeyword: targetSubject,
+        targetDate: dateAfterWeeks(targetWeeks),
+        dailyStudyHours: current.hours != null && current.hours > 0 ? current.hours : 2,
       })
-      
-      setRoadmap(data)
+      const next = normalizeRoadmap(data)
+      if (!next) throw new Error('로드맵 데이터가 비어 있습니다')
+      setRoadmap(next)
       setShowRoadmapForm(false)
     } catch (e) {
       console.error('로드맵 생성 실패:', e)
-      
-      // 폴백: mock 로드맵
-      const currentScore = student.scores?.[targetSubject] ?? 60
-      const targetScore = Math.min(95, currentScore + 15)
-      
-      setRoadmap({
-        targetSubject,
-        currentScore,
-        targetScore,
-        weeks: [
-          {
-            weekNumber: 1,
-            title: '기초 개념 점검',
-            description: `${targetSubject} 기본 단원 복습 및 약점 파악`,
-            targetScore: currentScore + 3,
-          },
-          {
-            weekNumber: 2,
-            title: '핵심 유형 정리',
-            description: '자주 출제되는 유형별 문제 풀이 훈련',
-            targetScore: currentScore + 7,
-          },
-          {
-            weekNumber: 3,
-            title: '심화 응용',
-            description: '응용 문제 + 실전 모의고사 풀이',
-            targetScore: currentScore + 11,
-          },
-          {
-            weekNumber: 4,
-            title: '실전 마무리',
-            description: '오답 노트 점검 + 시험 전 최종 점검',
-            targetScore: targetScore,
-          },
-        ].slice(0, targetWeeks),
-        summary: 'AI 서버 연결 실패 - 추세 기반 추천 로드맵을 보여드려요',
-        source: 'MOCK',
-      })
-      setShowRoadmapForm(false)
+      setRoadmapError('로드맵을 만들지 못했어요. 잠시 후 다시 시도해 주세요.')
     } finally {
       setRoadmapLoading(false)
     }
   }
   
-  if (loading) {
-    return (
-      <div style={{ padding:'40px 0', textAlign:'center', color:'var(--color-text-muted)', fontSize:13 }}>
-        예측 점수 분석 중...
-      </div>
-    )
-  }
-  
-  const hasApiData = Object.keys(predictions).length > 0
+  const summary = current.summary
+  const predicted = current.prediction ? withPredictedPoint(summary, current.prediction.expected_score).at(-1) : null
   
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -146,59 +105,31 @@ export default function PredictPanel({ student }) {
         <p style={{ fontSize:11, fontWeight:700, color:'var(--color-primary)', marginBottom:4 }}>
           📈 AI 성적 예측
         </p>
-        <p style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.5 }}>
-          학습 패턴과 최근 성적을 분석해 다음 시험 예상 점수를 보여드립니다
+        <p data-testid="admin-predict-summary" style={{ fontSize:12, color:'var(--color-text-primary)', lineHeight:1.5 }}>
+          {current.status === 'loading' ? '성적과 공부 시간을 분석하는 중...'
+            : current.status === 'error' ? '성적을 불러오지 못했어요.'
+            : !summary?.subjects.length ? '아직 등록된 성적이 없어 예측할 수 없어요. 성적이 등록되면 다음 시험 예상 점수를 보여 드려요.'
+            : current.prediction ? `현재 평균 ${summary.average}점 → 다음 시험 예상 평균 ${current.prediction.expected_score}점`
+            : `현재 평균 ${summary.average}점 · AI 예측 서버에 연결하지 못해 예상 점수는 표시하지 않아요.`}
         </p>
-      </div>
-      
-      {/* 과목별 예측 카드 */}
-      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        {PREDICT_SUBJECTS.map(subject => {
-          const apiData = predictions[subject]
-          const currentScore = student.scores?.[subject] ?? 0
-          const color = SUBJECT_COLORS[subject] || '#1A56DB'
-          
-          if (apiData) {
-            const predicted = apiData.predictedScore ?? apiData.predicted ?? 0
-            const current = apiData.currentScore ?? apiData.current ?? currentScore
-            const diff = predicted - current
-            const confidence = apiData.confidence != null 
-              ? Math.round(apiData.confidence * 100) 
-              : null
-            
-            return (
-              <PredictCard 
-                key={subject} subject={subject} color={color}
-                current={current} predicted={predicted} diff={diff}
-                confidence={confidence} summary={apiData.summary} source="API"
-              />
-            )
-          }
-          
-          if (currentScore > 0) {
-            const predicted = Math.max(0, Math.min(100, 
-              currentScore + (student.trendVal || 0)
-            ))
-            const diff = predicted - currentScore
-            
-            return (
-              <PredictCard 
-                key={subject} subject={subject} color={color}
-                current={currentScore} predicted={predicted} diff={diff}
-                source="MOCK"
-              />
-            )
-          }
-          
-          return null
-        })}
-      </div>
-      
-      {!hasApiData && (
-        <div style={{ padding:'10px 12px', borderRadius:10, background:'#FFF8E0', border:'1px solid #FFB80030' }}>
-          <p style={{ fontSize:11, color:'#8A6500', lineHeight:1.5 }}>
-            💡 학습 데이터가 더 쌓이면 정확한 AI 예측이 가능해요
+        {current.prediction && (
+          <p style={{ fontSize:10, color:'var(--color-text-muted)', marginTop:4 }}>
+            하루 평균 공부 {current.hours != null ? `${current.hours}시간` : '기록 없음(2시간으로 계산)'} 기준
+            {current.prediction.message ? ` · ${current.prediction.message}` : ''}
           </p>
+        )}
+      </div>
+      
+      {/* 과목별 예측 카드 (시험을 본 과목만) */}
+      {predicted && (
+        <div data-testid="admin-predict-cards" style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {summary.subjects.map(subject => (
+            <PredictCard
+              key={subject} subject={subject} color={SUBJECT_COLORS[subject] || '#1A56DB'}
+              current={summary.current[subject]} predicted={predicted[subject]}
+              diff={predicted[subject] - summary.current[subject]}
+            />
+          ))}
         </div>
       )}
       
@@ -226,6 +157,9 @@ export default function PredictPanel({ student }) {
         )}
         
         {/* 폼 */}
+        {roadmapError && !roadmap && (
+          <p role="alert" style={{ fontSize:11, color:'var(--color-danger)', marginBottom:8 }}>{roadmapError}</p>
+        )}
         {!roadmap && showRoadmapForm && (
           <RoadmapForm
             targetSubject={targetSubject}
@@ -288,7 +222,7 @@ function RoadmapForm({ targetSubject, setTargetSubject, targetWeeks, setTargetWe
           목표 과목
         </p>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-          {PREDICT_SUBJECTS.map(subject => {
+          {GRADE_SUBJECTS.map(subject => {
             const isActive = targetSubject === subject
             return (
               <button
@@ -380,22 +314,9 @@ function RoadmapView({ roadmap, onReset }) {
   // 응답 구조 대비 (weeks/steps/roadmap 여러 케이스)
   const weeks = roadmap.weeks || roadmap.steps || roadmap.roadmap || []
   const targetSubject = roadmap.targetSubject || roadmap.subject || '학습'
-  const isMock = roadmap.source === 'MOCK'
   
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-      
-      {/* mock 경고 */}
-      {isMock && (
-        <div style={{ 
-          padding:'8px 12px', borderRadius:8, 
-          background:'#FFF8E0', border:'1px solid #FFB80040',
-        }}>
-          <p style={{ fontSize:10, color:'#8A6500' }}>
-            ⚠️ AI 서버 연결 실패 - 추세 기반 추천 로드맵
-          </p>
-        </div>
-      )}
       
       {/* 헤더 */}
       <div style={{ 
@@ -405,7 +326,7 @@ function RoadmapView({ roadmap, onReset }) {
       }}>
         <p style={{ fontSize:11, opacity:0.85, marginBottom:4 }}>맞춤 학습 로드맵</p>
         <p style={{ fontSize:16, fontWeight:800 }}>
-          {targetSubject} · 총 {weeks.length}주 코스
+          {targetSubject} · 총 {weeks.length}주 코스{roadmap.targetDate ? ` · ${roadmap.targetDate}까지` : ''}
         </p>
         {roadmap.summary && (
           <p style={{ fontSize:11, opacity:0.9, marginTop:6, lineHeight:1.5 }}>
@@ -482,7 +403,7 @@ function RoadmapView({ roadmap, onReset }) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 예측 카드 (기존)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function PredictCard({ subject, color, current, predicted, diff, confidence, summary, source }) {
+function PredictCard({ subject, color, current, predicted, diff }) {
   const isRising = diff > 0
   const isFalling = diff < 0
   
@@ -500,16 +421,7 @@ function PredictCard({ subject, color, current, predicted, diff, confidence, sum
         }}>
           {subject}
         </span>
-        {source === 'API' && confidence != null && (
-          <span style={{ fontSize:10, color:'var(--color-text-muted)' }}>
-            신뢰도 {confidence}%
-          </span>
-        )}
-        {source === 'MOCK' && (
-          <span style={{ fontSize:10, color:'var(--color-text-muted)' }}>
-            추세 기반
-          </span>
-        )}
+        <span style={{ fontSize:10, color:'var(--color-text-muted)' }}>최근 시험 기준</span>
       </div>
       
       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10 }}>
@@ -552,16 +464,6 @@ function PredictCard({ subject, color, current, predicted, diff, confidence, sum
         </p>
       </div>
       
-      {summary && (
-        <div style={{ 
-          marginTop:10, padding:'8px 10px', borderRadius:8, 
-          background:'var(--color-primary-light)', border:'1px solid #1A56DB20',
-        }}>
-          <p style={{ fontSize:11, color:'var(--color-primary)', lineHeight:1.5 }}>
-            💡 {summary}
-          </p>
-        </div>
-      )}
     </div>
   )
 }

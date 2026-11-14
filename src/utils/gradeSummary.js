@@ -104,3 +104,23 @@ export function withPredictedPoint(summary, expectedAverage) {
   })
   return [...summary.trend, point]
 }
+
+// 학원 학생 상세 > 과목별 종합 분석 (GET /api/analysis/report)
+// 응답: { averageScore(전체 학생의 과목 평균), scoreChangeFromPrevious, trendSummary, weakPointSummary, … }
+// scores: 이 학생의 그 과목 점수(오래된 순). 지난 시험 대비는 시험이 2번 이상일 때만 보여 준다.
+export function subjectReportFacts(report, scores) {
+  const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  const list = (Array.isArray(scores) ? scores : []).filter(Number.isFinite)
+  const latest = list.at(-1) ?? null
+  const average = num(report?.averageScore) || null // 서버는 평균이 없으면 0.0을 보낸다
+  // 취약 개념 태그가 없으면 서버가 'null' 개념이라고 보내므로 그 문장은 빼고 오류 유형만 남긴다
+  let weak = typeof report?.weakPointSummary === 'string' ? report.weakPointSummary.trim() : ''
+  if (/'(null|undefined)?'/.test(weak)) weak = (weak.match(/오류 유형:.*$/)?.[0] ?? '').trim()
+  return {
+    latest,
+    average,
+    gap: latest != null && average != null ? Math.round((latest - average) * 10) / 10 : null,
+    change: list.length >= 2 ? list.at(-1) - list.at(-2) : null,
+    weak,
+  }
+}

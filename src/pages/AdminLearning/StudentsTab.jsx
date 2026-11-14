@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { analysisAPI, studentAPI } from '@/api'
 import { useAuth } from '@/context/AuthContext'
 import StudentDetail from './studentDetail/StudentDetail'
+import { mapLimited } from '@/utils/mapLimited'
 
 export default function StudentsTab() {
   const { user } = useAuth()
@@ -32,20 +33,18 @@ export default function StudentsTab() {
       .finally(() => setStudentsLoading(false))
   }, [])
 
-  // 위험도 일괄 조회
+  // 위험도 조회 (학생이 많아도 서버에 한 번에 6개까지만 요청)
   useEffect(() => {
     if (!students.length) return
-    Promise.all(
-      students.map(s =>
-        analysisAPI.getRiskAnalysis(String(s.id))
-          .then(data => [s.id, data])
-          .catch(() => [s.id, null])
-      )
-    ).then(entries => {
-      const map = {}
-      entries.forEach(([id, data]) => { if (data) map[id] = data })
-      setRiskMap(map)
-    })
+    let cancelled = false
+    mapLimited(students, s => analysisAPI.getRiskAnalysis(String(s.id)).then(data => [s.id, data]))
+      .then(entries => {
+        if (cancelled) return
+        const map = {}
+        entries.forEach(entry => { if (entry?.[1]) map[entry[0]] = entry[1] })
+        setRiskMap(map)
+      })
+    return () => { cancelled = true }
   }, [students])
 
   const GRADE_ORDER = ['초1','초2','초3','초4','초5','초6','중1','중2','중3','고1','고2','고3']
