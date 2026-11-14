@@ -66,7 +66,8 @@ export default function ParentAttendance({ user }) {
       .catch(() => { if (!cancelled) setError('출결 이력을 불러오지 못했습니다.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [selectedChild, date, reloadKey])
+  }, [selectedChild?.gpsStudentId, date, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  // 같은 자녀를 새 목록으로 다시 받아도(객체만 바뀜) 출결을 두 번 요청하지 않도록 ID로 비교한다
 
   // 마지막 상태 계산
   const lastRecord = records[0]

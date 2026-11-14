@@ -59,6 +59,21 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 자주 바뀌지 않는 라이브러리는 따로 묶어서, 앱 코드만 바뀐 배포 뒤에도 브라우저 캐시를 다시 쓴다
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|@remix-run)\//.test(id)) return 'react-vendor'
+          if (/node_modules\/(recharts|d3-[^/]+|victory-vendor|recharts-scale|decimal\.js-light)\//.test(id)) return 'charts'
+          if (/node_modules\/katex\//.test(id)) return 'katex'
+          if (/node_modules\/(firebase|@firebase)\//.test(id)) return 'firebase'
+          return undefined
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     host: true,
