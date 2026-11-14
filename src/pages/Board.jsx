@@ -89,7 +89,6 @@ export default function Board() {
       (b) =>
           !lowerKeyword ||
           b.name.toLowerCase().includes(lowerKeyword) ||
-          b.description.toLowerCase().includes(lowerKeyword) ||
           b.academyAddress.toLowerCase().includes(lowerKeyword),
   )
 
