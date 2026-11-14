@@ -6,25 +6,10 @@ import {
 } from 'recharts'
 import { SUBJECT_COLORS } from './data/mockData'
 import { normalizeGrades, summarizeGrades, GRADE_SUBJECTS } from '@/utils/gradeSummary'
+import { mapLimited } from '@/utils/mapLimited'
 
 const GRADE_ORDER = ['초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3']
 const CONCURRENCY = 6 // 학생이 많아도 서버에 한 번에 너무 많이 요청하지 않는다
-
-// 학생마다 요청을 보내되 동시에 CONCURRENCY개까지만
-async function mapLimited(items, fn, onProgress) {
-  const results = new Array(items.length)
-  let next = 0
-  let done = 0
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++
-      results[i] = await fn(items[i]).catch(() => null)
-      onProgress?.(++done)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker))
-  return results
-}
 
 const LEVELS = [
   { grade: '1등급', min: 96, color: '#1A56DB' },
@@ -77,7 +62,7 @@ export default function OverviewTab() {
           current: summary.current,
           risk: risk?.atRisk ? risk : null,
         }
-      }, done => { if (!cancelled) setProgress(p => ({ ...p, done })) })
+      }, { limit: CONCURRENCY, onProgress: done => { if (!cancelled) setProgress(p => ({ ...p, done })) } })
       if (cancelled) return
       setRows(result.filter(Boolean))
       setState('ready')

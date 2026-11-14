@@ -134,6 +134,9 @@ async function openPage(options = {}) {
       ? respond(state.metaResponse) : respond({ error: '분석 데이터가 부족합니다.' }, 400)
     if (path.includes('study-pattern')) return respond({ goldenTime: '데이터 없음', subjectStudyMinutes: {} })
     if (path.includes('strengths')) return respond({ strongSubjectIds: [] })
+    if (path === '/api/analysis/report') return state.subjectReport ? respond(state.subjectReport) : respond({ error: '없음' }, 404)
+    if (path === '/api/recommendations/roadmap') return state.roadmap ? respond(state.roadmap) : respond({ error: '없음' }, 404)
+    if (path === '/api/study-plan/progress' && req.method() === 'POST') return respond(state.roadmapResponse ?? { error: '실패' }, state.roadmapResponse ? 200 : 500)
     if (path.includes('risk')) return respond(state.risk?.[url.searchParams.get('studentId')] ?? { atRisk: false })
     if (path === '/api/grades' && req.method() === 'POST') {
       if (state.failGradeSave) return respond({ error: '저장 실패' }, 500)
@@ -1149,6 +1152,79 @@ test('저장된 리포트가 없으면 한눈에 보기 카드를 그리지 않�
     await page.goto(`${BASE}/learning?tab=counseling`)
     await page.getByText('아직 저장된 상담 리포트가 없습니다.', { exact: true }).waitFor()
     assert.equal(await page.getByTestId('coaching-summary').count(), 0)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('학원 학생 상세의 성적·강점·예측은 실제 성적으로만 계산하고 성적이 없으면 0점을 그리지 않는다', async () => {
+  const grades = [
+    { subject: '수학', score: 70, examDate: '2026-05-10', examType: '중간고사' },
+    { subject: '수학', score: 90, examDate: '2026-07-08', examType: '기말고사' },
+    { subject: '영어', score: 45, examDate: '2026-07-08', examType: '기말고사' },
+  ]
+  const { page, context, state, errors } = await openPage({
+    role: 'ACADEMY', grades, predict: { expected_score: 72, message: '조금 더 힘내요' },
+    subjectReport: { subjectName: '수학', averageScore: 64.7, scoreChangeFromPrevious: 20, trendSummary: '상승',
+      weakPointSummary: "현재 기말고사 시험에서 'null' 개념의 오답률이 높아 취약 단원으로 식별되었습니다. 오류 유형: 계산 실수 2건." },
+    roadmapResponse: { targetKeyword: '영어', targetDate: '2026-12-12', overallStrategy: '하루 2시간 기준',
+      weeklyMilestones: ['1주차 (14시간): 기초 개념 정리', '2주차 (14시간): 유형별 문제 풀이'] },
+  })
+  try {
+    await page.goto(`${BASE}/admin/learning`)
+    await page.getByRole('button', { name: '👥 학생관리', exact: true }).click()
+    await page.getByText('연결검증학생', { exact: true }).click()
+    const latest = page.getByTestId('admin-latest-scores')
+    await latest.getByText('90점', { exact: true }).waitFor()
+    await latest.getByText('45점', { exact: true }).waitFor()
+    assert.equal(await latest.getByText('국어', { exact: true }).count(), 0) // 안 본 과목은 그리지 않는다
+    const report = page.getByTestId('admin-subject-report')
+    await report.getByText('64.7점', { exact: true }).waitFor()
+    await report.getByText('+25.3점', { exact: true }).waitFor()
+    await report.getByText('+20점', { exact: true }).waitFor()
+    await page.getByText('오류 유형: 계산 실수 2건.', { exact: true }).waitFor()
+    assert.equal(await page.getByText("'null'", { exact: false }).count(), 0)
+
+    await page.getByRole('button', { name: /^💪\s*강점$/ }).click()
+    const strengths = page.getByTestId('admin-strengths')
+    await strengths.getByText('수학 과목에서 80점 이상을 받고 있어요.', { exact: true }).waitFor()
+    await strengths.getByText('지난 시험보다 20점 올랐어요', { exact: true }).waitFor()
+    await strengths.getByText('📌 보완이 필요한 과목 (60점 미만)', { exact: true }).waitFor()
+
+    await page.getByRole('button', { name: /^📈\s*예측$/ }).click()
+    await page.getByTestId('admin-predict-summary').getByText('현재 평균 68점 → 다음 시험 예상 평균 72점', { exact: true }).waitFor()
+    const cards = page.getByTestId('admin-predict-cards')
+    await cards.getByText('94점', { exact: true }).waitFor() // 90 + (72 - 68)
+    await cards.getByText('49점', { exact: true }).waitFor()
+    assert.equal(await cards.getByText('0점', { exact: true }).count(), 0)
+    assert.equal(state.requests.some(r => r.path === '/api/analysis/predict'), false)
+    assert.deepEqual(state.requests.find(r => r.path === '/api/ai/predict').body, { past_score_avg: 68, study_hours_per_day: 2 })
+
+    await page.getByRole('button', { name: /학습 로드맵 생성하기/ }).click()
+    await page.getByRole('button', { name: '영어', exact: true }).click()
+    await page.getByRole('button', { name: /로드맵 생성$/ }).click()
+    await page.getByText('기초 개념 정리', { exact: true }).waitFor()
+    const body = state.requests.find(r => r.path === '/api/study-plan/progress').body
+    assert.equal(body.targetKeyword, '영어')
+    assert.match(body.targetDate, /^\d{4}-\d{2}-\d{2}$/)
+    assert.equal(body.dailyStudyHours, 2)
+    assert.deepEqual(errors, [])
+    await page.screenshot({ path: 'test-results/academy-student-detail.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('학원 학생 상세: 성적이 없는 학생은 빈 안내를 보여 주고 예측 서버를 부르지 않는다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', grades: [], predict: { expected_score: 80 } })
+  try {
+    await page.goto(`${BASE}/admin/learning`)
+    await page.getByRole('button', { name: '👥 학생관리', exact: true }).click()
+    await page.getByText('연결검증학생', { exact: true }).click()
+    await page.getByTestId('admin-grade-empty').waitFor()
+    assert.equal(await page.getByText('0점', { exact: true }).count(), 0)
+    await page.getByRole('button', { name: /^💪\s*강점$/ }).click()
+    await page.getByTestId('admin-strengths-empty').waitFor()
+    await page.getByRole('button', { name: /^📈\s*예측$/ }).click()
+    await page.getByText('아직 등록된 성적이 없어 예측할 수 없어요.', { exact: false }).waitFor()
+    assert.equal(state.requests.some(r => r.path === '/api/ai/predict'), false)
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })
