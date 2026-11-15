@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation } from 'react-router-dom'
 import { Client } from '@stomp/stompjs';
 import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm';
 import { getBusCurrentLocation, getBusRoute, getStudentEtas, getStudentCurrentLocation } from '../services/gpsService';
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import BackButton from '../components/common/BackButton'
+import { formatKmh } from '../utils/gpsTracking'
 
 const MOCK_ROUTE = [
   { id: 1, name: '유치원', lat: 35.8714, lng: 128.6014 },
@@ -26,9 +28,21 @@ const mockVehicleInfo = {
 
 export default function Map() {
   const { user, role } = useAuth()
+  const location = useLocation()
+  // 지도에 보여줄 자녀: 홈에서 고른 자녀(state.studentId), 없으면 첫째 자녀
+  const children = user?.children ?? []
+  const selectedChild = children.find(c => String(c.studentId ?? c.id) === String(location.state?.studentId)) ?? children[0]
+  // 볼 버스: 이동할 때 넘겨받은 busId(알림 클릭 등) → 자녀 조회 응답(/api/students/my-children)의 busId
+  // → 둘 다 없으면(목업 계정 등) 테스트 버스 1번
+  const busId = location.state?.busId ?? selectedChild?.busId ?? 1
+  let childStudentId = selectedChild?.studentId || selectedChild?.id || 1
+  if (typeof childStudentId === 'string' && childStudentId.startsWith('child-')) {
+    childStudentId = 1
+  }
   const mapRef = useRef(null)
   const [status, setStatus] = useState('moving')
-  const [speed, setSpeed] = useState(32)
+  // 서버가 주는 km/h 값 (GPS 백엔드가 m/s × 3.6 으로 변환). 받기 전에는 null → '-' 표시
+  const [speed, setSpeed] = useState(null)
   const [currentStopIndex, setCurrentStopIndex] = useState(0)
   const [driverInfo, setDriverInfo] = useState(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
@@ -100,9 +114,9 @@ export default function Map() {
     const fetchData = async () => {
       try {
         const [locRes, routeRes, etaRes] = await Promise.allSettled([
-          getBusCurrentLocation(1),
-          getBusRoute(1),
-          getStudentEtas(1)
+          getBusCurrentLocation(busId),
+          getBusRoute(busId),
+          getStudentEtas(busId)
         ]);
 
         if (locRes.status === 'fulfilled' && locRes.value?.latitude) {
@@ -144,12 +158,6 @@ export default function Map() {
         }
 
         try {
-          const child = user?.children?.[0];
-          let childStudentId = child?.studentId || child?.id || 1;
-
-          if (typeof childStudentId === 'string' && childStudentId.startsWith('child-')) {
-            childStudentId = 1;
-          }
           const studentLoc = await getStudentCurrentLocation(childStudentId);
           if (studentLoc === null) {
             setIsChildOnBoard(false);
@@ -164,7 +172,7 @@ export default function Map() {
       }
     };
     fetchData();
-  }, []);
+  }, [busId, childStudentId]);
 
   useEffect(() => {
     requestAndGetFCMToken();
@@ -178,7 +186,7 @@ export default function Map() {
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
       onConnect: () => {
-        client.subscribe('/topic/bus/1', (message) => {
+        client.subscribe(`/topic/bus/${busId}`, (message) => {
           if (message.body) {
             try {
               const data = JSON.parse(message.body);
@@ -207,7 +215,7 @@ export default function Map() {
     });
     client.activate();
     return () => { client.deactivate(); };
-  }, []);
+  }, [busId]);
 
   useEffect(() => {
     if (mapInstance && busMarker && busLocation) {
@@ -330,7 +338,7 @@ export default function Map() {
                 {updatedAt && <span style={{ marginLeft: 6, fontSize: 11, color: '#9CA3AF', fontWeight: 'normal' }}>({new Date(updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })})</span>}
               </p>
               <span style={{ background: '#FEF08A', color: '#A16207', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '800' }}>
-              {user?.children?.[0]?.name ?? '자녀'} 하차 예정
+              {selectedChild?.name ?? '자녀'} 하차 예정
             </span>
             </div>
 
@@ -364,7 +372,7 @@ export default function Map() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
-              {[['이동거리', `${(activeIndex * 1.2).toFixed(1)}km`], ['종점 도착', `${globalEta}분`], ['현재속도', `${speed}km/h`]].map(([k, v]) => (
+              {[['이동거리', `${(activeIndex * 1.2).toFixed(1)}km`], ['종점 도착', `${globalEta}분`], ['현재속도', formatKmh(speed)]].map(([k, v]) => (
                   <div key={k} style={{ textAlign: 'center' }}>
                     <p style={{ fontSize: 11, color: '#666' }}>{k}</p>
                     <p style={{ fontSize: 14, fontWeight: 700, color: '#111', marginTop: 4 }}>{v}</p>
@@ -418,7 +426,7 @@ export default function Map() {
                       <span style={{ fontSize: '15px', fontWeight: isCurrent || isMyChildStop ? '800' : '500', color: isPassed ? '#9CA3AF' : (isCurrent ? '#3B82F6' : '#111') }}>{stop.stationName}</span>
                       {isMyChildStop && (
                           <span style={{ marginLeft: '8px', background: '#FEF08A', color: '#A16207', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
-                      {user?.children?.[0]?.name ?? '우리 아이'} 하차 정류장
+                      {selectedChild?.name ?? '우리 아이'} 하차 정류장
                     </span>
                       )}
                     </div>

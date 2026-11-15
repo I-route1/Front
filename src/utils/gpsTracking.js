@@ -1,0 +1,169 @@
+// 기사 앱 GPS 전송과 학부모 지도 속도 표시에 쓰는 계산.
+// 백엔드(teature/gps-alerts) 규칙: 기사 앱은 브라우저 GPS 원본 단위인 m/s로 보내고,
+// 서버가 ×3.6 해서 km/h로 저장하고 /topic/bus/{busId}로 내려준다
+// (GpsLocationRequest.speed 주석, GpsCommandService 저장 부분).
+
+export const MS_TO_KMH = 3.6
+
+// 이보다 빠른 추정 속도(약 216km/h)는 위치가 튄 것으로 보고 버린다.
+const MAX_PLAUSIBLE_MS = 60
+// 기기가 방향을 주지 않을 때, 이만큼 이상 움직였을 때만 이동 방향을 새로 계산한다.
+const MIN_MOVE_FOR_HEADING_M = 5
+// 위치 변화로 속도를 추정할 때, 이보다 작은 이동은 측위 오차로 보고 정지로 친다.
+const MIN_MOVE_FOR_SPEED_M = 5
+// 위치 변화로 속도를 추정할 때 비교할 기준 측정은 최소 이만큼 이전 것이어야 한다.
+// 측정은 보통 1초 간격으로 오는데, 1초 사이 이동(10km/h면 약 2.8m)은 측위 오차와 구분되지 않아
+// 저속 주행이 0으로 잡힌다. 5초(전송 주기)면 10km/h도 약 14m 이동이라 구분된다.
+export const MIN_ESTIMATE_BASELINE_MS = 5000
+
+const EARTH_RADIUS_M = 6371000
+const toRad = (deg) => (deg * Math.PI) / 180
+const toDeg = (rad) => (rad * 180) / Math.PI
+
+export const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v)
+
+export function msToKmh(ms) {
+  return isFiniteNumber(ms) ? ms * MS_TO_KMH : null
+}
+
+// 화면 표시용: km/h 값을 정수로 반올림한다. 값이 없으면 '-'.
+export function formatKmh(kmh) {
+  if (!isFiniteNumber(kmh) || kmh < 0) return '-'
+  return `${Math.round(kmh)}km/h`
+}
+
+export function distanceMeters(a, b) {
+  const dLat = toRad(b.latitude - a.latitude)
+  const dLng = toRad(b.longitude - a.longitude)
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)))
+}
+
+// a에서 b로 가는 방향 (북쪽 0°, 시계 방향, 0 이상 360 미만)
+export function bearingDegrees(a, b) {
+  const lat1 = toRad(a.latitude)
+  const lat2 = toRad(b.latitude)
+  const dLng = toRad(b.longitude - a.longitude)
+  const y = Math.sin(dLng) * Math.cos(lat2)
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng)
+  return normalizeHeading(toDeg(Math.atan2(y, x)))
+}
+
+export function normalizeHeading(h) {
+  if (!isFiniteNumber(h)) return null
+  return ((h % 360) + 360) % 360
+}
+
+// 기기가 speed를 주지 않을 때(PC, Wi-Fi 측위 등) 두 측정 사이의 거리와 시간으로 추정한다.
+export function estimateSpeedMs(prev, curr) {
+  if (!prev || !curr) return null
+  const dt = (curr.timestamp - prev.timestamp) / 1000
+  if (!isFiniteNumber(dt) || dt <= 0) return null
+  const d = distanceMeters(prev, curr)
+  if (d < MIN_MOVE_FOR_SPEED_M) return 0
+  const v = d / dt
+  return v <= MAX_PLAUSIBLE_MS ? v : null
+}
+
+// GeolocationPosition을 화면·전송에 쓰는 측정값으로 바꾼다.
+// - baseline: 속도·방향 추정에 비교할 기준 측정 (createFixTracker가 관리)
+// - previous: 바로 직전 결과. 기준과의 간격이 짧을 때 추정값을 이어 쓴다.
+// speed: 기기 값(m/s)이 있으면 그대로, 없으면 기준 측정과 비교해 추정
+// heading: 기기 값이 없으면 기준 측정에서의 이동 방향, 거의 안 움직였으면 직전 방향을 유지
+export function fixFromPosition(position, { baseline = null, previous = null } = {}) {
+  const c = position?.coords
+  if (!c || !isFiniteNumber(c.latitude) || !isFiniteNumber(c.longitude)) return null
+  const fix = {
+    latitude: c.latitude,
+    longitude: c.longitude,
+    accuracy: isFiniteNumber(c.accuracy) ? c.accuracy : null,
+    timestamp: isFiniteNumber(position.timestamp) ? position.timestamp : Date.now(),
+  }
+
+  if (isFiniteNumber(c.speed) && c.speed >= 0) {
+    fix.speed = c.speed
+    fix.speedSource = 'device'
+  } else if (baseline && fix.timestamp - baseline.timestamp >= MIN_ESTIMATE_BASELINE_MS) {
+    fix.speed = estimateSpeedMs(baseline, fix)
+    fix.speedSource = fix.speed === null ? null : 'estimated'
+  } else if (previous?.speedSource === 'estimated') {
+    fix.speed = previous.speed
+    fix.speedSource = 'estimated'
+  } else {
+    fix.speed = null
+    fix.speedSource = null
+  }
+
+  const deviceHeading = normalizeHeading(c.heading)
+  if (deviceHeading !== null) {
+    fix.heading = deviceHeading
+  } else if (baseline && distanceMeters(baseline, fix) >= MIN_MOVE_FOR_HEADING_M) {
+    fix.heading = bearingDegrees(baseline, fix)
+  } else {
+    fix.heading = previous?.heading ?? null
+  }
+  return fix
+}
+
+// watchPosition 콜백마다 부르는 측정기. 기준 측정을 MIN_ESTIMATE_BASELINE_MS마다 갱신한다.
+export function createFixTracker() {
+  let baseline = null
+  let previous = null
+  return (position) => {
+    const fix = fixFromPosition(position, { baseline, previous })
+    if (!fix) return previous
+    if (!baseline || fix.timestamp - baseline.timestamp >= MIN_ESTIMATE_BASELINE_MS) baseline = fix
+    previous = fix
+    return fix
+  }
+}
+
+// 측정값 → POST /api/gps/locations 요청 본문.
+// 백엔드 검증(모두 @NotNull, 위도 ±90, 경도 ±180, speed ≥ 0, heading 0~360)을 항상 통과하도록 맞춘다.
+export function buildGpsPayload(busId, fix) {
+  const id = Number(busId)
+  if (!Number.isInteger(id) || id <= 0) return null
+  if (!fix || !isFiniteNumber(fix.latitude) || !isFiniteNumber(fix.longitude)) return null
+  if (Math.abs(fix.latitude) > 90 || Math.abs(fix.longitude) > 180) return null
+  const speed = isFiniteNumber(fix.speed) && fix.speed >= 0 ? fix.speed : 0
+  return {
+    busId: id,
+    latitude: fix.latitude,
+    longitude: fix.longitude,
+    speed: Math.round(speed * 100) / 100,
+    heading: normalizeHeading(fix.heading) ?? 0,
+  }
+}
+
+// ---- 시뮬레이션 (GPS가 없는 PC에서 시연·테스트할 때) ----
+
+// 20~40km/h 사이를 천천히 오르내리는 속도 (m/s)
+export function simulatedSpeedMs(elapsedSec) {
+  return 8.33 + 2.78 * Math.sin(elapsedSec / 15)
+}
+
+// 경로(path)를 따라 distanceM만큼 간 지점의 측정값. 끝에 닿으면 처음부터 다시 돈다.
+export function simulateFix(path, distanceM, speedMs, timestamp = Date.now()) {
+  if (!Array.isArray(path) || path.length < 2) return null
+  const legs = []
+  let total = 0
+  for (let i = 0; i < path.length - 1; i++) {
+    const len = distanceMeters(path[i], path[i + 1])
+    legs.push({ from: path[i], to: path[i + 1], start: total, len })
+    total += len
+  }
+  if (total <= 0) return null
+  const d = ((distanceM % total) + total) % total
+  const leg = legs.find((l) => d < l.start + l.len) ?? legs[legs.length - 1]
+  const t = leg.len > 0 ? (d - leg.start) / leg.len : 0
+  return {
+    latitude: leg.from.latitude + (leg.to.latitude - leg.from.latitude) * t,
+    longitude: leg.from.longitude + (leg.to.longitude - leg.from.longitude) * t,
+    accuracy: null,
+    timestamp,
+    speed: speedMs,
+    speedSource: 'simulated',
+    heading: bearingDegrees(leg.from, leg.to),
+  }
+}
