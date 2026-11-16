@@ -155,6 +155,7 @@ export function AuthProvider({ children }) {
                   academyId: c.academyId,
                   academyName: c.academyName,
                   busId: c.busId ?? null,
+                  routeStopId: c.routeStopId ?? null,
                   academies: Array.isArray(c.academies) ? c.academies.map(a => ({
                     id: a.id,
                     code: a.code,
@@ -233,6 +234,7 @@ export function AuthProvider({ children }) {
               academyId: c.academyId,
               academyName: c.academyName,
               busId: c.busId ?? null,
+              routeStopId: c.routeStopId ?? null,
               academies: Array.isArray(c.academies) ? c.academies.map(a => ({
                 id: a.id,
                 code: a.code,
