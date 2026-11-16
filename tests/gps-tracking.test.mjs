@@ -3,13 +3,14 @@ import assert from 'node:assert/strict'
 import {
   MS_TO_KMH, msToKmh, formatKmh, distanceMeters, bearingDegrees, normalizeHeading,
   estimateSpeedMs, fixFromPosition, createFixTracker, MIN_ESTIMATE_BASELINE_MS,
-  buildGpsPayload, simulatedSpeedMs, simulateFix,
+  buildGpsPayload, simulatedSpeedMs, simulateFix, pathStopDistances, simulationSpeedAt,
+  SIMULATION_STOP_ZONE_M, SIMULATION_STOP_ZONE_SPEED_MS,
 } from '../src/utils/gpsTracking.js'
 
 const near = (actual, expected, tol, msg) =>
   assert.ok(Math.abs(actual - expected) <= tol, `${msg ?? ''} expected ${expected}±${tol}, got ${actual}`)
 
-// 지도 예시 노선과 같은 좌표 (경산)
+// 기사 화면 임시 시뮬레이션 경로와 같은 좌표 (대구 중구 시청 부근)
 const A = { latitude: 35.8714, longitude: 128.6014 }
 const B = { latitude: 35.8725, longitude: 128.6025 }
 
@@ -139,23 +140,54 @@ test('측정기: 기기 속도가 있으면 그대로 쓴다', () => {
   assert.equal(fix.speedSource, 'device')
 })
 
-test('시뮬레이션: 경로를 따라 움직이고 끝나면 처음부터 다시 돈다', () => {
-  const path = [A, B, { latitude: 35.8738, longitude: 128.6035 }]
+test('시뮬레이션: 편도 운행이라 종점에 닿으면 그 자리에 멈춘다 (되돌아가거나 순간이동하지 않음)', () => {
+  const C = { latitude: 35.8738, longitude: 128.6035 }
+  const path = [A, B, C]
   const start = simulateFix(path, 0, 8, 1)
   near(start.latitude, A.latitude, 1e-9)
   assert.equal(start.speed, 8)
   assert.equal(start.speedSource, 'simulated')
+  assert.equal(start.finished, false)
 
   const legLen = distanceMeters(A, B)
   const mid = simulateFix(path, legLen / 2, 8, 1)
   near(mid.latitude, (A.latitude + B.latitude) / 2, 1e-6)
+  near(mid.heading, bearingDegrees(A, B), 0.01, '진행 방향')
 
-  const total = legLen + distanceMeters(B, path[2])
-  near(simulateFix(path, total + 1, 8, 1).latitude, A.latitude, 1e-4, '한 바퀴 뒤')
+  const total = pathStopDistances(path)[2]
+  near(total, legLen + distanceMeters(B, C), 1e-6)
+  for (const over of [0, 1, 500]) {
+    const end = simulateFix(path, total + over, 8, 1)
+    assert.ok(distanceMeters(end, C) < 0.5, `종점을 ${over}m 넘겨도 종점에 있다`)
+    assert.equal(end.finished, true)
+    assert.equal(end.speed, 0, '종점에서는 정지')
+  }
 
-  const payload = buildGpsPayload(1, mid)
+  // 이어지는 두 지점 사이가 항상 짧다 = 어디서도 순간이동하지 않는다
+  let prev = simulateFix(path, 0, 8, 1)
+  for (let d = 5; d <= total + 50; d += 5) {
+    const cur = simulateFix(path, d, 8, 1)
+    assert.ok(distanceMeters(prev, cur) <= 5.01, `${d}m 지점에서 ${distanceMeters(prev, cur)}m 튐`)
+    prev = cur
+  }
+
+  const payload = buildGpsPayload(1, simulateFix(path, total, 8, 1))
+  assert.equal(payload.speed, 0)
   assert.ok(payload.heading >= 0 && payload.heading < 360)
   assert.equal(simulateFix([A], 10, 8), null)
+})
+
+test('시뮬레이션: 정류장 반경 안에서는 12km/h로 서행 (백엔드 정차 판정 3.0m/s보다 빠름)', () => {
+  const path = [A, B] // 약 157m
+  const total = pathStopDistances(path)[1]
+  assert.equal(SIMULATION_STOP_ZONE_M, 50)
+  assert.ok(SIMULATION_STOP_ZONE_SPEED_MS > 3.0, '정류장 서행이 비정상 정차로 잡히면 안 된다')
+  assert.equal(simulationSpeedAt(path, 0, 0), SIMULATION_STOP_ZONE_SPEED_MS, '출발 정류장')
+  assert.equal(simulationSpeedAt(path, 49, 0), SIMULATION_STOP_ZONE_SPEED_MS)
+  assert.equal(simulationSpeedAt(path, total - 10, 0), SIMULATION_STOP_ZONE_SPEED_MS, '도착 정류장 앞')
+  assert.equal(simulationSpeedAt(path, total / 2, 30), simulatedSpeedMs(30), '정류장 사이에서는 보통 속도')
+  // 서행 구간(50m)을 지나는 동안 5초 간격 전송이 여러 번 들어간다
+  assert.ok(SIMULATION_STOP_ZONE_M / SIMULATION_STOP_ZONE_SPEED_MS >= 15)
 })
 
 test('시뮬레이션 속도는 20~40km/h 사이', () => {
