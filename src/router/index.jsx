@@ -127,7 +127,15 @@ export const router = createBrowserRouter([
 
       // 기사 권한 라우트
       { path: 'driver/boarding', element: page(DriverBoardingList) },
-      { path: 'driver/map', element: page(DriverMapPage) },
+      {
+        // 위치를 서버로 보내는 화면이라 기사 계정만 들어올 수 있게 한다
+        path: 'driver/map',
+        element: (
+            <ProtectedRoute allowedRoles={[USER_ROLES.DRIVER]}>
+              {page(DriverMapPage)}
+            </ProtectedRoute>
+        ),
+      },
 
       // 역할 제한 페이지
       {

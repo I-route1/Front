@@ -43,7 +43,7 @@ export function getDefaultRoute(role) {
   if ([USER_ROLES.ACADEMY, USER_ROLES.TEACHER, USER_ROLES.ADMIN].includes(r)) {
     return '/admin/learning'
   }
-  if (r === USER_ROLES.DRIVER) return '/map'
+  if (r === USER_ROLES.DRIVER) return '/driver/map'
   return '/home'
 }
 
@@ -154,6 +154,7 @@ export function AuthProvider({ children }) {
                   grade: c.grade ?? '',
                   academyId: c.academyId,
                   academyName: c.academyName,
+                  busId: c.busId ?? null,
                   academies: Array.isArray(c.academies) ? c.academies.map(a => ({
                     id: a.id,
                     code: a.code,
@@ -231,6 +232,7 @@ export function AuthProvider({ children }) {
               grade: c.grade ?? '',
               academyId: c.academyId,
               academyName: c.academyName,
+              busId: c.busId ?? null,
               academies: Array.isArray(c.academies) ? c.academies.map(a => ({
                 id: a.id,
                 code: a.code,

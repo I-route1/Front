@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { notificationsAPI } from '@/api'
 import { notificationTargets, notificationTargetKey } from '@/utils/notificationTargets'
 import { useAuth, USER_ROLES, isAcademy } from '@/context/AuthContext'
-import { CalendarCheck } from 'lucide-react'
+import { Bus, CalendarCheck } from 'lucide-react'
 
 const PARENT_NAV = [
   { to: '/home',     label: '홈',     icon: HomeIcon },
@@ -30,6 +30,7 @@ const ADMIN_NAV = [
 
 const DRIVER_NAV = [
   { to: '/home',    label: '홈',   icon: HomeIcon },
+  { to: '/driver/map', label: '운행', icon: Bus },
   { to: '/map',     label: '지도', icon: MapIcon },
   { to: '/attendance', label: '출결', icon: CalendarCheck },
   { to: '/profile', label: '마이', icon: ProfileIcon },
