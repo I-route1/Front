@@ -1,16 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
-import { sendGpsLocation } from '../services/gpsService'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getBusRoute, sendGpsLocation } from '../services/gpsService'
 import {
-  buildGpsPayload, createFixTracker, formatKmh, msToKmh, simulateFix, simulatedSpeedMs,
+  buildGpsPayload, createFixTracker, formatKmh, msToKmh, simulateFix, simulationSpeedAt,
 } from '../utils/gpsTracking'
+import { simulationPathFromRoute } from '../utils/mapStatus'
 
 // 백엔드 GpsController: 기사 앱은 5초 주기로 위치를 보낸다.
 const SEND_INTERVAL_MS = 5000
 const SIMULATION_TICK_MS = 1000
 const STOPPED_MESSAGE = '운행 시작을 누르면 5초마다 위치를 서버로 보냅니다.'
 
-// GPS가 없는 PC에서 시연할 때 따라 움직일 경로 (지도 화면 예시 노선과 같은 좌표)
-const SIMULATION_PATH = [
+// GPS가 없는 PC에서 시연할 때 서버 노선을 아직 못 받았으면 쓰는 임시 경로 (대구 중구 시청 부근).
+// 서버는 버스 위치가 하나라도 있어야 노선을 주므로(없으면 404), 첫 전송 뒤 노선으로 갈아탄다.
+const FALLBACK_SIMULATION_PATH = [
   { latitude: 35.8714, longitude: 128.6014 },
   { latitude: 35.8725, longitude: 128.6025 },
   { latitude: 35.8738, longitude: 128.6035 },
@@ -49,8 +51,27 @@ export default function DriverMapPage({ busId = 1 }) {
   const [gpsError, setGpsError] = useState(null)
   const [sendState, setSendState] = useState({ status: 'stopped', message: STOPPED_MESSAGE })
   const [lastSent, setLastSent] = useState(null)
+  // 시뮬레이션은 '운행 시작'을 누를 때마다 출발점부터 다시 달린다 (실제 GPS에는 영향 없음)
+  const [simulationRun, setSimulationRun] = useState(0)
+  const simulationKey = mode === 'simulation' ? simulationRun : 0
+  // 시뮬레이션이 따라 달릴 서버 노선(정류장 좌표 순서). 못 받았으면 임시 경로
+  const [routePath, setRoutePath] = useState(null)
+  const simulationPath = routePath ?? FALLBACK_SIMULATION_PATH
+  const [starting, setStarting] = useState(false)
 
   const latestFixRef = useRef(null)
+
+  const loadRoutePath = useCallback(async () => {
+    try {
+      const path = simulationPathFromRoute(await getBusRoute(busId))
+      if (path) setRoutePath(path)
+      return path
+    } catch {
+      return null // 버스 위치가 아직 없으면 404
+    }
+  }, [busId])
+
+  useEffect(() => { setRoutePath(null) }, [busId])
   const sendingRef = useRef(false)
 
   const updateFix = (next) => {
@@ -87,25 +108,32 @@ export default function DriverMapPage({ busId = 1 }) {
     let distance = 0
     const tick = () => {
       const now = Date.now()
-      const speed = simulatedSpeedMs((now - startedAt) / 1000)
+      const speed = simulationSpeedAt(simulationPath, distance, (now - startedAt) / 1000)
       distance += speed * ((now - lastTick) / 1000)
       lastTick = now
-      updateFix(simulateFix(SIMULATION_PATH, distance, speed, now))
+      updateFix(simulateFix(simulationPath, distance, speed, now))
     }
     tick()
     const timer = setInterval(tick, SIMULATION_TICK_MS)
     return () => clearInterval(timer)
-  }, [mode, geolocationSupported])
+  }, [mode, geolocationSupported, simulationKey, simulationPath])
+
+  // 임시 경로로 첫 전송을 한 뒤에는 서버가 노선을 주므로, 받는 즉시 노선 출발점으로 옮겨 간다
+  useEffect(() => {
+    if (mode === 'simulation' && running && !routePath && lastSent) loadRoutePath()
+  }, [mode, running, routePath, lastSent, loadRoutePath])
 
   // 2) 전송: 5초마다 가장 최근 측정값을 m/s 그대로 보낸다 (km/h 변환은 서버가 한다)
   useEffect(() => {
     if (!running) {
-      setSendState({ status: 'stopped', message: STOPPED_MESSAGE })
+      // 종점 도착으로 끝난 경우에는 그 안내를 남겨 둔다
+      setSendState((prev) => (prev.status === 'done' ? prev : { status: 'stopped', message: STOPPED_MESSAGE }))
       return undefined
     }
     const transmit = async () => {
       if (sendingRef.current) return
-      const payload = buildGpsPayload(busId, latestFixRef.current)
+      const fix = latestFixRef.current
+      const payload = buildGpsPayload(busId, fix)
       if (!payload) {
         setSendState({ status: 'waiting', message: '위치를 받는 중입니다...' })
         return
@@ -115,6 +143,12 @@ export default function DriverMapPage({ busId = 1 }) {
         await sendGpsLocation(payload) // 성공 시 본문 없는 200 (GpsController)
         const sentAt = Date.now()
         setLastSent({ payload, sentAt })
+        if (fix?.finished) {
+          // 시뮬레이션이 종점에 닿으면 종점 위치를 한 번 보낸 뒤 운행을 마친다 (되돌아가지 않음)
+          setSendState({ status: 'done', message: `종점에 도착해 운행을 마쳤어요 (${timeText(sentAt)})` })
+          setRunning(false)
+          return
+        }
         setSendState({ status: 'ok', message: `전송 성공 (${timeText(sentAt)})` })
       } catch (err) {
         setSendState({ status: 'error', message: sendErrorMessage(err) })
@@ -130,6 +164,7 @@ export default function DriverMapPage({ busId = 1 }) {
   const currentKmh = msToKmh(fix?.speed)
   const statusColor = {
     ok: { bg: '#ECFDF5', border: '#A7F3D0', fg: '#047857' },
+    done: { bg: '#ECFDF5', border: '#A7F3D0', fg: '#047857' },
     error: { bg: '#FEF2F2', border: '#FCA5A5', fg: '#B91C1C' },
     waiting: { bg: '#EFF6FF', border: '#BFDBFE', fg: '#1D4ED8' },
     stopped: { bg: '#F3F4F6', border: '#D1D5DB', fg: '#374151' },
@@ -170,6 +205,7 @@ export default function DriverMapPage({ busId = 1 }) {
         </p>
         <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>
           {fix?.speedSource ? SPEED_SOURCE_LABEL[fix.speedSource] : '속도 정보 없음'}
+          {fix?.speedSource === 'simulated' && (routePath ? ' · 서버 노선 따라 종점까지' : ' · 임시 경로 (노선을 받으면 노선으로 이동)')}
           {fix?.accuracy != null && ` · 위치 오차 약 ${Math.round(fix.accuracy)}m`}
         </p>
       </div>
@@ -186,9 +222,24 @@ export default function DriverMapPage({ busId = 1 }) {
 
       <button
         type="button"
-        onClick={() => setRunning((r) => !r)}
+        disabled={starting}
+        onClick={async () => {
+          if (running) {
+            setRunning(false)
+            return
+          }
+          // 시뮬레이션이면 서버 노선을 먼저 받아 노선 출발점에서 시작한다 (버스 위치가 없으면 임시 경로로 시작)
+          if (mode === 'simulation' && !routePath) {
+            setStarting(true)
+            await loadRoutePath()
+            setStarting(false)
+          }
+          setSimulationRun((n) => n + 1)
+          setRunning(true)
+        }}
         style={{
-          padding: 14, borderRadius: 12, border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+          padding: 14, borderRadius: 12, border: 'none', fontSize: 15, fontWeight: 700,
+          cursor: starting ? 'wait' : 'pointer', opacity: starting ? 0.7 : 1,
           background: running ? '#EF4444' : '#10B981', color: 'white',
         }}
       >

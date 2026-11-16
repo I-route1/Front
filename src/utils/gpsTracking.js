@@ -143,27 +143,50 @@ export function simulatedSpeedMs(elapsedSec) {
   return 8.33 + 2.78 * Math.sin(elapsedSec / 15)
 }
 
-// 경로(path)를 따라 distanceM만큼 간 지점의 측정값. 끝에 닿으면 처음부터 다시 돈다.
+// 경로 점(정류장)마다 출발점에서 경로를 따라 잰 거리
+export function pathStopDistances(path) {
+  const distances = [0]
+  for (let i = 0; i < (path?.length ?? 0) - 1; i++) {
+    distances.push(distances[i] + distanceMeters(path[i], path[i + 1]))
+  }
+  return distances
+}
+
+// 경로(path)를 따라 distanceM만큼 간 지점의 측정값. 편도 운행이라 종점에 닿으면 그 자리에 멈추고
+// finished: true, speed: 0 이 된다. (되돌아가거나 출발점으로 순간이동하면 학부모 지도에서
+// 버스가 거꾸로 가거나 튀어 보이기 때문)
 export function simulateFix(path, distanceM, speedMs, timestamp = Date.now()) {
   if (!Array.isArray(path) || path.length < 2) return null
-  const legs = []
-  let total = 0
-  for (let i = 0; i < path.length - 1; i++) {
-    const len = distanceMeters(path[i], path[i + 1])
-    legs.push({ from: path[i], to: path[i + 1], start: total, len })
-    total += len
-  }
+  const stops = pathStopDistances(path)
+  const total = stops[stops.length - 1]
   if (total <= 0) return null
-  const d = ((distanceM % total) + total) % total
-  const leg = legs.find((l) => d < l.start + l.len) ?? legs[legs.length - 1]
-  const t = leg.len > 0 ? (d - leg.start) / leg.len : 0
+  const finished = distanceM >= total
+  const d = Math.min(Math.max(distanceM, 0), total)
+  let i = stops.findIndex((s, k) => k < stops.length - 1 && d < stops[k + 1])
+  if (i === -1) i = path.length - 2
+  const len = stops[i + 1] - stops[i]
+  const t = len > 0 ? Math.min(1, (d - stops[i]) / len) : 0
+  const from = path[i]
+  const to = path[i + 1]
   return {
-    latitude: leg.from.latitude + (leg.to.latitude - leg.from.latitude) * t,
-    longitude: leg.from.longitude + (leg.to.longitude - leg.from.longitude) * t,
+    latitude: from.latitude + (to.latitude - from.latitude) * t,
+    longitude: from.longitude + (to.longitude - from.longitude) * t,
     accuracy: null,
     timestamp,
-    speed: speedMs,
+    speed: finished ? 0 : speedMs,
     speedSource: 'simulated',
-    heading: bearingDegrees(leg.from, leg.to),
+    heading: bearingDegrees(from, to),
+    finished,
   }
+}
+
+// 정류장 반경 안에서는 서행해서, 5초 간격 전송으로도 학부모 지도에 '도착'이 여러 번 찍히게 한다.
+// 반경은 지도 화면의 도착 판정(50m)과 같다. 12km/h(초속 3.33m)는 백엔드 비정상 정차 판정
+// (초속 3.0m 이하가 연속 두 번)보다 빨라서 정류장 서행이 정차로 잡히지 않는다.
+export const SIMULATION_STOP_ZONE_M = 50
+export const SIMULATION_STOP_ZONE_SPEED_MS = 12 / 3.6
+
+export function simulationSpeedAt(path, distanceM, elapsedSec) {
+  const nearStop = pathStopDistances(path).some((s) => Math.abs(distanceM - s) < SIMULATION_STOP_ZONE_M)
+  return nearStop ? SIMULATION_STOP_ZONE_SPEED_MS : simulatedSpeedMs(elapsedSec)
 }
