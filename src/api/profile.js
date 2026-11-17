@@ -5,7 +5,21 @@ export const profileAPI = {
         return apiCall('/api/users/me')
     },
 
-    updateMyProfile(data) {
+    updateMyProfile(data, imageFile = null) {
+        if (imageFile) {
+            const formData = new FormData()
+            formData.append(
+                'data',
+                new Blob([JSON.stringify(data)], { type: 'application/json' })
+            )
+            formData.append('profileImage', imageFile)
+
+            return apiCall('/api/users/me', {
+                method: 'PATCH',
+                body: formData,
+            })
+        }
+
         return apiCall('/api/users/me', {
             method: 'PATCH',
             body: JSON.stringify(data),

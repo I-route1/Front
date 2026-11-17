@@ -67,8 +67,16 @@ export function createApiClient({ baseUrl, storage = sessionStorage, fetcher = f
   return async function apiCall(path, options = {}) {
     const initialUser = user(), token = tokenOf(initialUser)
     const { timeoutMs, ...requestOptions } = options
-    const headers = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '69420',
-      ...(token ? { Authorization: 'Bearer ' + token } : {}), ...requestOptions.headers }
+
+    const isFormData = requestOptions.body instanceof FormData
+
+    const headers = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      'ngrok-skip-browser-warning': '69420',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      ...requestOptions.headers,
+    }
+
     return withDeadline(async signal => {
       const checkCurrent = () => {
         signal?.throwIfAborted()

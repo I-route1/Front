@@ -5,6 +5,7 @@ import BackButton from '../components/common/BackButton'
 import { studentAPI } from '@/api/student'
 import { profileAPI } from '@/api/profile'
 import { authAPI } from '@/api/auth'
+import { resolveProfileImageUrl, DEFAULT_PROFILE_IMAGE } from '@/utils/profileImage'
 
 export default function EditProfile() {
   const navigate = useNavigate()
@@ -90,11 +91,18 @@ export default function EditProfile() {
     nickname: user?.nickname ?? '',
     email: user?.email ?? '',
     phone: user?.phoneNumber ?? user?.phone ?? '',
+    profileImageUrl: user?.profileImageUrl ?? '',
     children: [],
     academyName: user?.academyName ?? '',
     academyAddress: user?.academyAddress ?? '',
     academies: normalizeAcademies(user),
   })
+
+  // 이미지 파일 업로드 및 미리보기 상태
+  const [selectedImageFile, setSelectedImageFile] = useState(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(
+      resolveProfileImageUrl(user?.profileImageUrl ?? '')
+  )
 
   // 내 원래 기존 정보 저장 (내 정보와 일치 여부 비교용)
   const [initialEmail, setInitialEmail] = useState('')
@@ -116,6 +124,13 @@ export default function EditProfile() {
           const fetchedEmail = userData.email ?? user?.email ?? ''
           const fetchedNickname = userData.nickname ?? userData.nickName ?? user?.nickname ?? ''
           const fetchedPhone = (userData.phoneNumber ?? userData.phone ?? user?.phoneNumber ?? user?.phone ?? '').replace(/\D/g, '')
+          const fetchedImageUrl =
+              userData.profileImageUrl ??
+              userData.profileImage ??
+              userData.imageUrl ??
+              userData.avatar ??
+              user?.profileImageUrl ??
+              ''
 
           setForm((prev) => ({
             ...prev,
@@ -123,7 +138,10 @@ export default function EditProfile() {
             nickname: fetchedNickname,
             email: fetchedEmail,
             phone: fetchedPhone,
+            profileImageUrl: fetchedImageUrl,
           }))
+
+          setImagePreviewUrl(resolveProfileImageUrl(fetchedImageUrl))
 
           // 기존 본인 정보 저장
           setInitialEmail(fetchedEmail)
@@ -164,7 +182,49 @@ export default function EditProfile() {
             setForm((prev) => ({ ...prev, children: [] }))
           })
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 선택한 로컬 이미지 파일 미리보기 생성 및 메모리 해제
+  useEffect(() => {
+    if (!selectedImageFile) return
+    const objectUrl = URL.createObjectURL(selectedImageFile)
+    setImagePreviewUrl(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [selectedImageFile])
+
+  const handleImageFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setErrors((prev) => ({
+        ...prev,
+        profileImage: 'jpg, jpeg, png, webp 형식의 이미지 파일만 업로드할 수 있습니다.',
+      }))
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setErrors((prev) => ({
+        ...prev,
+        profileImage: '이미지 크기는 10MB 이하만 가능합니다.',
+      }))
+      return
+    }
+
+    setErrors((prev) => ({ ...prev, profileImage: '', submit: '' }))
+    setSelectedImageFile(file)
+    // 같은 파일을 다시 선택할 수 있도록 input 값 초기화
+    e.target.value = ''
+  }
+
+  const handleResetToDefaultImage = () => {
+    setSelectedImageFile(null)
+    setForm((prev) => ({ ...prev, profileImageUrl: '' }))
+    setImagePreviewUrl(DEFAULT_PROFILE_IMAGE)
+    setErrors((prev) => ({ ...prev, profileImage: '', submit: '' }))
+  }
 
   const update = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -290,7 +350,6 @@ export default function EditProfile() {
     }))
   }
 
-  // [인증 요청] 버튼 클릭 시
   const handleSendEmailVerification = async () => {
     const email = form.email.trim()
 
@@ -299,7 +358,6 @@ export default function EditProfile() {
       return
     }
 
-    // 💡 내가 기존에 사용하던 이메일과 같으면 바로 인증 성공 처리
     if (email === initialEmail.trim()) {
       setIsEmailVerified(true)
       alert('현재 사용 중인 본인 이메일입니다.')
@@ -336,7 +394,6 @@ export default function EditProfile() {
     }
   }
 
-  // [인증 완료 확인] 버튼 클릭 시
   const handleCheckEmailStatus = async () => {
     try {
       if (authAPI?.checkEmailStatus) {
@@ -420,11 +477,10 @@ export default function EditProfile() {
         email: form.email.trim(),
         phone: form.phone.trim(),
         phoneNumber: formattedPhone,
+        profileImageUrl: form.profileImageUrl?.trim() ?? '',
       }
 
-      // 💡 내 기존 정보와 다를 때만 중복 검사 실행 (자신의 정보 중복 오인 방지!)
       if (profileAPI.checkDuplicate) {
-        // 닉네임이 기존 내 닉네임과 다를 때만 체크
         if (updated.nickname !== initialNickname) {
           const nickCheck = await profileAPI.checkDuplicate('nickname', updated.nickname)
           const isDup = nickCheck?.duplicate ?? nickCheck?.isDuplicate ?? nickCheck?.data?.duplicate
@@ -435,7 +491,6 @@ export default function EditProfile() {
           }
         }
 
-        // 전화번호가 기존 내 번호와 다를 때만 체크
         if (formattedPhone !== initialPhone) {
           const phoneCheck = await profileAPI.checkDuplicate('phoneNumber', formattedPhone)
           const isDup = phoneCheck?.duplicate ?? phoneCheck?.isDuplicate ?? phoneCheck?.data?.duplicate
@@ -448,12 +503,34 @@ export default function EditProfile() {
       }
 
       if (profileAPI.updateMyProfile) {
-        await profileAPI.updateMyProfile({
-          name: updated.name,
-          nickname: updated.nickname,
-          email: updated.email,
-          phoneNumber: updated.phoneNumber,
-        })
+        const profileRes = await profileAPI.updateMyProfile(
+            {
+              name: updated.name,
+              nickname: updated.nickname,
+              email: updated.email,
+              phoneNumber: updated.phoneNumber,
+              profileImageUrl: updated.profileImageUrl,
+            },
+            selectedImageFile
+        )
+
+        const savedProfile = profileRes?.data ?? profileRes ?? {}
+
+        if (updated.profileImageUrl === '' && !selectedImageFile) {
+          updated.profileImageUrl = ''
+          updated.avatar = ''
+        } else {
+          const newImageUrl =
+              savedProfile.profileImageUrl ??
+              savedProfile.profileImage ??
+              savedProfile.imageUrl ??
+              savedProfile.avatar
+
+          if (newImageUrl) {
+            updated.profileImageUrl = newImageUrl
+            updated.avatar = newImageUrl
+          }
+        }
       }
 
       if (user?.role === USER_ROLES.PARENT) {
@@ -509,7 +586,6 @@ export default function EditProfile() {
       const formattedPhone = form.phone.replace(/\D/g, '')
 
       if (errorMsg.includes('Duplicate entry')) {
-        // 기존 내 닉네임/전화번호가 아닐 때에만 에러 출력
         if (errorMsg.includes(`'${form.nickname.trim()}'`) && form.nickname.trim() !== initialNickname) {
           setErrors((prev) => ({ ...prev, nickname: '이미 사용 중인 닉네임입니다.' }))
         } else if (errorMsg.includes(`'${formattedPhone}'`) && formattedPhone !== initialPhone) {
@@ -539,6 +615,86 @@ export default function EditProfile() {
           </div>
 
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <Field label="프로필 이미지" error={errors.profileImage}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div
+                    style={{
+                      width: 84,
+                      height: 84,
+                      borderRadius: '50%',
+                      overflow: 'hidden',
+                      background: '#DBEAFE',
+                      border: '1px solid var(--color-border)',
+                      flexShrink: 0,
+                    }}
+                >
+                  <img
+                      src={imagePreviewUrl || DEFAULT_PROFILE_IMAGE}
+                      alt="프로필 미리보기"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null
+                        e.currentTarget.src = DEFAULT_PROFILE_IMAGE
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '9px 14px',
+                          borderRadius: 10,
+                          background: 'var(--color-primary-light)',
+                          color: 'var(--color-primary)',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                    >
+                      사진 선택
+                      <input
+                          type="file"
+                          accept="image/jpeg, image/png, image/webp"
+                          onChange={handleImageFileChange}
+                          style={{ display: 'none' }}
+                      />
+                    </label>
+
+                    {(selectedImageFile || form.profileImageUrl) && (
+                        <button
+                            type="button"
+                            onClick={handleResetToDefaultImage}
+                            style={{
+                              padding: '9px 12px',
+                              borderRadius: 10,
+                              background: '#F1F5F9',
+                              color: '#475569',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              border: '1px solid var(--color-border)',
+                              cursor: 'pointer',
+                            }}
+                        >
+                          기본 이미지
+                        </button>
+                    )}
+                  </div>
+
+                  <p style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                    {selectedImageFile ? selectedImageFile.name : 'JPG, PNG, WEBP (최대 10MB)'}
+                  </p>
+                </div>
+              </div>
+            </Field>
+
             <Field label="닉네임" error={errors.nickname}>
               <input className="input-field" value={form.nickname} onChange={(e) => update('nickname', e.target.value)} placeholder="닉네임을 입력해 주세요" />
             </Field>
@@ -547,7 +703,6 @@ export default function EditProfile() {
               <input className="input-field" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="이름을 입력해 주세요" />
             </Field>
 
-            {/* 💡 이메일 입력 및 상시 [인증 요청] 버튼 */}
             <Field label="이메일" error={errors.email}>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input

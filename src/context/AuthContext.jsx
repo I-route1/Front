@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { authAPI } from '@/api'
+import { profileAPI } from '@/api/profile'
 
 export const USER_ROLES = {
   PARENT: 'PARENT',
@@ -43,7 +44,7 @@ export function getDefaultRoute(role) {
   if ([USER_ROLES.ACADEMY, USER_ROLES.TEACHER, USER_ROLES.ADMIN].includes(r)) {
     return '/admin/learning'
   }
-  if (r === USER_ROLES.DRIVER) return '/driver/map'
+  if (r === USER_ROLES.DRIVER) return '/map'
   return '/home'
 }
 
@@ -137,40 +138,66 @@ export function AuthProvider({ children }) {
       try {
         const parsed = JSON.parse(saved)
         setUser(parsed)
+
+        if (parsed.token) {
+          profileAPI
+              .getMyProfile()
+              .then((profile) => {
+                if (!profile) return
+                setUser((prev) => {
+                  if (!prev) return prev
+                  const merged = {
+                    ...prev,
+                    name: profile.name ?? prev.name,
+                    nickname: profile.nickname ?? prev.nickname,
+                    email: profile.email ?? prev.email,
+                    phone: profile.phoneNumber ?? prev.phone,
+                    profileImageUrl: profile.profileImageUrl ?? prev.profileImageUrl ?? null,
+                  }
+                  sessionStorage.setItem('i-route-user', JSON.stringify(merged))
+                  return merged
+                })
+              })
+              .catch(() => {})
+        }
+
         // 학부모 계정이면 자녀 목록을 최신 데이터로 갱신
         if (normalizeRole(parsed.role) === USER_ROLES.PARENT && parsed.token) {
           fetch(`${BASE_URL}/api/students/my-children`, {
             headers: { Authorization: `Bearer ${parsed.token}` },
           })
-            .then(res => res.ok ? res.json() : [])
-            .then(childrenData => {
-              const updatedUser = {
-                ...parsed,
-                children: (Array.isArray(childrenData) ? childrenData : []).map(c => ({
-                  id: c.studentId,
-                  studentId: c.studentId,
-                  name: c.name,
-                  gradeStudentId: c.gradeStudentId,
-                  grade: c.grade ?? '',
-                  academyId: c.academyId,
-                  academyName: c.academyName,
-                  busId: c.busId ?? null,
-                  routeStopId: c.routeStopId ?? null,
-                  academies: Array.isArray(c.academies) ? c.academies.map(a => ({
-                    id: a.id,
-                    code: a.code,
-                    name: a.name,
-                  })) : [],
-                })),
-              }
-              setUser(updatedUser)
-              sessionStorage.setItem('i-route-user', JSON.stringify(updatedUser))
-            })
-            .catch(() => {})
+              .then(res => res.ok ? res.json() : [])
+              .then(childrenData => {
+                  setUser((prev) => {
+                      const base = prev ?? parsed
+                      const updatedUser = {
+                          ...base,
+                          children: (Array.isArray(childrenData) ? childrenData : []).map(c => ({
+                              id: c.studentId,
+                              studentId: c.studentId,
+                              name: c.name,
+                              gradeStudentId: c.gradeStudentId,
+                              grade: c.grade ?? '',
+                              academyId: c.academyId,
+                              academyName: c.academyName,
+                              busId: c.busId ?? null,
+                              routeStopId: c.routeStopId ?? null,
+                              academies: Array.isArray(c.academies) ? c.academies.map(a => ({
+                                  id: a.id,
+                                  code: a.code,
+                                  name: a.name,
+                              })) : [],
+                          })),
+                      }
+                      sessionStorage.setItem('i-route-user', JSON.stringify(updatedUser))
+                      return updatedUser
+                  })
+              })
+              .catch(() => {})
         }
       } catch { sessionStorage.removeItem('i-route-user') }
     }
-    setLoading(false)
+      setLoading(false)
   }, [])
 
   const saveUser = (u) => {

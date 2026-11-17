@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { studentAPI } from '@/api'
+import { resolveProfileImageUrl, DEFAULT_PROFILE_IMAGE } from '@/utils/profileImage'
 
 const ROLE_LABEL = {
     [USER_ROLES.PARENT]: '학부모',
@@ -166,9 +167,14 @@ export default function Profile() {
         }
     }
 
-    // 💡 아바타 또는 닉네임/이름의 첫 글자 추출
     const displayName = user?.nickname ?? user?.name ?? '사용자'
+    const avatarSrc = resolveProfileImageUrl(user?.profileImageUrl ?? user?.avatar)
     const displayInitial = displayName[0] ?? '?'
+    const [imgLoadError, setImgLoadError] = useState(false)
+
+    useEffect(() => {
+        setImgLoadError(false)
+    }, [user?.profileImageUrl, user?.avatar])
 
     return (
         <div>
@@ -187,30 +193,25 @@ export default function Profile() {
                             width: 64,
                             height: 64,
                             borderRadius: '50%',
-                            background: 'rgba(255,255,255,0.2)',
+                            background: '#E2E8F0',
                             border: '2.5px solid rgba(255,255,255,0.4)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 28,
-                            fontWeight: 700,
                             overflow: 'hidden',
                             flexShrink: 0,
                         }}
                     >
-                        {user?.avatar ? (
-                            <img
-                                src={user.avatar}
-                                alt={displayName}
-                                style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'cover',
-                                }}
-                            />
-                        ) : (
-                            displayInitial
-                        )}
+                        <img
+                            src={avatarSrc}
+                            alt={displayName}
+                            onError={(e) => {
+                                e.currentTarget.onerror = null
+                                e.currentTarget.src = DEFAULT_PROFILE_IMAGE
+                            }}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                            }}
+                        />
                     </div>
 
                     <div>
