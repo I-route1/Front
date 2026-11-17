@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {
   todayString, timeOfDay, updatedAgo, latestRecord, rideState, describeRide, attendanceToast,
   findChildEta, delayNotice, locationErrorMessage, routeFromResponse, progressStatuses, routePaths,
-  simulationPathFromRoute, progressAlongRoute,
+  simulationPathFromRoute, progressAlongRoute, offRouteMeters, OFF_ROUTE_M, formatDistance,
+  describeNextStop, signalLostSeconds, describeSignalLoss,
 } from '../src/utils/mapStatus.js'
 import { distanceMeters } from '../src/utils/gpsTracking.js'
 
@@ -171,6 +172,58 @@ test('노선 위 진행 거리: 출발 전, 노선 위, 종점 너머', () => {
   assert.deepEqual(progressStatuses(testRouteStations.slice(0, 1), STOP_A).map((s) => s.status), ['ARRIVED'])
 })
 
+test('노선에서 100m 넘게 벗어나면 어떤 정류장도 통과로 보지 않는다 (백엔드와 같은 규칙)', () => {
+  assert.equal(OFF_ROUTE_M, 100)
+  const mid = busAt(300)
+  // 노선 방향에 수직으로 비켜난 지점 (stop-A→B 방향을 90° 돌린 방향)
+  const beside = (meters) => {
+    const dLat = STOP_B.latitude - STOP_A.latitude, dLng = STOP_B.longitude - STOP_A.longitude
+    const len = distanceMeters(STOP_A, STOP_B)
+    return { latitude: mid.latitude + (dLng * Math.cos(STOP_A.latitude * Math.PI / 180)) * meters / len,
+      longitude: mid.longitude - (dLat / Math.cos(STOP_A.latitude * Math.PI / 180)) * meters / len }
+  }
+  const status = (bus) => progressStatuses(testRouteStations, bus).map((s) => s.status)
+  near(progressAlongRoute(testRouteStations, beside(90)).offRoute, 90, 3)
+  assert.deepEqual(status(beside(90)), ['PASSED', 'BEFORE_ARRIVAL'], '90m 옆은 노선 위로 본다')
+  assert.equal(offRouteMeters(progressAlongRoute(testRouteStations, beside(90))), null)
+  assert.deepEqual(status(beside(150)), ['BEFORE_ARRIVAL', 'BEFORE_ARRIVAL'], '150m 옆은 이탈')
+  near(offRouteMeters(progressAlongRoute(testRouteStations, beside(150))), 150, 3)
+  // 어제 화면 캡처 상황: 노선에서 약 3km 떨어진 버스 → 예전에는 둘 다 '통과'였다
+  const far = { latitude: 35.8745, longitude: 128.6041 }
+  assert.deepEqual(status(far), ['BEFORE_ARRIVAL', 'BEFORE_ARRIVAL'])
+  assert.ok(offRouteMeters(progressAlongRoute(testRouteStations, far)) > 3000)
+})
+
+test('상단 바 문구: 정류장 도착 또는 다음 정류장까지 노선 위 남은 거리', () => {
+  const describe = (bus) => describeNextStop(progressStatuses(testRouteStations, bus), progressAlongRoute(testRouteStations, bus))
+  assert.equal(describe(busAt(0)), 'stop-A 도착')
+  assert.equal(describe(busAt(93)), '다음 정류장 stop-B · 약 620m') // 709 - 93 = 616m
+  assert.equal(describe(busAt(680)), 'stop-B 도착')
+  assert.equal(describe({ latitude: 35.8745, longitude: 128.6041 }), null, '노선 이탈 중에는 다음 정류장을 말하지 않는다')
+  const beyond = { latitude: STOP_B.latitude + 0.00072 * 0.45, longitude: STOP_B.longitude + 0.00072 * 0.95 }
+  assert.equal(describe(beyond), '마지막 정류장 통과')
+  assert.equal(describeNextStop([], null), null)
+})
+
+test('거리 표시', () => {
+  assert.equal(formatDistance(616), '620m')
+  assert.equal(formatDistance(3), '10m')
+  assert.equal(formatDistance(1234), '1.2km')
+  assert.equal(formatDistance(3081), '3.1km')
+  assert.equal(formatDistance(null), '-')
+})
+
+test('위치 신호 끊김: 30초 넘게 수신이 없으면 안내, 10분이 넘으면 운행 종료 가능성', () => {
+  const now = new Date('2026-11-17T12:00:00').getTime()
+  assert.equal(signalLostSeconds('2026-11-17T11:59:35', now), null, '25초는 정상 (5초 주기 + 여유)')
+  assert.equal(signalLostSeconds('2026-11-17T11:59:15', now), 45)
+  assert.equal(signalLostSeconds(null, now), null)
+  assert.equal(describeSignalLoss(45), '위치 신호가 45초째 없어요. 마지막 위치를 보여드려요')
+  assert.equal(describeSignalLoss(125), '위치 신호가 2분째 없어요. 마지막 위치를 보여드려요')
+  assert.equal(describeSignalLoss(700), '10분 넘게 위치 신호가 없어요. 운행이 끝났을 수 있어요')
+  assert.equal(describeSignalLoss(null), null)
+})
+
 test('정류장 상태 갱신: 정류장 근처는 도착, 지나온 정류장은 통과', () => {
   const { stations } = routeFromResponse(routeResponse)
   // 두 번째 정류장(푸르지오) 바로 옆 (약 10m)
@@ -184,14 +237,25 @@ test('정류장 상태 갱신: 정류장 근처는 도착, 지나온 정류장�
   assert.deepEqual(progressStatuses([], { latitude: 1, longitude: 1 }), [])
 })
 
-test('지도 선: 지나온 구간과 남은 구간이 버스 위치에서 만난다', () => {
-  const stations = progressStatuses(routeFromResponse(routeResponse).stations, { latitude: 35.8734, longitude: 128.6032 })
+test('지도 선: 노선 위 지점에서 나뉘고, 버스 쪽으로 선을 잇지 않는다', () => {
+  const raw = routeFromResponse(routeResponse).stations
   const bus = { latitude: 35.8734, longitude: 128.6032 }
+  const stations = progressStatuses(raw, bus)
   const { passed, remaining } = routePaths(stations, bus)
-  assert.equal(passed.length, 3) // 유치원, 푸르지오, 버스
-  assert.deepEqual(passed[passed.length - 1], bus)
-  assert.deepEqual(remaining[0], bus)
-  assert.equal(remaining.length, 2) // 버스, 계양네거리
+  assert.equal(passed.length, 3) // 유치원, 푸르지오, 나뉘는 지점
+  assert.equal(remaining.length, 2) // 나뉘는 지점, 계양네거리
+  const split = passed[passed.length - 1]
+  assert.deepEqual(remaining[0], split)
+  // 나뉘는 지점은 버스가 아니라 노선(푸르지오~계양네거리 선) 위에 있다
+  const p = progressAlongRoute(raw, bus)
+  near(distanceMeters(split, bus), p.offRoute, 1)
+  near(distanceMeters(raw[1], split) + distanceMeters(split, raw[2]), distanceMeters(raw[1], raw[2]), 0.5)
+
+  // 노선에서 멀리 벗어나 있으면 지나온 구간 없이 노선 전체를 남은 구간으로 그린다
+  const far = { latitude: 35.8745 + 0.02, longitude: 128.6041 }
+  const offPaths = routePaths(progressStatuses(raw, far), far)
+  assert.deepEqual(offPaths.passed, [])
+  assert.equal(offPaths.remaining.length, 3)
 
   const before = routePaths(routeFromResponse(routeResponse).stations, null)
   assert.equal(before.passed.length, 1)

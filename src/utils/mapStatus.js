@@ -137,6 +137,8 @@ export function simulationPathFromRoute(route) {
 
 // 정류장 반경(m). 백엔드 RouteProgressService.ARRIVAL_RADIUS_METER와 같은 값
 const ARRIVAL_RADIUS_M = 50
+// 노선 이탈 기준(m). 백엔드 RouteProgressService.ROUTE_DEVIATION_METER, RouteDeviationService와 같은 값
+export const OFF_ROUTE_M = 100
 const EARTH_RADIUS_M = 6371000
 
 // 기준점(origin)에서 본 평면 좌표(m). 정류장 사이 수백 m 범위라 평면으로 봐도 오차가 작다.
@@ -149,7 +151,9 @@ function toLocalXY(origin, p) {
 }
 
 // 노선 위 진행 거리: 버스 위치를 정류장을 잇는 선에 투영해 출발 정류장에서 몇 m 왔는지 구한다.
-// along이 음수면 출발 정류장 앞, 마지막 정류장까지 거리보다 크면 종점을 지난 것.
+// - along: 음수면 출발 정류장 앞, 마지막 정류장까지 거리보다 크면 종점을 지난 것
+// - offRoute: 노선 선(구간)까지의 거리. 노선 끝의 연장선이 아니라 실제 구간까지 잰다
+// - point: 노선 위에서 버스와 가장 가까운 지점 (지도 선을 나누는 곳)
 export function progressAlongRoute(stations, bus) {
   if (!Array.isArray(stations) || stations.length < 2) return null
   if (!bus || !isFiniteNumber(bus.latitude) || !isFiniteNumber(bus.longitude)) return null
@@ -171,38 +175,88 @@ export function progressAlongRoute(stations, bus) {
   let along = best.start + best.t * best.len
   if (best.i === 0 && best.rawT < 0) along = best.rawT * best.len
   if (best.i === lastLeg && best.rawT > 1) along = best.start + best.rawT * best.len
-  return { along, stopDistances, offRoute: best.offRoute }
+  const from = stations[best.i]
+  const to = stations[best.i + 1]
+  const point = {
+    latitude: from.latitude + (to.latitude - from.latitude) * best.t,
+    longitude: from.longitude + (to.longitude - from.longitude) * best.t,
+  }
+  return { along, stopDistances, offRoute: best.offRoute, point }
 }
 
-// 버스 위치가 바뀔 때마다 서버에 다시 묻지 않고 정류장 상태를 갱신한다.
-// 50m 이내 → ARRIVED, 버스가 이미 지나온 정류장 → PASSED, 나머지 → BEFORE_ARRIVAL
-// '지나온 정류장'은 노선 위 진행 거리로 판단한다. 백엔드 RouteProgressService는
-// '가장 가까운 정류장보다 앞 순서'로 판단해서, 정류장을 떠난 뒤 다음 정류장과의 중간을 넘을 때까지
-// 방금 지난 정류장을 통과로 표시하지 못한다.
+// 버스가 노선에서 OFF_ROUTE_M보다 멀리 떨어져 있으면 그 거리(m), 아니면 null
+export function offRouteMeters(progress) {
+  return progress && progress.offRoute > OFF_ROUTE_M ? progress.offRoute : null
+}
+
+// 버스 위치가 바뀔 때마다 서버에 다시 묻지 않고 정류장 상태를 갱신한다. (백엔드 RouteProgressService와 같은 규칙)
+// - 노선에서 100m 넘게 벗어나 있으면 진행 거리를 믿을 수 없으므로 어떤 정류장도 통과로 보지 않는다
+// - 50m 이내 → ARRIVED, 노선 위 진행 거리로 이미 지나온 정류장 → PASSED, 나머지 → BEFORE_ARRIVAL
 export function progressStatuses(stations, bus) {
   if (!Array.isArray(stations) || stations.length === 0) return []
   if (!bus || !isFiniteNumber(bus.latitude) || !isFiniteNumber(bus.longitude)) return stations
   const progress = progressAlongRoute(stations, bus)
+  const offRoute = offRouteMeters(progress) !== null
   return stations.map((s, i) => {
+    if (offRoute) return { ...s, status: 'BEFORE_ARRIVAL' }
     if (distanceMeters(bus, s) <= ARRIVAL_RADIUS_M) return { ...s, status: 'ARRIVED' }
     if (progress && progress.stopDistances[i] < progress.along) return { ...s, status: 'PASSED' }
     return { ...s, status: 'BEFORE_ARRIVAL' }
   })
 }
 
-// 지도에 그릴 선: 지나온 구간(회색)과 남은 구간(파랑). 버스 위치가 있으면 두 선이 버스에서 만난다.
+// 거리 표시: 1km 미만은 10m 단위, 그 이상은 0.1km 단위
+export function formatDistance(meters) {
+  if (!isFiniteNumber(meters) || meters < 0) return '-'
+  if (meters < 1000) return `${Math.max(10, Math.round(meters / 10) * 10)}m`
+  return `${(meters / 1000).toFixed(1)}km`
+}
+
+// 상단 바 오른쪽 문구: 정류장에 있으면 'stop-B 도착', 아니면 다음 정류장과 노선 위 남은 거리.
+// stations는 progressStatuses 결과, progress는 같은 정류장 순서로 구한 progressAlongRoute 결과
+export function describeNextStop(stations, progress) {
+  if (!Array.isArray(stations) || stations.length === 0) return null
+  const arrived = stations.find((s) => s.status === 'ARRIVED')
+  if (arrived) return `${arrived.name} 도착`
+  if (!progress || offRouteMeters(progress) !== null) return null
+  const nextIndex = stations.findIndex((s) => s.status === 'BEFORE_ARRIVAL')
+  if (nextIndex === -1) return '마지막 정류장 통과'
+  const remaining = progress.stopDistances[nextIndex] - progress.along
+  return `다음 정류장 ${stations[nextIndex].name} · 약 ${formatDistance(Math.max(0, remaining))}`
+}
+
+// 위치 신호 끊김 안내 문구. 서버가 마지막 위치를 10분 보관하므로 그 뒤에는 운행 종료 가능성을 알린다
+export function describeSignalLoss(seconds) {
+  if (!isFiniteNumber(seconds)) return null
+  if (seconds >= 600) return '10분 넘게 위치 신호가 없어요. 운행이 끝났을 수 있어요'
+  const elapsed = seconds < 60 ? `${seconds}초` : `${Math.floor(seconds / 60)}분`
+  return `위치 신호가 ${elapsed}째 없어요. 마지막 위치를 보여드려요`
+}
+
+// 위치 신호 끊김: 마지막 수신이 thresholdMs보다 오래됐으면 지난 초, 아니면 null
+export function signalLostSeconds(updatedAt, now = Date.now(), thresholdMs = 30_000) {
+  if (!updatedAt) return null
+  const t = new Date(updatedAt).getTime()
+  if (!Number.isFinite(t)) return null
+  const elapsed = now - t
+  return elapsed > thresholdMs ? Math.floor(elapsed / 1000) : null
+}
+
+// 지도에 그릴 선: 지나온 구간(회색)과 남은 구간(파랑). 선은 항상 노선(정류장을 잇는 선) 위에만 그리고,
+// 버스와 가장 가까운 노선 위 지점에서 나눈다. 버스가 노선을 벗어나 있으면 버스 쪽으로 선을 잇지 않는다.
 export function routePaths(stations, bus) {
   const point = (s) => ({ latitude: s.latitude, longitude: s.longitude })
   const list = Array.isArray(stations) ? stations : []
   const passed = list.filter((s) => s.status === 'PASSED').map(point)
   const rest = list.filter((s) => s.status !== 'PASSED').map(point)
   const hasBus = bus && isFiniteNumber(bus.latitude) && isFiniteNumber(bus.longitude)
-  if (!hasBus) {
+  const progress = hasBus ? progressAlongRoute(list, bus) : null
+  const split = progress && offRouteMeters(progress) === null ? progress.point : null
+  if (!split) {
     return { passed, remaining: passed.length ? [passed[passed.length - 1], ...rest] : rest }
   }
-  const busPoint = point(bus)
   return {
-    passed: passed.length ? [...passed, busPoint] : [],
-    remaining: [busPoint, ...rest],
+    passed: passed.length ? [...passed, split] : [],
+    remaining: [split, ...rest],
   }
 }
