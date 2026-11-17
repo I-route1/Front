@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getBusRoute, sendGpsLocation } from '../services/gpsService'
 import {
-  buildGpsPayload, createFixTracker, formatKmh, msToKmh, simulateFix, simulationSpeedAt,
+  buildGpsPayload, createFixTracker, fixAgeMs, formatKmh, isFixStale, msToKmh, simulateFix, simulationSpeedAt,
 } from '../utils/gpsTracking'
 import { simulationPathFromRoute } from '../utils/mapStatus'
 
@@ -73,6 +73,7 @@ export default function DriverMapPage({ busId = 1 }) {
 
   useEffect(() => { setRoutePath(null) }, [busId])
   const sendingRef = useRef(false)
+  const gpsErrorAtRef = useRef(null) // 마지막 측정 뒤 GPS 오류가 난 시각 (정상 측정이 오면 지운다)
 
   const updateFix = (next) => {
     if (!next) return
@@ -83,6 +84,7 @@ export default function DriverMapPage({ busId = 1 }) {
   // 1) 위치 측정: 실제 GPS(watchPosition) 또는 시뮬레이션
   useEffect(() => {
     latestFixRef.current = null
+    gpsErrorAtRef.current = null
     setFix(null)
     setGpsError(null)
 
@@ -95,9 +97,13 @@ export default function DriverMapPage({ busId = 1 }) {
       const watchId = navigator.geolocation.watchPosition(
         (position) => {
           updateFix(track(position))
+          gpsErrorAtRef.current = null
           setGpsError(null)
         },
-        (err) => setGpsError(geolocationErrorMessage(err)),
+        (err) => {
+          gpsErrorAtRef.current = Date.now()
+          setGpsError(geolocationErrorMessage(err))
+        },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
       )
       return () => navigator.geolocation.clearWatch(watchId)
@@ -136,6 +142,12 @@ export default function DriverMapPage({ busId = 1 }) {
       const payload = buildGpsPayload(busId, fix)
       if (!payload) {
         setSendState({ status: 'waiting', message: '위치를 받는 중입니다...' })
+        return
+      }
+      // GPS 신호가 끊겨 새 위치가 안 오면 마지막 위치를 다시 보내지 않고 기다린다
+      if (isFixStale(fix, Date.now(), { errorAt: gpsErrorAtRef.current })) {
+        const seconds = Math.round(fixAgeMs(fix) / 1000)
+        setSendState({ status: 'waiting', message: `GPS 신호를 기다리는 중이에요 (마지막 위치 ${seconds}초 전)` })
         return
       }
       sendingRef.current = true

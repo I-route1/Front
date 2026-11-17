@@ -4,8 +4,21 @@ import {
   MS_TO_KMH, msToKmh, formatKmh, distanceMeters, bearingDegrees, normalizeHeading,
   estimateSpeedMs, fixFromPosition, createFixTracker, MIN_ESTIMATE_BASELINE_MS,
   buildGpsPayload, simulatedSpeedMs, simulateFix, pathStopDistances, simulationSpeedAt,
-  SIMULATION_STOP_ZONE_M, SIMULATION_STOP_ZONE_SPEED_MS,
+  SIMULATION_STOP_ZONE_M, SIMULATION_STOP_ZONE_SPEED_MS, isFixStale, fixAgeMs, STALE_FIX_MS,
 } from '../src/utils/gpsTracking.js'
+
+test('GPS 신호가 끊긴 뒤의 오래된 위치는 다시 보내지 않는다', () => {
+  const now = 1_000_000
+  const fix = { ...A, speed: 8, timestamp: now - 5_000 }
+  assert.equal(fixAgeMs(fix, now), 5_000)
+  assert.equal(isFixStale(fix, now), false, '5초 전 위치는 정상')
+  assert.equal(STALE_FIX_MS, 30_000)
+  assert.equal(isFixStale({ ...fix, timestamp: now - 20_000 }, now), false, '정차 중 갱신이 뜸해도 30초까지는 보낸다')
+  assert.equal(isFixStale({ ...fix, timestamp: now - 31_000 }, now), true, '30초 넘게 새 위치가 없으면 멈춘다')
+  assert.equal(isFixStale(fix, now, { errorAt: now - 1_000 }), true, '마지막 위치 뒤에 GPS 오류가 났으면 바로 멈춘다')
+  assert.equal(isFixStale(fix, now, { errorAt: now - 9_000 }), false, '오류 뒤에 새 위치가 들어왔으면 정상')
+  assert.equal(isFixStale(null, now, { errorAt: now }), false)
+})
 
 const near = (actual, expected, tol, msg) =>
   assert.ok(Math.abs(actual - expected) <= tol, `${msg ?? ''} expected ${expected}±${tol}, got ${actual}`)

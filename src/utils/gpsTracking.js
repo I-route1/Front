@@ -119,6 +119,24 @@ export function createFixTracker() {
   }
 }
 
+// 측정값이 오래됐는지 (GPS 신호가 끊기면 새 측정이 오지 않는다).
+// 오래된 위치를 계속 보내면 서버에는 버스가 같은 자리에서 마지막 속도로 계속 달리는 것처럼 들어간다.
+// - 마지막 측정 뒤에 GPS 오류(신호 없음·시간 초과)가 났으면 바로 오래된 것으로 본다
+// - 오류가 없어도 STALE_FIX_MS 동안 새 측정이 없으면 오래된 것으로 본다.
+//   정차 중에는 위치 갱신을 드물게 주는 기기가 있어서 짧게 잡지 않는다 (신호등 대기 중 전송이 멈추지 않게)
+export const STALE_FIX_MS = 30_000
+
+export function fixAgeMs(fix, now = Date.now()) {
+  return fix && isFiniteNumber(fix.timestamp) ? now - fix.timestamp : null
+}
+
+export function isFixStale(fix, now = Date.now(), { maxAgeMs = STALE_FIX_MS, errorAt = null } = {}) {
+  const age = fixAgeMs(fix, now)
+  if (age === null) return false
+  if (isFiniteNumber(errorAt) && errorAt >= fix.timestamp) return true
+  return age > maxAgeMs
+}
+
 // 측정값 → POST /api/gps/locations 요청 본문.
 // 백엔드 검증(모두 @NotNull, 위도 ±90, 경도 ±180, speed ≥ 0, heading 0~360)을 항상 통과하도록 맞춘다.
 export function buildGpsPayload(busId, fix) {

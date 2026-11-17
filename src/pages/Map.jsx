@@ -9,8 +9,9 @@ import { useAuth, USER_ROLES, normalizeRole } from '@/context/AuthContext'
 import BackButton from '../components/common/BackButton'
 import { formatKmh } from '../utils/gpsTracking'
 import {
-  attendanceToast, delayNotice, describeRide, findChildEta, locationErrorMessage,
-  progressStatuses, rideState, routeFromResponse, routePaths, timeOfDay, todayString, updatedAgo,
+  attendanceToast, delayNotice, describeNextStop, describeRide, describeSignalLoss, findChildEta,
+  formatDistance, locationErrorMessage, offRouteMeters, progressAlongRoute, progressStatuses, rideState,
+  routeFromResponse, routePaths, signalLostSeconds, timeOfDay, todayString, updatedAgo,
 } from '../utils/mapStatus'
 
 // 노선을 받기 전 지도 중심 (대구 중구 시청 부근)
@@ -112,17 +113,19 @@ export default function Map() {
 
   const isRunning = busLocation !== null
   const stations = useMemo(() => progressStatuses(route.stations, busLocation), [route.stations, busLocation])
+  const progress = useMemo(() => progressAlongRoute(route.stations, busLocation), [route.stations, busLocation])
+  const offRoute = offRouteMeters(progress) // 노선에서 100m 넘게 벗어나 있으면 그 거리(m)
+  const signalLoss = isRunning ? describeSignalLoss(signalLostSeconds(updatedAt, now)) : null
   const childEta = findChildEta(etas, childStudentId)
   const childStopId = selectedChild?.routeStopId ?? childEta?.stopId ?? null
   const childStop = stations.find(s => String(s.stopId) === String(childStopId)) ?? null
   const ride = describeRide(rideState({ records: attendance, studentId: childStudentId, onBoard }), childName)
   const notice = delayNotice(childEta)
-  const nearStop = stations.find(s => s.status === 'ARRIVED') ?? stations.find(s => s.status === 'BEFORE_ARRIVAL') ?? null
   const statusRight = !isRunning
     ? '운행 전'
     : childEta
       ? `우리 아이 정류장까지 ${childEta.etaMinutes}분`
-      : nearStop ? `${nearStop.name} 부근` : '운행 중'
+      : offRoute !== null ? '노선 이탈' : (describeNextStop(stations, progress) ?? '운행 중')
 
   // 상단 바에 뒤로가기 버튼
   useEffect(() => {
@@ -180,6 +183,13 @@ export default function Map() {
       routeLoadingRef.current = false
     }
   }, [busId])
+
+  // 실시간 연결이 끊겼다 다시 붙었을 때: 끊긴 동안의 위치는 다시 오지 않으므로 현재 위치를 한 번 조회한다
+  const refreshLocation = useCallback(() => {
+    getBusCurrentLocation(busId)
+      .then(data => { if (data?.latitude) applyLocation(data) })
+      .catch(err => setLocationError(locationErrorMessage(err)))
+  }, [busId, applyLocation])
 
   // 버스가 바뀌면 처음부터 다시 받는다
   useEffect(() => {
@@ -242,6 +252,7 @@ export default function Map() {
   // 실시간: 버스 위치 + (학부모 계정이면) 자녀 승하차
   useEffect(() => {
     let active = true // 화면을 떠나며 끊는 건 '재연결 중'으로 보이지 않게
+    let connectedBefore = false
     const client = new Client({
       brokerURL: import.meta.env.VITE_WS_URL,
       reconnectDelay: 5000,
@@ -249,6 +260,8 @@ export default function Map() {
       heartbeatOutgoing: 4000,
       onConnect: () => {
         setWsState('connected')
+        if (connectedBefore) refreshLocation()
+        connectedBefore = true
         client.subscribe(`/topic/bus/${busId}`, (message) => {
           try {
             applyLocation(JSON.parse(message.body))
@@ -280,7 +293,7 @@ export default function Map() {
       active = false
       client.deactivate()
     }
-  }, [busId, parentId, applyLocation])
+  }, [busId, parentId, applyLocation, refreshLocation])
 
   // 승하차 안내는 잠깐만 보여준다
   useEffect(() => {
@@ -402,6 +415,8 @@ export default function Map() {
 
         {toast && <Banner kind="info">{toast}</Banner>}
         {notice && <Banner kind={notice.level}>{notice.text}</Banner>}
+        {offRoute !== null && <Banner kind="warn">버스가 노선에서 약 {formatDistance(offRoute)} 벗어나 있어요</Banner>}
+        {signalLoss && <Banner kind="muted">{signalLoss}</Banner>}
         {wsState === 'reconnecting' && <Banner kind="muted">실시간 연결이 끊겨 다시 연결하고 있어요</Banner>}
         {!isRunning && locationError && <Banner kind="muted">{locationError}</Banner>}
 
