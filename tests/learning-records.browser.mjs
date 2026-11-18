@@ -158,6 +158,84 @@ async function openPage(options = {}) {
   return { page, context, state, errors }
 }
 
+test('AI 질문은 안내와 교과 답변을 구분하고 안내 뒤 원문을 고쳐 다시 물을 수 있다', async () => {
+  const { page, context, errors } = await openPage()
+  try {
+    const followups = [
+      { needSubject: true },
+      { answerKind: 'clarification', answer: '문제의 지문과 보기를 적어 주세요.' },
+      { answerKind: 'out_of_scope', answer: '매장의 실시간 재고는 확인할 수 없어요.' },
+      { answerKind: 'answer', answer: '3 × 4 = 12개입니다.', grounded: true },
+      { answer: '하루는 24시간입니다.', grounded: false },
+    ]
+    let count = 0
+    await page.route('**/api/ai/ask', route => route.fulfill({ json: {
+      ...route.request().postDataJSON(), ...followups[count++],
+    } }))
+    await page.goto(BASE + '/learning?tab=ask')
+    const input = page.getByRole('textbox', { name: '학습 질문' })
+    const submit = page.getByRole('button', { name: '질문하기', exact: true })
+    const guidance = page.locator('#ask-guidance')
+    await input.fill('이게 왜 그런가요?')
+    await submit.click()
+    await guidance.getByText(/과목을 고른 뒤/).waitFor()
+    assert.equal(await input.inputValue(), '이게 왜 그런가요?')
+    await page.getByRole('button', { name: '수학', exact: true }).click()
+    assert.equal(await guidance.count(), 0)
+    for (const [question, message] of [
+      ['3번 풀어 줘', followups[1].answer],
+      ['가게에 지금 몇 개 남았나요?', followups[2].answer],
+    ]) {
+      await input.fill(question)
+      await submit.click()
+      await guidance.getByText(message, { exact: true }).waitFor()
+      assert.equal(await input.inputValue(), question)
+      assert.equal(await page.getByText('Q. ' + question, { exact: true }).count(), 0)
+      assert.equal(await page.getByText(/맞는 교과 자료 없이 생성됨/).count(), 0)
+    }
+    await input.fill('사과가 3개씩 4상자면 모두 몇 개인가요?')
+    await submit.click()
+    await page.getByText(followups[3].answer, { exact: true }).waitFor()
+    assert.equal(await guidance.count(), 0)
+    assert.equal(await input.inputValue(), '')
+    await page.getByText(/교과 자료 기반/).waitFor()
+    await input.fill('하루는 몇 시간인가요?')
+    await submit.click()
+    await page.getByText(followups[4].answer, { exact: true }).waitFor()
+    await page.getByText(/맞는 교과 자료 없이 생성됨/).waitFor()
+    assert.equal(count, followups.length)
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('다른 자녀의 늦은 AI 안내가 현재 질문을 바꾸지 않는다', async () => {
+  const { page, context } = await openPage()
+  try {
+    let release
+    const pending = new Promise(resolve => { release = resolve })
+    await page.route('**/api/ai/ask', async route => {
+      await pending
+      await route.fulfill({ json: { answerKind: 'clarification', answer: '앞 학생의 문제 지문을 적어 주세요.' } })
+    })
+    await page.goto(BASE + '/learning?tab=ask')
+    const input = page.getByRole('textbox', { name: '학습 질문' })
+    await input.fill('앞 학생의 질문')
+    const received = page.waitForRequest(r => r.url().endsWith('/api/ai/ask'))
+    await page.getByRole('button', { name: '질문하기', exact: true }).click()
+    await received
+    await page.getByRole('button', { name: '다른학생 · 중2', exact: true }).click()
+    assert.equal(await input.inputValue(), '')
+    await input.fill('새 학생의 질문')
+    const ended = page.waitForEvent('requestfinished', r => r.url().endsWith('/api/ai/ask'))
+    release()
+    await ended
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert.equal(await input.inputValue(), '새 학생의 질문')
+    assert.equal(await page.locator('#ask-guidance').count(), 0)
+    assert.equal(await page.getByRole('button', { name: '질문하기', exact: true }).isEnabled(), true)
+  } finally { await context.close() }
+})
+
 const poseRecord = { id: 901, studentId: 14, subject: '수학', startedAt: '2026-11-11T01:00:00Z',
   createdAt: '2026-11-11T01:01:00Z', submissionId: 'pose-test-901', modelName: 'yolov8s_pose_h8',
   durationSeconds: 20, inputSource: 'VIDEO', measurementSource: 'AI_HAT', totalSamples: 10, classifiedSamples: 8,

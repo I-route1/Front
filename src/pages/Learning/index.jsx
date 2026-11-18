@@ -249,7 +249,7 @@ export default function Learning() {
                 {active === 'suggest'    && <SuggestTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'predict'    && <PredictTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'counseling' && <CounselingTab studentId={studentId} selectedChild={selectedChild} />}
-                {active === 'ask'        && <AskTab        studentId={studentId} />}
+                {active === 'ask'        && <AskTab key={studentId} />}
                 </div>}
             </div>
         </div>
