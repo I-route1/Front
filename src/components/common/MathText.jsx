@@ -19,6 +19,22 @@ export function splitMath(text) {
   return parts
 }
 
+// Keep display equations intact when paragraphs, lists and headings are read line by line.
+export function mathLines(text) {
+  const lines = ['']
+  for (const part of splitMath(text)) {
+    if (part.tex !== undefined) {
+      const delimiters = part.display ? ['\\[', '\\]'] : ['\\(', '\\)']
+      lines[lines.length - 1] += delimiters[0] + part.tex + delimiters[1]
+    } else {
+      const [first, ...rest] = part.text.split(/\r?\n/)
+      lines[lines.length - 1] += first
+      lines.push(...rest)
+    }
+  }
+  return lines
+}
+
 function renderTex(tex, display) {
   // strict:'ignore' — 모델이 display 수식 안에 \\ 줄바꿈을 자주 넣어 콘솔 경고가 쌓인다
   return katex.renderToString(tex, { displayMode: display, throwOnError: false, strict: 'ignore', output: 'html' })

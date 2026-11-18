@@ -165,7 +165,7 @@ test('AI 질문은 안내와 교과 답변을 구분하고 안내 뒤 원문을 
       { needSubject: true },
       { answerKind: 'clarification', answer: '문제의 지문과 보기를 적어 주세요.' },
       { answerKind: 'out_of_scope', answer: '매장의 실시간 재고는 확인할 수 없어요.' },
-      { answerKind: 'answer', answer: '3 × 4 = 12개입니다.', grounded: true },
+      { answerKind: 'answer', answer: '모두 12개입니다.\n한 상자에 3개씩 4상자이므로 $3 \\times 4 = 12$입니다.\n교과 자료 · 같은 수의 반복된 덧셈은 곱셈으로 나타낼 수 있습니다.', grounded: true },
       { answer: '하루는 24시간입니다.', grounded: false },
     ]
     let count = 0
@@ -195,14 +195,21 @@ test('AI 질문은 안내와 교과 답변을 구분하고 안내 뒤 원문을 
     }
     await input.fill('사과가 3개씩 4상자면 모두 몇 개인가요?')
     await submit.click()
-    await page.getByText(followups[3].answer, { exact: true }).waitFor()
+    const answer = page.getByRole('article', { name: /사과가 3개씩/ })
+    await answer.getByText('모두 12개입니다.', { exact: true }).waitFor()
+    await answer.getByRole('heading', { name: '풀이와 근거' }).waitFor()
+    assert.equal(await answer.locator('.katex').count(), 1)
+    await answer.locator('blockquote').getByText(/같은 수의 반복된 덧셈/).waitFor()
+    assert(await answer.evaluate(el => el === document.activeElement))
+    await answer.screenshot({ path: 'test-results/ai-answer-mobile.png' })
     assert.equal(await guidance.count(), 0)
     assert.equal(await input.inputValue(), '')
     await page.getByText(/교과 자료 기반/).waitFor()
     await input.fill('하루는 몇 시간인가요?')
     await submit.click()
     await page.getByText(followups[4].answer, { exact: true }).waitFor()
-    await page.getByText(/맞는 교과 자료 없이 생성됨/).waitFor()
+    await page.getByText('AI 풀이', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('heading', { name: '풀이와 근거' }).count(), 1)
     assert.equal(count, followups.length)
     assert.deepEqual(errors, [])
   } finally { await context.close() }
@@ -976,6 +983,38 @@ test('학부모는 서버 저장 리포트를 과목별로 조회하고 이전 �
     assert(!state.requests.some(r => r.path.startsWith('/api/counseling/') && r.method !== 'GET'))
     assert.deepEqual(errors, [])
     await page.screenshot({ path: 'test-results/saved-reports-parent.png', fullPage: true })
+  } finally { await context.close() }
+})
+
+test('저장된 AI 리포트의 제목·복습 단계·여러 줄 수식은 모바일과 인쇄에서 유지된다', async () => {
+  const row = { ...savedReports[0],
+    careerAnalysis: '[기록으로 본 학습]\n● 현재 학업 수준: 중위권 (수학 백분위 72%)\n● 기록된 학습 시간: 하루 40분\n● 복습할 개념: 일차방정식\n\n[교과 자료]\n수의 범위를 표시했습니다.\n[0, 1]',
+    learningGuide: '[이번 복습]\n1단계 — 양변에서 3을 빼세요.\n2단계 — 다음 식에 대입하세요.\n$$\nx = \\frac{5}{2}\n$$\n\n[스스로 확인]\n원래 식의 양변이 같나요?',
+  }
+  const { page, context } = await openPage({ reportsByStudent: { 14: [row] } })
+  try {
+    await page.setViewportSize({ width: 320, height: 720 })
+    await page.goto(BASE + '/learning?tab=counseling')
+    const card = page.getByTestId('saved-report-math')
+    await card.getByRole('heading', { name: '기록으로 본 학습' }).waitFor()
+    await card.getByText('[0, 1]', { exact: true }).waitFor()
+    assert.equal(await card.locator('ul > li').count(), 3)
+    const summary = page.getByTestId('coaching-summary')
+    assert.match(await summary.innerText(), /일차방정식/)
+    assert.match(await summary.innerText(), /하루 40분/)
+    assert.match(await summary.getByTestId('coaching-key-line').innerText(), /1단계 — 양변에서 3을 빼세요/)
+    const guide = card.getByRole('region', { name: '학습 가이드', exact: true })
+    assert.equal(await guide.locator('ol > li').count(), 2)
+    assert.equal(await guide.locator('.katex-display').count(), 1)
+    assert(await guide.evaluate(el => el.scrollWidth <= el.clientWidth))
+    await guide.screenshot({ path: 'test-results/ai-report-mobile.png' })
+    const opened = page.waitForEvent('popup')
+    await card.getByRole('button', { name: /PDF로 저장/ }).click()
+    const popup = await opened
+    await popup.getByRole('heading', { name: '스스로 확인' }).waitFor()
+    assert.equal(await popup.locator('ol > li').count(), 2)
+    assert.equal(await popup.locator('.katex-display').count(), 1)
+    await popup.close()
   } finally { await context.close() }
 })
 
