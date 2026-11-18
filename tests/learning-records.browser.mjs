@@ -97,6 +97,7 @@ async function openPage(options = {}) {
       return respond(path.endsWith('unread') ? list.filter(n => !n.isRead) : list)
     }
     if (path.startsWith('/api/gps/attendance/buses/')) return respond((state.busRecords || {})[path.split('/').pop()] || [])
+    if (path === '/api/gps/drivers/my-bus/attendance') return respond(state.driverRoster || [])
     if (path.startsWith('/api/wrong-answer/')) {
       if (state.delay && path.endsWith('/14')) await state.delay
       if (state.fail) return respond({ error: '오답 서버 응답 실패' }, 503)
@@ -442,6 +443,41 @@ test('학부모 출결은 실제 자녀 목록과 인증 헤더로 조회하고,
     await page.getByText('승차 — 버스 탑승 중', { exact: false }).waitFor()
     assert.deepEqual(errors, [])
   } finally { await context.close() }
+})
+
+test('열려 있는 학부모·학원·기사 화면이 태그를 자동 반영한다', async () => {
+  const child = { studentId: 14, name: '연결검증학생', busId: 3 }
+  const board = { attendanceId: 1, studentId: 14, studentName: child.name, busId: 3, eventType: 'BOARD', timestamp: '2026-11-07T08:00:00' }
+  const exit = { ...board, attendanceId: 2, eventType: 'EXIT', timestamp: '2026-11-07T08:30:00' }
+  await Promise.all(['PARENT', 'ACADEMY', 'DRIVER'].map(async role => {
+    const { page, context, state, errors } = await openPage({ role, academyStudents: [child],
+      driverRoster: [{ ...child, status: 'WAITING' }] })
+    try {
+      let documentRequests = 0
+      page.on('request', r => { if (r.isNavigationRequest() && r.frame() === page.mainFrame()) documentRequests++ })
+      await page.goto(`${BASE}/attendance`)
+      const visible = text => page.getByText(text, { exact: true }).first().waitFor()
+      await visible({ PARENT: '이날 출결 기록이 없습니다', ACADEMY: '오늘 기록이 없습니다', DRIVER: '대기 중' }[role])
+      function publish(rows, status) {
+        state.attendance = { 14: rows }
+        state.busRecords = { 3: rows }
+        state.driverRoster = [{ ...child, status }]
+      }
+      publish([board], 'BOARDED')
+      await visible({ PARENT: '탑승중', ACADEMY: '승차', DRIVER: '승차 완료' }[role])
+      publish([exit, board], 'EXITED')
+      await visible({ PARENT: '🏠 하차', ACADEMY: '하차', DRIVER: '하차 완료' }[role])
+      if (role === 'PARENT') {
+        state.attendanceFail = true
+        await page.getByRole('alert').waitFor()
+        assert(await page.getByText('🏠 하차', { exact: true }).isVisible())
+        state.attendanceFail = false
+        await page.getByRole('alert').waitFor({ state: 'hidden' })
+      }
+      assert.equal(documentRequests, 1)
+      assert.deepEqual(errors, [])
+    } finally { await context.close() }
+  }))
 })
 
 test('출결 조회 토큰 만료는 갱신하고 권한 거부 후 이전 자녀 기록은 표시하지 않는다', async () => {

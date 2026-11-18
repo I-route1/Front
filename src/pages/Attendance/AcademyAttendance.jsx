@@ -1,8 +1,9 @@
 // src/pages/Attendance/AcademyAttendance.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getAttendanceByBus, registerNfcCard } from '@/api/attendance'
 import { studentAPI } from '@/api/student'
 import { busesFromStudents, latestStatusByStudent } from '@/utils/busAttendance'
+import { useAttendanceList } from './useAttendanceList'
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -13,9 +14,6 @@ function formatTime(ts) {
 export default function AcademyAttendance({ user }) {
   const [tab, setTab] = useState('records') // 'records' | 'nfc'
   const [selectedBus, setSelectedBus] = useState(null)
-  const [records, setRecords] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
 
   // NFC 등록 폼
   const [nfcStudentId, setNfcStudentId] = useState('')
@@ -48,19 +46,11 @@ export default function AcademyAttendance({ user }) {
 
   const buses = busesFromStudents(students)
 
-  // 버스 출결 로드 (버스를 빨리 바꿔도 마지막 요청 결과만 반영)
-  useEffect(() => {
-    if (tab !== 'records' || !selectedBus) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    setRecords([])
-    getAttendanceByBus(selectedBus.busId)
-      .then(data => { if (!cancelled) setRecords(Array.isArray(data) ? data : []) })
-      .catch(() => { if (!cancelled) setError('출결 정보를 불러오지 못했습니다.') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [selectedBus, tab, reloadKey])
+  const busId = selectedBus?.busId
+  const loadRecords = useCallback(signal => getAttendanceByBus(busId, signal), [busId])
+  const { rows: records, loading, error } = useAttendanceList(tab === 'records' && busId != null ? loadRecords : null, {
+    reloadKey, errorMessage: '출결 정보를 불러오지 못했습니다.',
+  })
 
   // 학생별 가장 최근 상태
   const studentStatus = latestStatusByStudent(records)

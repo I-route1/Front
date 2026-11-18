@@ -1,20 +1,8 @@
 // src/pages/Attendance/DriverAttendance.jsx
 // 출결 탭 — 모든 아이들 이름 리스트
 
-import { useState, useEffect } from 'react'
-
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
-
-async function getMyBusAttendance() {
-  const saved = sessionStorage.getItem('i-route-user')
-  const user = saved ? JSON.parse(saved) : null
-  const token = user?.token
-  const res = await fetch(`${BASE_URL}/api/gps/drivers/my-bus/attendance`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!res.ok) throw new Error('출석부 조회 실패')
-  return res.json()
-}
+import { getMyBusAttendance } from '@/api/attendance'
+import { useAttendanceList } from './useAttendanceList'
 
 const STATUS_LABEL = {
   WAITING: '대기 중',
@@ -29,31 +17,14 @@ const STATUS_STYLE = {
 }
 
 export default function DriverAttendance({ user }) {
-  const [students, setStudents] = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState(null)
-
-  useEffect(() => {
-    setLoading(true)
-    getMyBusAttendance()
-      .then(data => {
-        // 백엔드에서 이미 status를 포함해서 반환
-        setStudents(Array.isArray(data) ? data : [])
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [])
+  const { rows: students, loading, error } = useAttendanceList(getMyBusAttendance, {
+    errorMessage: '출석부 조회 실패', reloadKey: user?.id,
+  })
 
   if (loading) return (
     <div style={s.center}>
       <div style={s.spinner} />
       <p style={{ color: '#94a3b8', fontSize: 14, marginTop: 12 }}>학생 목록 불러오는 중...</p>
-    </div>
-  )
-
-  if (error) return (
-    <div style={s.center}>
-      <p style={{ color: '#ef4444', fontSize: 14 }}>{error}</p>
     </div>
   )
 
@@ -64,7 +35,8 @@ export default function DriverAttendance({ user }) {
         <p style={s.subtitle}>총 {students.length}명</p>
       </div>
 
-      {students.length === 0 ? (
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
+      {!error && students.length === 0 ? (
         <div style={s.empty}>
           <p>등록된 학생이 없습니다.</p>
         </div>
