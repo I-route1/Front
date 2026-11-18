@@ -99,9 +99,10 @@ export function createApiClient({ baseUrl, storage = sessionStorage, fetcher = f
         const message = await res.text().catch(() => '')
         checkCurrent()
         let error
-        try { error = JSON.parse(message) } catch { throw new Error(message || '요청 처리에 실패했습니다.') }
-        throw new Error((typeof error === 'string' ? error : error?.message || error?.error || error?.detail
-          || Object.values(error || {}).find(value => typeof value === 'string')) || '요청 처리에 실패했습니다.')
+        try { error = JSON.parse(message) } catch { error = message }
+        const reason = typeof error === 'string' ? error : error?.message || error?.error || error?.detail
+          || Object.values(error || {}).find(value => typeof value === 'string')
+        throw Object.assign(new Error(reason || '요청 처리에 실패했습니다.'), { status: res.status })
       }
       if (res.status === 204) return null
       const text = await res.text()

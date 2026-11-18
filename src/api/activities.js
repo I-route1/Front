@@ -12,12 +12,15 @@ export const activitiesAPI = {
   // 요청 형식:
   // { studentId, subject, studyDate, studyStartTime(선택),
   //   studyDurationMinutes, understandingScore(1~5), concentrationScore(1~5),
-  //   measurementSource: MANUAL | CAMERA, focusedRatio(0~1), drowsyRatio(0~1) }
+  //   measurementSource: MANUAL | CAMERA, focusedRatio(0~1), drowsyRatio(0~1),
+  //   elapsedSeconds, uprightRatio, postureSampleCount, forwardHeadCount }
 
   // 2-2. 학습 기록 조회
   // GET /api/activities/{studentId}
   getActivities: (studentId) =>
     apiCall(`/api/activities/${studentId}`),
+  getActivity: (studentId, activityId) =>
+    apiCall(`/api/activities/${encodeURIComponent(studentId)}/records/${encodeURIComponent(activityId)}`),
 
   // 2-3. 강사 피드백 입력/수정
   // PATCH /api/activities/{activityId}/feedback
