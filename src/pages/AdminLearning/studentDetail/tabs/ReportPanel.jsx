@@ -11,8 +11,8 @@ import { REPORT_SUBJECTS as SUBJECT_OPTIONS, normalizeReportSubject } from '@/ut
 const REPORT_TYPES = [
   {
     id: 'subjectRecommend',
-    title: 'AI 맞춤 문제 추천',
-    description: '오답 기반으로 AI가 취약 개념을 분석하고 문제를 추천합니다',
+    title: 'AI 맞춤 복습 가이드',
+    description: '과목별로 복습할 개념과 학습 방법을 안내합니다',
     emoji: '🤖',
     color: '#0F3460',
     api: 'getSubjectRecommend',
@@ -377,7 +377,7 @@ function ResultBlock({ result, reportType, onClear }) {
             }}>
               <span style={{ fontSize: 18 }}>🎯</span>
               <div>
-                <p style={{ fontSize: 11, color: '#0F3460', fontWeight: 600 }}>분석된 취약 개념</p>
+                <p style={{ fontSize: 11, color: '#0F3460', fontWeight: 600 }}>복습할 개념</p>
                 <p style={{ fontSize: 14, fontWeight: 800, color: '#0F3460', marginTop: 2 }}>
                   {result.targetConcept}
                 </p>
