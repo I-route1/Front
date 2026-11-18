@@ -1,0 +1,13 @@
+.review-paper { border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; color: var(--color-text-primary); min-width: 0; }
+.review-paper header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.review-paper header strong { font-size: 16px; }
+.review-paper header span, .review-paper-topics, .review-paper-empty { color: var(--color-text-secondary); font-size: 13px; }
+.review-paper-topics { margin: 5px 0 0; overflow-wrap: anywhere; }
+.review-paper ol { margin: 14px 0 0; padding-left: 1.6rem; }
+.review-paper li { padding: .75rem 0 .75rem .25rem; border-top: 1px solid var(--color-border); }
+.review-paper li:last-child { padding-bottom: 0; }
+.review-paper li::marker { color: var(--color-text-secondary); font-weight: 700; }
+.review-paper-question, .review-paper-answer { font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-paper details { margin-top: 5px; }
+.review-paper summary { color: var(--color-primary); font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 0; width: fit-content; }
+.review-paper-answer { background: var(--color-surface-2); border-radius: 6px; padding: 8px 10px; }

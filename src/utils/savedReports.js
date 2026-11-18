@@ -55,9 +55,12 @@ const stripBullet = line => line.trim().replace(/^[●•▪◦\-*#>\s]+/, '').t
 function statusValue(text, label) {
   for (const line of lines(text)) {
     const body = stripBullet(line)
-    if (!body.includes(label)) continue
-    const value = body.slice(body.indexOf(':') + 1).trim()
-    if (body.indexOf(':') >= 0 && value) return value
+    const separator = body.search(/[:：]/)
+    if (separator < 0) continue
+    const name = body.slice(0, separator).trim()
+    if (name !== label && !name.endsWith(' ' + label)) continue
+    const value = body.slice(separator + 1).trim()
+    if (value) return value
   }
   return null
 }
@@ -93,6 +96,8 @@ export function summarizeSavedReports(rows, now = Date.now()) {
     latest,
     level: level ? level.replace(/\s*\(.*\)\s*$/, '') : null,
     intensity: statusValue(latest.careerAnalysis, '학습 강도'),
+    studyTime: statusValue(latest.careerAnalysis, '기록된 학습 시간'),
+    concept: statusValue(latest.careerAnalysis, '복습할 개념'),
     keyLine: reportKeyLine(latest),
     subjects,
     missing: SUMMARY_TYPES.filter(t => t.type !== 'premium' && !groups[t.type]?.length).map(t => t.label),

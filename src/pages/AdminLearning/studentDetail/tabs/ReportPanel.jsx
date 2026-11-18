@@ -1,9 +1,10 @@
+import ReviewPaper, { printReviewPaper, reviewQuestions } from '@/components/learning/ReviewPaper'
 import { useState, useEffect } from 'react'
 import useSavedCounselingReports from '@/hooks/useSavedCounselingReports'
 import { SavedReportPicker, SavedReportStatus } from '@/components/learning/SavedReportControls'
 import { UNCLASSIFIED_REPORT } from '@/utils/savedReports'
 import { counselingAPI, studyPlanAPI, aiReportAPI, gradesAPI } from '@/api'
-import MathText, { mathToHtml, KATEX_CSS_LINK } from '@/components/common/MathText'
+import ReportContent, { printTextReport } from '@/components/learning/ReportContent'
 
 import { REPORT_SUBJECTS as SUBJECT_OPTIONS, normalizeReportSubject } from '@/utils/reportSubjects'
 
@@ -21,7 +22,7 @@ const REPORT_TYPES = [
   {
     id: 'reviewPaper',
     title: '맞춤 복습 시험지',
-    description: '학생 약점 기반으로 시험지를 생성',
+    description: '학생이 복습할 개념에 맞는 문제를 모읍니다',
     emoji: '📝',
     color: '#00C49A',
     api: 'getReviewPaper',
@@ -353,91 +354,10 @@ export default function ReportPanel({ student }) {
   )
 }
 
-function parseQuestion(raw) {
-  if (typeof raw === 'object' && raw !== null) return raw
-  const str = String(raw)
-  const qMatch = str.match(/질문[:：]\s*([\s\S]+?)(?=\n답변[:：]|$)/i)
-  const aMatch = str.match(/답변[:：]\s*([\s\S]+)/i)
-  return {
-    question: qMatch?.[1]?.trim() || str,
-    answer: aMatch?.[1]?.trim() || '',
-  }
-}
-
-function printReviewPaper(questions, weakConcepts) {
-  const parsed = questions.map(parseQuestion)
-  const html = `
-    <html><head><meta charset="utf-8">
-    <style>
-      body { font-family: 'Malgun Gothic', sans-serif; padding: 32px; color: #111; }
-      h1 { font-size: 20px; margin-bottom: 4px; }
-      .meta { font-size: 12px; color: #666; margin-bottom: 20px; }
-      .weak { background: #FFF8E0; border: 1px solid #FFB800; border-radius: 6px; padding: 8px 12px; font-size: 12px; margin-bottom: 20px; }
-      .q-block { margin-bottom: 18px; padding: 14px; border: 1px solid #ddd; border-radius: 8px; page-break-inside: avoid; }
-      .q-num { display: inline-block; background: #00C49A; color: white; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 22px; font-size: 11px; font-weight: 700; margin-right: 8px; }
-      .q-text { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
-      .a-label { font-size: 11px; color: #00C49A; font-weight: 700; margin-bottom: 4px; }
-      .a-text { font-size: 13px; color: #333; line-height: 1.6; }
-      @media print { body { padding: 16px; } }
-    </style></head><body>
-    <h1>📝 맞춤 복습 시험지</h1>
-    <div class="meta">생성일: ${new Date().toLocaleDateString('ko-KR')} &nbsp;|&nbsp; 총 ${parsed.length}문제</div>
-    ${weakConcepts?.length ? `<div class="weak"><strong>⚠️ 취약 개념</strong><ul style="margin:6px 0 0 16px;padding:0">${weakConcepts.map(c => `<li>${c}</li>`).join('')}</ul></div>` : ''}
-    ${parsed.map((q, i) => `
-      <div class="q-block">
-        <div class="q-text"><span class="q-num">${i + 1}</span>${q.question}</div>
-        ${q.answer ? `<div class="a-label">정답</div><div class="a-text">${q.answer}</div>` : ''}
-      </div>`).join('')}
-    </body></html>`
-  const win = window.open('', '_blank')
-  win.document.write(html)
-  win.document.close()
-  win.focus()
-  setTimeout(() => win.print(), 500)
-}
-
-function printTextReport(reportType, result) {
-  const title          = result.title || reportType.title
-  const content        = result.careerAnalysis || result.summary || result.analysis || ''
-  const guide          = result.learningGuide || result.guide || result.recommend || ''
-  const recommendation = result.aiRecommendationReport || ''
-  const concept        = result.targetConcept || ''
-  const ts             = result._generatedAt || new Date().toLocaleDateString('ko-KR')
-
-  const html = `
-    <html><head><meta charset="utf-8">${KATEX_CSS_LINK}
-    <style>
-      body { font-family: 'Malgun Gothic', sans-serif; padding: 32px; color: #111; max-width: 720px; margin: 0 auto; }
-      h1 { font-size: 20px; margin-bottom: 4px; color: ${reportType.color}; }
-      .meta { font-size: 12px; color: #666; margin-bottom: 20px; }
-      .section { margin-bottom: 20px; padding: 14px; border: 1px solid #ddd; border-radius: 8px; }
-      .section-title { font-size: 12px; font-weight: 700; color: ${reportType.color}; margin-bottom: 8px; }
-      .section-body { font-size: 13px; color: #333; line-height: 1.8; white-space: pre-wrap; }
-      .concept { background: ${reportType.color}15; border: 1px solid ${reportType.color}40; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; font-weight: 700; color: ${reportType.color}; }
-      @media print { body { padding: 16px; } }
-    </style></head><body>
-    <h1>${reportType.emoji} ${title}</h1>
-    <div class="meta">생성일: ${ts}</div>
-    ${concept        ? `<div class="concept">🎯 ${concept}</div>` : ''}
-    ${content        ? `<div class="section"><div class="section-title">📋 분석 결과</div><div class="section-body">${mathToHtml(content)}</div></div>` : ''}
-    ${recommendation ? `<div class="section"><div class="section-title">🤖 AI 추천 리포트</div><div class="section-body">${mathToHtml(recommendation)}</div></div>` : ''}
-    ${guide          ? `<div class="section"><div class="section-title">💡 학습 가이드</div><div class="section-body">${mathToHtml(guide)}</div></div>` : ''}
-    </body></html>`
-
-  const win = window.open('', '_blank')
-  win.document.write(html)
-  win.document.close()
-  win.focus()
-  setTimeout(() => win.print(), 500)
-}
 
 function ResultBlock({ result, reportType, onClear }) {
   const isReviewPaper      = reportType.id === 'reviewPaper'
   const isSubjectRecommend = reportType.id === 'subjectRecommend'
-
-  const rawQuestions   = result.questions || result.problems || []
-  const parsedQuestions = rawQuestions.map(parseQuestion)
-  const weakConcepts   = result.weakConcepts || []
 
   const title          = result.title || reportType.title
   const careerAnalysis = result.careerAnalysis || result.summary || result.analysis || ''
@@ -464,134 +384,23 @@ function ResultBlock({ result, reportType, onClear }) {
               </div>
             </div>
           )}
-          {result.aiRecommendationReport && (
-            <div style={{
-              padding: '12px 14px', borderRadius: 10,
-              background: 'var(--color-surface-2)', border: '1px solid var(--color-border)',
-            }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#0F3460', marginBottom: 8 }}>
-                🤖 AI 추천 리포트
-              </p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                <MathText text={result.aiRecommendationReport} />
-              </p>
-            </div>
-          )}
+          {result.aiRecommendationReport && <ReportContent title="AI 추천 리포트" text={result.aiRecommendationReport} />}
         </>
       )}
 
-      {/* 시험지 전용 */}
-      {isReviewPaper && (
-        <>
-          <div style={{
-            padding: '14px', borderRadius: 10,
-            background: `${reportType.color}15`, border: `1px solid ${reportType.color}30`,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <span style={{ fontSize: 24 }}>📄</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: reportType.color }}>시험지 생성 완료</p>
-                <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                  총 {parsedQuestions.length}문제
-                  {weakConcepts.length > 0 && ` · 취약 개념 ${weakConcepts.length}개`}
-                </p>
-              </div>
-            </div>
-            {weakConcepts.length > 0 && (
-              <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: '#FFF8E0', border: '1px solid #FFB80040' }}>
-                <p style={{ fontSize: 10, fontWeight: 700, color: '#8A6500', marginBottom: 4 }}>⚠️ 취약 개념</p>
-                <ul style={{ margin: 0, paddingLeft: 14 }}>
-                  {weakConcepts.map((c, i) => (
-                    <li key={i} style={{ fontSize: 11, color: '#8A6500', lineHeight: 1.6 }}>{c}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <button
-              onClick={() => printReviewPaper(rawQuestions, weakConcepts)}
-              style={{
-                display: 'block', width: '100%', padding: '10px', borderRadius: 8,
-                background: reportType.color, color: 'white', textAlign: 'center',
-                fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >
-              📥 PDF로 저장 (인쇄)
-            </button>
-          </div>
-
-          {parsedQuestions.length > 0 && (
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                📋 문제 미리보기
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {parsedQuestions.map((q, i) => (
-                  <div key={i} style={{
-                    padding: '10px 12px', borderRadius: 8,
-                    background: 'var(--color-surface-2)', border: '1px solid var(--color-border)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                      <span style={{
-                        width: 22, height: 22, flexShrink: 0, borderRadius: '50%',
-                        background: reportType.color, color: 'white',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 10, fontWeight: 700,
-                      }}>
-                        {i + 1}
-                      </span>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.5, fontWeight: 600 }}>
-                          {q.question}
-                        </p>
-                        {q.answer && (
-                          <p style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5, marginTop: 4, borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>
-                            💡 {q.answer}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      {isReviewPaper && <ReviewPaper key={result.paperId ?? result._generatedAt} result={result} />}
 
       {/* 일반 리포트 */}
-      {!isReviewPaper && !isSubjectRecommend && careerAnalysis && (
-        <div style={{
-          padding: '12px 14px', borderRadius: 10,
-          background: reportType.color + '10', border: `1px solid ${reportType.color}30`,
-        }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: reportType.color, marginBottom: 6 }}>
-            📋 {title}
-          </p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-            <MathText text={careerAnalysis} />
-          </p>
-        </div>
-      )}
+      {!isReviewPaper && !isSubjectRecommend && careerAnalysis && <ReportContent title={title} text={careerAnalysis} />}
 
-      {learningGuide && (
-        <div style={{
-          padding: '12px 14px', borderRadius: 10,
-          background: 'var(--color-primary-light)', border: '1px solid #1A56DB20',
-        }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', marginBottom: 4 }}>
-            💡 학습 가이드
-          </p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-            <MathText text={learningGuide} />
-          </p>
-        </div>
-      )}
+      {learningGuide && <ReportContent title="학습 가이드" text={learningGuide} />}
 
       {/* PDF 저장 + 결과 삭제 */}
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button
+          disabled={isReviewPaper && !reviewQuestions(result).length}
           onClick={() => isReviewPaper
-            ? printReviewPaper(rawQuestions, weakConcepts)
+            ? printReviewPaper(result)
             : printTextReport(reportType, result)
           }
           style={{

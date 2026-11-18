@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { aiReportAPI } from '@/api'
-import MathText from '@/components/common/MathText'
+import MathText, { mathLines } from '@/components/common/MathText'
+import '@/components/learning/generatedContent.css'
 import { REPORT_SUBJECTS } from '@/utils/reportSubjects'
 import { SUBJECT_COLORS } from './data/mockData'
 
@@ -13,6 +14,35 @@ const EXAMPLES = [
   '빅뱅 우주론의 증거를 알려주세요',
 ]
 
+function AnswerCard({ item, answerRef }) {
+  const [lead, ...body] = mathLines(item.answer).filter(line => line.trim())
+  const isSource = line => line.startsWith('교과 자료 · ')
+  const details = body.filter(line => !isSource(line))
+  const sources = body.filter(isSource)
+  return (
+    <article className="study-answer" ref={answerRef} tabIndex={-1} aria-labelledby={'question-' + item.id}>
+      <div className="study-answer__meta">
+        {item.subject && <span className="study-answer__subject">{item.subject}</span>}
+        <span>{item.grounded ? '교과 자료 기반' : 'AI 풀이'}</span>
+      </div>
+      <h3 className="study-answer__question" id={'question-' + item.id}>Q. {item.question}</h3>
+      <p className="study-answer__lead"><MathText text={lead} /></p>
+      {details.length > 0 && (
+        <div className="study-answer__details">
+          <h4>풀이와 근거</h4>
+          {details.map((line, i) => <p key={i}><MathText text={line} /></p>)}
+        </div>
+      )}
+      {sources.map((line, i) => (
+        <blockquote className="study-answer__source" key={i}>
+          <strong>교과 자료</strong>
+          <MathText text={line.slice('교과 자료 · '.length)} />
+        </blockquote>
+      ))}
+    </article>
+  )
+}
+
 // 학생이 직접 쓴 학습 질문에 AI가 답한다. 답은 AI 서버가 교과 자료(ConceptMap)를 찾아 근거로 붙여
 // 만든다. 생성이 한 번에 하나씩이라 여러 명이 동시에 물으면 늦어질 수 있다(Backend 한도 50초).
 export default function AskTab() {
@@ -22,6 +52,15 @@ export default function AskTab() {
   const [error, setError]       = useState(null)
   const [guidance, setGuidance] = useState(null)
   const [history, setHistory]   = useState([])          // 최신이 앞
+  const latestAnswer = useRef(null)
+
+  useEffect(() => {
+    const card = latestAnswer.current
+    if (card) {
+      card.focus({ preventScroll: true })
+      card.scrollIntoView({ block: 'start', behavior: 'instant' })
+    }
+  }, [history])
 
   const trimmed = question.trim()
   const canSubmit = !loading && trimmed.length >= 2 && trimmed.length <= MAX_LENGTH
@@ -42,6 +81,10 @@ export default function AskTab() {
           ? '문제의 지문과 조건, 보기가 있으면 질문에 함께 적어 주세요.'
           : '이곳에서는 수학·영어·국어·사회·과학 학습 질문에 답해 드려요.'
         setGuidance(res.answer?.trim() || fallback)
+        return
+      }
+      if (typeof res?.answer !== 'string' || !res.answer.trim()) {
+        setError('답변을 읽지 못했어요. 같은 질문으로 다시 시도해 주세요.')
         return
       }
       setHistory(prev => [{ ...res, id: Date.now() }, ...prev])
@@ -81,6 +124,7 @@ export default function AskTab() {
             return (
               <button
                 key={s || 'auto'}
+                aria-pressed={selected}
                 onClick={() => { setSubject(s); setGuidance(null) }}
                 disabled={loading}
                 style={{
@@ -141,13 +185,13 @@ export default function AskTab() {
         </div>
 
         {loading && (
-          <p style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          <p role="status" style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
             보통 5~30초 걸려요. 다른 학생이 먼저 물어보고 있으면 더 걸릴 수 있어요.
           </p>
         )}
 
         {error && (
-          <div style={{ padding: '8px 12px', borderRadius: 8, background: '#FFF0F0', border: '1px solid #FF6B6B40' }}>
+          <div role="alert" style={{ padding: '8px 12px', borderRadius: 8, background: '#FFF0F0', border: '1px solid #FF6B6B40' }}>
             <p style={{ fontSize: 12, color: '#C0392B' }}>⚠️ {error}</p>
           </div>
         )}
@@ -172,32 +216,7 @@ export default function AskTab() {
         )}
       </div>
 
-      {history.map(item => (
-        <div key={item.id} style={{
-          padding: 14, borderRadius: 12, background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 8,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {item.subject && (
-              <span style={{
-                padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, color: 'white',
-                background: SUBJECT_COLORS?.[item.subject] ?? 'var(--color-primary)',
-              }}>
-                {item.subject}
-              </span>
-            )}
-            <span style={{ fontSize: 11, color: item.grounded ? '#00875A' : '#8A6500' }}>
-              {item.grounded ? '📚 교과 자료 기반' : '⚠️ 맞는 교과 자료 없이 생성됨 — 교과서로 확인하세요'}
-            </span>
-          </div>
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
-            Q. {item.question}
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-            <MathText text={item.answer} />
-          </p>
-        </div>
-      ))}
+      {history.map((item, index) => <AnswerCard key={item.id} item={item} answerRef={index === 0 ? latestAnswer : undefined} />)}
     </div>
   )
 }

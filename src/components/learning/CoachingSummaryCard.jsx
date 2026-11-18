@@ -8,7 +8,7 @@ const shortDate = row => (row?._generatedAt && row._generatedAt !== '생성일 �
 export default function CoachingSummaryCard({ history, onOpen }) {
   const summary = useMemo(() => summarizeSavedReports(history.data), [history.data])
   if (!history.enabled || history.loading || history.error || !summary) return null
-  const { latest, level, intensity, keyLine, subjects, missing, days, stale } = summary
+  const { latest, level, intensity, studyTime, concept, keyLine, subjects, missing, days, stale } = summary
 
   return (
     <section aria-label="AI 코칭 한눈에 보기" data-testid="coaching-summary" style={{
@@ -21,10 +21,12 @@ export default function CoachingSummaryCard({ history, onOpen }) {
         </span>
       </div>
 
-      {(level || intensity) && (
+      {(level || intensity || studyTime || concept) && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
           {level && <Chip label="학업 수준" value={level} />}
           {intensity && <Chip label="학습 강도" value={intensity} />}
+          {studyTime && <Chip label="학습 시간" value={studyTime} />}
+          {concept && <Chip label="복습할 개념" value={concept} />}
         </div>
       )}
 
@@ -32,7 +34,7 @@ export default function CoachingSummaryCard({ history, onOpen }) {
         <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#5334830D' }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: '#533483', marginBottom: 4 }}>지금 해 볼 것</p>
           <p data-testid="coaching-key-line" style={{
-            fontSize: 13, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            fontSize: 14, lineHeight: 1.65, overflowWrap: 'anywhere',
           }}><MathText text={keyLine} /></p>
         </div>
       )}

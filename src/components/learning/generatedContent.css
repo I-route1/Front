@@ -1,0 +1,66 @@
+.study-answer, .study-report {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.study-answer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.study-answer { scroll-margin-block-start: 12px; }
+.study-answer:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.study-answer__subject {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+.study-answer__question { margin: 9px 0 12px; font-size: 14px; line-height: 1.6; }
+.study-answer__lead {
+  margin: 0;
+  padding: 12px 14px;
+  border-inline-start: 3px solid var(--color-primary);
+  border-radius: 0 7px 7px 0;
+  background: var(--color-primary-light);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.65;
+}
+.study-answer__details { margin-top: 14px; }
+.study-answer__details h4, .study-answer__source strong { font-size: 12px; color: var(--color-text-secondary); }
+.study-answer__details p, .study-answer__source { margin-top: 4px; font-size: 14px; line-height: 1.75; }
+.study-answer__source { border-inline-start: 2px solid var(--color-border); padding-inline-start: 10px; margin-top: 12px; }
+.study-answer__source strong { display: block; }
+.study-report > h3 { font-size: 16px; line-height: 1.5; margin: 0; color: var(--color-text-primary); }
+.study-report__body {
+  margin-top: 10px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.study-report__body h4 { margin: 17px 0 4px; font-size: 14px; font-weight: 750; color: var(--color-primary); }
+.study-report__body > :first-child { margin-top: 0; }
+.study-report__body p { margin: 5px 0; }
+.study-report__body ul, .study-report__body ol { margin: 5px 0; }
+.study-report__body ul { list-style: disc; padding-inline-start: 19px; }
+.study-report__body ul li::marker { color: var(--color-text-muted); }
+.study-report__body li + li { margin-top: 5px; }
+.study-report__body ol { list-style: none; padding: 0; }
+.study-step { font-size: 12px; color: var(--color-primary); margin-inline-end: 4px; white-space: nowrap; }
+.study-answer .katex-display, .study-report .katex-display { overflow-x: auto; overflow-y: hidden; max-width: 100%; padding-block: 3px; }
+.study-answer .katex, .study-report .katex { font-size: 1.02em; }
+.study-answer .katex:not(.katex-display .katex), .study-report .katex:not(.katex-display .katex) {
+  display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: middle;
+}
