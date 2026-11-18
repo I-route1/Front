@@ -1,6 +1,7 @@
 // 학습 기록(LearningActivity)으로 집중도 통계를 만든다.
 // 학습 탭의 집중도 리포트(ConcentrationTab)와 학습 패턴 탭 요약 카드에서 같이 쓴다.
 import { normalizeReportSubject } from './reportSubjects'
+import { cameraActivityMetrics, isRatio } from '../components/learning/recordUtils.js'
 
 export const SCORE_MAX = 5
 
@@ -22,7 +23,6 @@ export const STATE_COLORS = {
 
 const round1 = (n) => Math.round(n * 10) / 10
 const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
-const isRatio = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1
 
 function hourOf(time) {
   if (typeof time !== 'string') return null
@@ -53,6 +53,7 @@ export function normalizeActivities(data) {
         focused: camera ? a.focusedRatio : null,
         drowsy: camera ? a.drowsyRatio : null,
         unfocused: camera ? Math.max(0, 1 - a.focusedRatio - a.drowsyRatio) : null,
+        ...cameraActivityMetrics(a),
       }
     })
     .sort((a, b) =>

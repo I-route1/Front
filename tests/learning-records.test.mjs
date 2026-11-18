@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { formatRatio, wrongTypeCounts, hourlyConcentration, localStudyDate, metaCognitionPresentation } from '../src/components/learning/recordUtils.js'
+import { cameraActivityMetrics, formatElapsedSeconds, formatRatio, wrongTypeCounts, hourlyConcentration, localStudyDate, metaCognitionPresentation } from '../src/components/learning/recordUtils.js'
 import { evaluationSubmissionId, manualEvaluationPayload } from '../src/components/learning/evaluationSubmission.js'
 
 test('학원 자기평가는 실제 학생 ID와 날짜·시각·별점·분 단위를 검증하고 재시도 키를 유지한다', async () => {
@@ -44,6 +44,26 @@ test('집중도 비율의 0, 1, 미측정 값을 구분한다', () => {
   assert.equal(formatRatio(1), '100%')
   assert.equal(formatRatio(0.625), '62.5%')
   for (const value of [null, undefined, NaN, Infinity, -0.1, 1.1]) assert.equal(formatRatio(value), '미측정')
+})
+
+test('Pi 카메라 측정의 초·자세·거북목 값은 0과 미측정을 구분한다', () => {
+  const camera = { measurementSource: 'CAMERA', elapsedSeconds: 0,
+    uprightRatio: 0, postureSampleCount: 4, forwardHeadCount: 0 }
+  assert.deepEqual(cameraActivityMetrics(camera), {
+    elapsedSeconds: 0, uprightRatio: 0, postureSampleCount: 4, forwardHeadCount: 0,
+  })
+  const missing = { elapsedSeconds: null, uprightRatio: null, postureSampleCount: null, forwardHeadCount: null }
+  assert.deepEqual(cameraActivityMetrics({ ...camera, measurementSource: 'MANUAL' }), missing)
+  assert.deepEqual(cameraActivityMetrics({ measurementSource: 'CAMERA' }), missing)
+  assert.deepEqual(cameraActivityMetrics({ ...camera, elapsedSeconds: 86401, postureSampleCount: 0,
+    forwardHeadCount: -1 }), missing)
+  assert.deepEqual(cameraActivityMetrics({ ...camera, elapsedSeconds: 86400, uprightRatio: null }), {
+    ...missing, elapsedSeconds: 86400, forwardHeadCount: 0,
+  })
+  assert.equal(formatElapsedSeconds(0), '0초')
+  assert.equal(formatElapsedSeconds(65), '1분 5초')
+  assert.equal(formatElapsedSeconds(3723), '1시간 2분 3초')
+  assert.equal(formatElapsedSeconds(null), null)
 })
 
 test('유형별 반복 오답을 누적하고 미분류 오답도 포함한다', () => {

@@ -18,6 +18,8 @@ const ocr = [{ id: 1, studentId: 14, subject: '국어', totalQuestions: 2, corre
 ] }]
 const camera = { id: 1, subject: '국어', studyDate: '2026-11-04', studyStartTime: '10:00:00', studyDurationMinutes: 30,
   concentrationScore: 5, understandingScore: 4, measurementSource: 'CAMERA', focusedRatio: 1, drowsyRatio: 0 }
+const piCamera = { ...camera, id: 41, studentId: 15, subject: '과학', studyDurationMinutes: 1,
+  elapsedSeconds: 0, uprightRatio: 0, postureSampleCount: 4, forwardHeadCount: 0 }
 const savedReports = [
   { id: 101, subject: '수학', title: '최신 수학 리포트', careerAnalysis: '저장된 수학 분석', learningGuide: '수학 학습 안내', createdAt: '2026-11-08T10:00:00' },
   { id: 100, subject: '수학', title: '이전 수학 리포트', careerAnalysis: '이전 수학 분석', learningGuide: null, createdAt: '2026-11-07T10:00:00' },
@@ -127,6 +129,13 @@ async function openPage(options = {}) {
       state.activities.push(saved)
       if (state.loseSaveResponse) { state.loseSaveResponse = false; return route.abort('connectionreset') }
       return respond(saved)
+    }
+    const exactActivity = path.match(/^\/api\/activities\/(\d+)\/records\/(\d+)$/)
+    if (exactActivity) {
+      if (state.exactActivityStatus) return respond({ error: '학습 기록 서버 응답 실패' }, state.exactActivityStatus)
+      const [, studentId, activityId] = exactActivity
+      const record = state.activities.find(row => Number(row.studentId ?? 14) === Number(studentId) && row.id === Number(activityId))
+      return record ? respond(record) : respond({ error: '기록을 찾을 수 없습니다.' }, 404)
     }
     if (path.startsWith('/api/activities/') && state.failActivities) return respond({ error: '학습 기록 서버 응답 실패' }, 503)
     if (path.startsWith('/api/activities/')) return respond(state.activities.filter(a => Number(a.studentId ?? 14) === Number(path.split('/').at(-1))))
@@ -620,6 +629,60 @@ test('카메라 집중 100%·졸음 0%와 출처를 표시한다', async () => {
   } finally { await context.close() }
 })
 
+test('Pi 측정 상세는 학부모가 선택할 수 있는 자녀의 기록 한 건만 조회한다', async () => {
+  const { page, context, state, errors } = await openPage({ activities: [camera, piCamera] })
+  try {
+    await page.goto(`${BASE}/learning?tab=focus&studentId=15&activityId=41`)
+    const detail = page.getByRole('region', { name: '집중도 기록 상세' })
+    await detail.getByText('과학', { exact: true }).waitFor()
+    await detail.getByText(/10:00 · 0초$/).waitFor()
+    await detail.getByText('집중도 5 / 5', { exact: true }).waitFor()
+    await detail.getByText('이해도 4 / 5', { exact: true }).waitFor()
+    await detail.getByText('바른 자세 0%', { exact: true }).waitFor()
+    await detail.getByText('자세 표본 4개', { exact: true }).waitFor()
+    await detail.getByText('거북목 주의 0회', { exact: true }).waitFor()
+    const recordPaths = state.requests.filter(request => /^\/api\/(activities|posture-records)/.test(request.path))
+      .map(request => request.path)
+    assert.deepEqual([...new Set(recordPaths)], ['/api/activities/15/records/41'])
+
+    await detail.getByRole('button', { name: '집중도 기록 목록 보기' }).click()
+    await page.waitForURL(`${BASE}/learning?tab=focus`)
+    await page.getByText('🗂️ 공부 기록', { exact: true }).waitFor()
+    await page.getByText('이해도 4 / 5', { exact: true }).waitFor()
+    assert.ok(state.requests.some(request => request.path === '/api/activities/15'))
+    assert.ok(!state.requests.some(request => request.path === '/api/activities/14'))
+
+    state.requests.length = 0
+    await page.goto(`${BASE}/learning?tab=focus&studentId=700&activityId=41`)
+    await page.getByText('조회할 학생을 확인해 주세요.', { exact: true }).waitFor()
+    assert.ok(!state.requests.some(request => /^\/api\/(activities|posture-records)/.test(request.path)))
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('Pi 측정 상세는 학원에서 학생 목록 없이 열리고 서버 실패를 다시 조회한다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ACADEMY', activities: [piCamera], exactActivityStatus: 503 })
+  try {
+    await page.goto(`${BASE}/admin/learning?studentId=15&activityId=41`)
+    const detail = page.getByRole('region', { name: '집중도 기록 상세' })
+    await detail.getByRole('alert').getByText('학습 기록 서버 응답 실패').waitFor()
+    const recordPaths = () => state.requests
+      .filter(request => /^\/api\/(activities|posture-records|students\/academy)/.test(request.path))
+      .map(request => request.path)
+    const initialRequests = recordPaths().length
+    state.exactActivityStatus = 0
+    await detail.getByRole('button', { name: '다시 불러오기' }).click()
+    await detail.getByText('바른 자세 0%', { exact: true }).waitFor()
+    assert.equal(recordPaths().length, initialRequests + 1)
+    assert.deepEqual([...new Set(recordPaths())], ['/api/activities/15/records/41'])
+
+    await page.goto(`${BASE}/admin/learning?studentId=15&activityId=999`)
+    await detail.getByText('선택한 학생의 해당 학습 기록을 찾을 수 없어요.', { exact: true }).waitFor()
+    await detail.getByRole('button', { name: '학습 관리로 돌아가기' }).waitFor()
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
 test('집중도 탭은 직접 입력 기록만 있으면 카메라 안내를 보이고, 조회 실패 시 다시 불러올 수 있다', async () => {
   const { page, context, state, errors } = await openPage({ activities: [
     { id: 11, subject: '수학', studyDate: '2026-11-03', studyStartTime: '19:00:00', studyDurationMinutes: 40, concentrationScore: 2, understandingScore: 3, measurementSource: 'MANUAL' },
@@ -729,6 +792,7 @@ test('많은 기록·1000문항·긴 인식 글자를 나누어 표시하며 HTM
     await page.goto(`${BASE}/learning?tab=records`)
     const records = page.getByRole('region', { name: '오답 및 OCR 채점 기록' })
     await records.getByText('국어 · W0', { exact: true }).waitFor()
+    await records.locator('details').first().waitFor()
     assert.equal(await records.locator('details').count(), 20)
     assert.equal(await records.locator('.ocr-question').count(), 0)
     await records.getByRole('button', { name: '채점 결과 더 보기', exact: true }).click()

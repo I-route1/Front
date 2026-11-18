@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { activitiesAPI, studentAPI } from '@/api'
 import { MeasurementDetails } from '@/components/learning/AttentionRecords'
+import { cameraActivityMetrics, formatElapsedSeconds } from '@/components/learning/recordUtils'
 
 export default function FeedbackTab() {
   const [students, setStudents] = useState([])
@@ -253,6 +254,8 @@ function ActivityCard({ activity, subjectColor, editingId, feedbackText, setFeed
   const isSaved = savedId === activityId
   
   const color = subjectColor[activity.subject] || 'var(--color-primary)'
+  const duration = formatElapsedSeconds(cameraActivityMetrics(activity).elapsedSeconds)
+    ?? (activity.studyDurationMinutes ? `${activity.studyDurationMinutes}분` : null)
   
   return (
     <div style={{ padding:'14px', borderRadius:12, background:'var(--color-surface)', border:`1px solid ${isEditing ? 'var(--color-primary)' : 'var(--color-border)'}`, transition:'all 0.15s' }}>
@@ -266,9 +269,9 @@ function ActivityCard({ activity, subjectColor, editingId, feedbackText, setFeed
             {activity.studyDate}
           </span>
         </div>
-        {activity.studyDurationMinutes && (
+        {duration && (
           <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>
-            ⏱ {activity.studyDurationMinutes}분
+            ⏱ {duration}
           </span>
         )}
       </div>
@@ -301,7 +304,7 @@ function ActivityCard({ activity, subjectColor, editingId, feedbackText, setFeed
         </div>
       )}
       
-      <MeasurementDetails activity={activity} />
+      <MeasurementDetails activity={activity} showScores={false} />
 
       {/* 피드백 영역 */}
       {isEditing ? (

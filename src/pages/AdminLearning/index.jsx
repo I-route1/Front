@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { ScopedActivityRecord } from '@/components/learning/AttentionRecords'
 import OverviewTab from './OverviewTab'
 import StudentsTab from './StudentsTab'
 import FeedbackTab from './FeedbackTab'
@@ -13,6 +15,16 @@ const TABS = [
 
 export default function AdminLearning() {
   const [activeTab, setActiveTab] = useState('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activityId = searchParams.get('activityId')
+  const studentId = searchParams.get('studentId')
+
+  if (activityId !== null) {
+    return <div style={{ margin: '16px' }}>
+      <ScopedActivityRecord key={`${studentId}:${activityId}`} studentId={studentId} activityId={activityId}
+        onBack={() => setSearchParams({}, { replace: true })} backLabel="학습 관리로 돌아가기" />
+    </div>
+  }
 
   return (
     <div>

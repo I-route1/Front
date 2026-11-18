@@ -186,15 +186,36 @@ export default function Learning() {
             .finally(() => setIsLoading(false))
     }, [isParent, user?.children])
 
+    const activityId = active === 'focus' ? searchParams.get('activityId') : null
+    const linkedStudentId = isParent && activityId !== null ? searchParams.get('studentId') : null
+    const childIndex = linkedStudentId === null
+        ? selectedChildIndex
+        : childrenList.findIndex(child => String(child?.studentId ?? child?.id ?? '') === linkedStudentId)
+
+    function selectChild(index) {
+        setSelectedChildIndex(index)
+        if (linkedStudentId !== null) {
+            const child = childrenList[index]
+            const next = new URLSearchParams(searchParams)
+            next.set('studentId', String(child?.studentId ?? child?.id ?? ''))
+            setSearchParams(next, { replace: true })
+        }
+    }
+
+    function backToFocusList() {
+        if (childIndex >= 0) setSelectedChildIndex(childIndex)
+        setActive('focus')
+    }
+
     // 선택된 자녀 정보
     const selectedChild = isParent
-        ? (childrenList?.[selectedChildIndex] ?? null)
+        ? (childrenList?.[childIndex] ?? null)
         : user
     const studentId = selectedChild?.studentId ?? selectedChild?.id
 
     const hasNoChildren = isParent && !isLoading && childrenList.length === 0
 
-    if (hasNoChildren) {
+    if (hasNoChildren && activityId === null) {
         return (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <GroupTabs activeGroup={activeGroup} onSelect={() => {}} disabled />
@@ -212,8 +233,8 @@ export default function Learning() {
             {isParent && childrenList.length > 1 && (
                 <ChildSelector
                     children={childrenList}
-                    selectedIndex={selectedChildIndex}
-                    onSelect={setSelectedChildIndex}
+                    selectedIndex={childIndex}
+                    onSelect={selectChild}
                 />
             )}
 
@@ -224,7 +245,7 @@ export default function Learning() {
                 {active === 'grade'      && <GradeTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'records'    && <div style={{ margin: '0 16px 16px' }}><LearningResults key={studentId} studentId={studentId} showSummary /></div>}
                 {active === 'pattern'    && <PatternTab key={studentId} studentId={studentId} selectedChild={selectedChild} />}
-                {active === 'focus'      && <ConcentrationTab key={studentId} studentId={studentId} />}
+                {active === 'focus'      && <ConcentrationTab key={studentId} studentId={studentId} activityId={activityId} onBack={backToFocusList} />}
                 {active === 'suggest'    && <SuggestTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'predict'    && <PredictTab    studentId={studentId} selectedChild={selectedChild} />}
                 {active === 'counseling' && <CounselingTab studentId={studentId} selectedChild={selectedChild} />}

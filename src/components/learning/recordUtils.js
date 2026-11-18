@@ -20,9 +20,32 @@ export function wrongTypeCounts(records) {
   })).sort((a, b) => b.count - a.count)
 }
 
+export const isRatio = value => Number.isFinite(value) && value >= 0 && value <= 1
+
 export function formatRatio(value) {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
-    ? `${Math.round(value * 1000) / 10}%` : '미측정'
+  return isRatio(value) ? `${Math.round(value * 1000) / 10}%` : '미측정'
+}
+
+export function cameraActivityMetrics(activity) {
+  const camera = activity?.measurementSource === 'CAMERA'
+  const elapsed = activity?.elapsedSeconds
+  const upright = activity?.uprightRatio
+  const samples = activity?.postureSampleCount
+  const warnings = activity?.forwardHeadCount
+  const hasPosture = camera && isRatio(upright) && Number.isSafeInteger(samples) && samples > 0
+  return {
+    elapsedSeconds: camera && Number.isInteger(elapsed) && elapsed >= 0 && elapsed <= 86400 ? elapsed : null,
+    uprightRatio: hasPosture ? upright : null,
+    postureSampleCount: hasPosture ? samples : null,
+    forwardHeadCount: camera && Number.isSafeInteger(warnings) && warnings >= 0 ? warnings : null,
+  }
+}
+
+export function formatElapsedSeconds(seconds) {
+  if (seconds == null) return null
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor(seconds / 60) % 60
+  return [hours && `${hours}시간`, minutes && `${minutes}분`, `${seconds % 60}초`].filter(Boolean).join(' ')
 }
 
 export function hourlyConcentration(records) {

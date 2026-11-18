@@ -6,8 +6,10 @@ import {
 } from 'recharts'
 import { activitiesAPI } from '@/api'
 import useStudentRecords from '@/hooks/useStudentRecords'
+import { CameraPostureDetails, ScopedActivityRecord } from '@/components/learning/AttentionRecords'
 import PostureRecords from '@/components/learning/PostureRecords'
 import { RecordError } from '@/components/learning/LearningResults'
+import { formatElapsedSeconds } from '@/components/learning/recordUtils'
 import { RecordLauncher } from '@/components/common/BottomSheet'
 import {
   SCORE_MAX, STATE_COLORS, concentrationLevel, normalizeActivities,
@@ -152,7 +154,17 @@ function CameraCard({ summary, activities }) {
   )
 }
 
-export default function ConcentrationTab({ studentId }) {
+export default function ConcentrationTab({ studentId, activityId, onBack }) {
+  if (activityId != null) {
+    return <div style={section}>
+      <ScopedActivityRecord key={activityId} studentId={studentId} activityId={activityId}
+        onBack={onBack} backLabel="집중도 기록 목록 보기" />
+    </div>
+  }
+  return <ConcentrationOverview studentId={studentId} />
+}
+
+function ConcentrationOverview({ studentId }) {
   const records = useStudentRecords(studentId, activitiesAPI.getActivities)
   const [, setSearchParams] = useSearchParams()
   // 입력 창은 학습 패턴 화면에 있다 (자기평가 저장 뒤 AI 메타인지 분석까지 이어서 보여준다)
@@ -351,12 +363,18 @@ export default function ConcentrationTab({ studentId }) {
                             <SourceBadge source={a.source} />
                           </div>
                           <p style={{ ...muted, fontSize: 11, marginTop: 3 }}>
-                            {formatDate(a.date)}{a.startTime ? ` ${a.startTime}` : ''} · {formatMinutes(a.minutes)}
+                            {formatDate(a.date)}{a.startTime ? ` ${a.startTime}` : ''} · {formatElapsedSeconds(a.elapsedSeconds) ?? formatMinutes(a.minutes)}
                             {a.source === 'CAMERA' && ` · 집중 ${pct(a.focused)} · 졸음 ${pct(a.drowsy)}`}
                           </p>
                         </div>
                         <Stars score={a.concentration} />
                       </div>
+                      {(a.understanding != null || a.uprightRatio !== null || a.forwardHeadCount !== null) && (
+                        <div className="measurement-details">
+                          {a.understanding != null && <span>이해도 {a.understanding} / 5</span>}
+                          <CameraPostureDetails metrics={a} />
+                        </div>
+                      )}
                       {a.feedback && (
                         <p style={{ marginTop: 8, marginLeft: 16, fontSize: 12, lineHeight: 1.5, color: 'var(--color-text-secondary)', background: 'var(--color-surface-2)', borderRadius: 8, padding: '8px 10px' }}>
                           👩‍🏫 {a.feedback}
