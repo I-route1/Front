@@ -47,30 +47,25 @@ export async function getAttendanceByParent(parentId, date) {
  * 4. 자녀 출결 이력 조회 (studentId 기반)
  * GET /api/gps/attendance/students/{studentId}?date=YYYY-MM-DD
  */
-export async function getAttendanceByStudent(studentId, date) {
+export async function getAttendanceByStudent(studentId, date, signal) {
   const params = date ? `?date=${date}` : ''
-  return apiCall(`/api/gps/attendance/students/${studentId}${params}`)
+  return apiCall(`/api/gps/attendance/students/${studentId}${params}`, { signal, timeoutMs: 15000 })
 }
 
 /**
  * 5. 버스 전체 출결 조회 (관리자/교사용)
  * GET /api/gps/attendance/buses/{busId}
  */
-export async function getAttendanceByBus(busId) {
-  return apiCall(`/api/gps/attendance/buses/${busId}`)
+export async function getAttendanceByBus(busId, signal) {
+  return apiCall(`/api/gps/attendance/buses/${busId}`, { signal, timeoutMs: 15000 })
 }
 
 /**
  * 6. 기사 앱: 내 버스 탑승 명단 + 출결 현황 조회
  * GET /api/gps/drivers/my-bus/attendance
  */
-export async function getMyBusAttendance() {
-  const res = await fetch(`${BASE_URL}/api/gps/drivers/my-bus/attendance`, {
-    headers: { ...getAuthHeader() },
-  })
-  if (res.status === 403) throw new Error('기사 권한이 필요합니다.')
-  if (!res.ok) throw new Error('출결 명단 조회 실패')
-  return res.json()
+export async function getMyBusAttendance(signal) {
+  return apiCall('/api/gps/drivers/my-bus/attendance', { signal, timeoutMs: 15000 })
 }
 
 /**

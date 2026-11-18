@@ -1,6 +1,7 @@
 // src/pages/Attendance/ParentAttendance.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getAttendanceByStudent, getChildren } from '@/api/attendance'
+import { useAttendanceList } from './useAttendanceList'
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -23,10 +24,7 @@ const toChild = c => ({ gpsStudentId: c.studentId ?? c.id, name: c.name, grade: 
 export default function ParentAttendance({ user }) {
   const [children, setChildren] = useState([])
   const [selectedChild, setSelectedChild] = useState(null)
-  const [records, setRecords] = useState([])
   const [date, setDate] = useState(getTodayStr())
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
   const [childState, setChildState] = useState('loading') // loading | ready | error
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -54,20 +52,11 @@ export default function ParentAttendance({ user }) {
     return () => { cancelled = true }
   }, [user?.id, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 출결 이력 로드 (자녀나 날짜를 빨리 바꿔도 마지막 요청 결과만 반영)
-  useEffect(() => {
-    if (!selectedChild) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    setRecords([])
-    getAttendanceByStudent(selectedChild.gpsStudentId, date)
-      .then(data => { if (!cancelled) setRecords(Array.isArray(data) ? data : []) })
-      .catch(() => { if (!cancelled) setError('출결 이력을 불러오지 못했습니다.') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [selectedChild?.gpsStudentId, date, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  // 같은 자녀를 새 목록으로 다시 받아도(객체만 바뀜) 출결을 두 번 요청하지 않도록 ID로 비교한다
+  const studentId = selectedChild?.gpsStudentId
+  const loadRecords = useCallback(signal => getAttendanceByStudent(studentId, date, signal), [studentId, date])
+  const { rows: records, loading, error } = useAttendanceList(studentId != null && date ? loadRecords : null, {
+    live: date === getTodayStr(), reloadKey, errorMessage: '출결 이력을 불러오지 못했습니다.',
+  })
 
   // 마지막 상태 계산
   const lastRecord = records[0]
