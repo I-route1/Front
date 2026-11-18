@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { aiReportAPI } from '@/api'
 import MathText from '@/components/common/MathText'
 import { REPORT_SUBJECTS } from '@/utils/reportSubjects'
@@ -15,16 +15,13 @@ const EXAMPLES = [
 
 // 학생이 직접 쓴 학습 질문에 AI가 답한다. 답은 AI 서버가 교과 자료(ConceptMap)를 찾아 근거로 붙여
 // 만든다. 생성이 한 번에 하나씩이라 여러 명이 동시에 물으면 늦어질 수 있다(Backend 한도 50초).
-export default function AskTab({ studentId }) {
+export default function AskTab() {
   const [subject, setSubject]   = useState(AUTO)
   const [question, setQuestion] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
-  const [askSubject, setAskSubject] = useState(false)   // 과목을 알 수 없다는 응답을 받음
+  const [guidance, setGuidance] = useState(null)
   const [history, setHistory]   = useState([])          // 최신이 앞
-
-  // 학부모가 자녀를 바꾸면 이전 자녀의 질문 기록은 지운다
-  useEffect(() => { setHistory([]); setError(null); setAskSubject(false) }, [studentId])
 
   const trimmed = question.trim()
   const canSubmit = !loading && trimmed.length >= 2 && trimmed.length <= MAX_LENGTH
@@ -33,13 +30,20 @@ export default function AskTab({ studentId }) {
     if (!canSubmit) return
     setLoading(true)
     setError(null)
+    setGuidance(null)
     try {
       const res = await aiReportAPI.askQuestion(trimmed, subject || undefined)
       if (res?.needSubject) {
-        setAskSubject(true)
+        setGuidance('어떤 과목 질문인지 알 수 없어요. 위에서 과목을 고른 뒤 다시 질문해 주세요.')
         return
       }
-      setAskSubject(false)
+      if (res?.answerKind === 'clarification' || res?.answerKind === 'out_of_scope') {
+        const fallback = res.answerKind === 'clarification'
+          ? '문제의 지문과 조건, 보기가 있으면 질문에 함께 적어 주세요.'
+          : '이곳에서는 수학·영어·국어·사회·과학 학습 질문에 답해 드려요.'
+        setGuidance(res.answer?.trim() || fallback)
+        return
+      }
       setHistory(prev => [{ ...res, id: Date.now() }, ...prev])
       setQuestion('')
     } catch (e) {
@@ -77,7 +81,7 @@ export default function AskTab({ studentId }) {
             return (
               <button
                 key={s || 'auto'}
-                onClick={() => { setSubject(s); if (s) setAskSubject(false) }}
+                onClick={() => { setSubject(s); setGuidance(null) }}
                 disabled={loading}
                 style={{
                   padding: '6px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
@@ -93,15 +97,17 @@ export default function AskTab({ studentId }) {
           })}
         </div>
 
-        {askSubject && (
-          <div style={{ padding: '8px 12px', borderRadius: 8, background: '#FFF8E0', border: '1px solid #FFB80040' }}>
+        {guidance && (
+          <div role="status" id="ask-guidance" style={{ padding: '8px 12px', borderRadius: 8, background: '#FFF8E0', border: '1px solid #FFB80040' }}>
             <p style={{ fontSize: 12, color: '#8A6500' }}>
-              어떤 과목 질문인지 알 수 없어요. 위에서 과목을 고른 뒤 다시 질문해 주세요.
+              {guidance}
             </p>
           </div>
         )}
 
         <textarea
+          aria-label="학습 질문"
+          aria-describedby={guidance ? 'ask-guidance' : undefined}
           value={question}
           onChange={e => setQuestion(e.target.value.slice(0, MAX_LENGTH))}
           onKeyDown={onKeyDown}
@@ -152,7 +158,7 @@ export default function AskTab({ studentId }) {
             {EXAMPLES.map(ex => (
               <button
                 key={ex}
-                onClick={() => setQuestion(ex)}
+                onClick={() => { setQuestion(ex); setGuidance(null) }}
                 style={{
                   textAlign: 'left', padding: '8px 10px', borderRadius: 8, fontSize: 12, fontFamily: 'inherit',
                   border: '1px dashed var(--color-border)', background: 'transparent',
