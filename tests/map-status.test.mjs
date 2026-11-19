@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   todayString, timeOfDay, updatedAgo, latestRecord, rideState, describeRide, attendanceToast,
   findChildEta, delayNotice, locationErrorMessage, routeFromResponse, progressStatuses, routePaths,
-  simulationPathFromRoute, progressAlongRoute, offRouteMeters, OFF_ROUTE_M, formatDistance,
+  simulationRouteFromResponse, routeLine, progressAlongRoute, offRouteMeters, OFF_ROUTE_M, formatDistance,
   describeNextStop, signalLostSeconds, describeSignalLoss,
 } from '../src/utils/mapStatus.js'
 import { distanceMeters } from '../src/utils/gpsTracking.js'
@@ -106,7 +106,7 @@ test('노선 응답은 순서대로 정렬하고 좌표 없는 정류장은 뺀�
   assert.deepEqual(routeFromResponse(null).stations, [])
 })
 
-test('시뮬레이션 경로는 서버 노선 정류장 순서대로, 정류장이 2개 미만이면 null', () => {
+test('시뮬레이션 경로: 도로 경로가 없으면 정류장 순서대로 직선, 정류장이 2개 미만이면 null', () => {
   // 운영 서버 1번 버스 테스트 노선(test-route)과 같은 모양
   const testRoute = {
     routeName: 'test-route',
@@ -115,12 +115,16 @@ test('시뮬레이션 경로는 서버 노선 정류장 순서대로, 정류장�
       { stopId: 1, stopName: 'stop-A', stopOrder: 1, latitude: 35.8468, longitude: 128.6132, status: 'PASSED' },
     ],
   }
-  assert.deepEqual(simulationPathFromRoute(testRoute), [
+  const sim = simulationRouteFromResponse(testRoute)
+  assert.deepEqual(sim.path, [
     { latitude: 35.8468, longitude: 128.6132 },
     { latitude: 35.85, longitude: 128.62 },
   ])
-  assert.equal(simulationPathFromRoute({ stops: [testRoute.stops[0]] }), null)
-  assert.equal(simulationPathFromRoute(null), null)
+  assert.equal(sim.onRoad, false)
+  assert.equal(sim.stopDistances[0], 0)
+  near(sim.stopDistances[1], 709, 2)
+  assert.equal(simulationRouteFromResponse({ stops: [testRoute.stops[0]] }), null)
+  assert.equal(simulationRouteFromResponse(null), null)
 })
 
 // 운영 서버 1번 버스 테스트 노선 (stop-A → stop-B, 약 709m)
@@ -261,4 +265,130 @@ test('지도 선: 노선 위 지점에서 나뉘고, 버스 쪽으로 선을 잇
   assert.equal(before.passed.length, 1)
   assert.deepEqual(before.remaining[0], before.passed[0], '버스 위치가 없으면 마지막으로 지난 정류장에서 이어진다')
   assert.deepEqual(routePaths([], null), { passed: [], remaining: [] })
+})
+
+// ---- 도로 경로(path) ----
+
+// 운영 서버 1번 버스 노선의 실제 도로 경로 (GET /api/gps/buses/1/route의 path, 2026-11-19).
+// 도로 길이 약 1,005m, 정류장 사이 직선 709m. 도로가 직선에서 최대 약 167m 벗어난다
+const ROAD = [
+  [35.8468026, 128.6131608], [35.8468206, 128.613172], [35.8468476, 128.6131722],
+  [35.8469827, 128.6131843], [35.8469632, 128.6134831], [35.8469254, 128.613826],
+  [35.8468753, 128.6148109], [35.8468462, 128.6152092], [35.8467391, 128.6167693],
+  [35.8470816, 128.6167719], [35.8474061, 128.6167634], [35.8481452, 128.616758],
+  [35.8488212, 128.6167632], [35.8494611, 128.6167682], [35.8494308, 128.617399],
+  [35.8494109, 128.6177642], [35.8497354, 128.6177667], [35.8500057, 128.6177799],
+  [35.8500237, 128.6177911], [35.8500594, 128.6178578], [35.850068, 128.6179243],
+  [35.8500393, 128.6182451], [35.8499419, 128.6196725], [35.8499132, 128.6199822],
+].map(([latitude, longitude]) => ({ latitude, longitude }))
+const roadRoute = routeFromResponse({
+  stops: [
+    { stopId: 1, stopName: 'stop-A', stopOrder: 1, ...STOP_A, status: 'BEFORE_ARRIVAL' },
+    { stopId: 2, stopName: 'stop-B', stopOrder: 2, ...STOP_B, status: 'BEFORE_ARRIVAL' },
+  ],
+  path: ROAD,
+})
+// 도로를 따라 meters만큼 간 지점
+const onRoad = (meters) => {
+  let left = meters
+  for (let i = 0; i < ROAD.length - 1; i++) {
+    const len = distanceMeters(ROAD[i], ROAD[i + 1])
+    if (left <= len) {
+      const t = len > 0 ? left / len : 0
+      return {
+        latitude: ROAD[i].latitude + (ROAD[i + 1].latitude - ROAD[i].latitude) * t,
+        longitude: ROAD[i].longitude + (ROAD[i + 1].longitude - ROAD[i].longitude) * t,
+      }
+    }
+    left -= len
+  }
+  return ROAD[ROAD.length - 1]
+}
+const ROAD_LENGTH = ROAD.slice(1).reduce((sum, p, i) => sum + distanceMeters(ROAD[i], p), 0)
+
+test('노선 응답의 도로 경로: 좌표가 이상한 점은 빼고, 2점 미만이면 없는 것으로 본다', () => {
+  assert.equal(roadRoute.path.length, 24)
+  near(ROAD_LENGTH, 1005, 3)
+  const mixed = routeFromResponse({ stops: [], path: [ROAD[0], { latitude: null, longitude: 1 }, { latitude: 200, longitude: 1 }, ROAD[1]] })
+  assert.deepEqual(mixed.path, [ROAD[0], ROAD[1]])
+  assert.deepEqual(routeFromResponse({ stops: [], path: [ROAD[0]] }).path, [])
+  assert.deepEqual(routeFromResponse({ stops: [] }).path, [], '예전 서버처럼 path가 없어도 된다')
+  assert.equal(routeLine(roadRoute.stations, roadRoute.path), roadRoute.path)
+  assert.deepEqual(routeLine(roadRoute.stations, []), [STOP_A, STOP_B], '도로 경로가 없으면 정류장 사이 직선')
+})
+
+test('도로를 따라 달리면 어디서도 노선 이탈이 아니다 (직선 기준이면 일부 구간이 이탈로 잡혔다)', () => {
+  let straightOff = 0
+  let lastAlong = -Infinity
+  for (let m = 0; m <= ROAD_LENGTH; m += 10) {
+    const bus = onRoad(m)
+    const p = progressAlongRoute(roadRoute.stations, bus, roadRoute.path)
+    assert.ok(p.offRoute < 1, `${m}m 지점이 도로에서 ${p.offRoute}m`)
+    assert.ok(p.along >= lastAlong - 0.5, `${m}m 지점에서 진행 거리가 줄었다`)
+    lastAlong = p.along
+    if (offRouteMeters(progressAlongRoute(roadRoute.stations, bus)) !== null) straightOff++
+  }
+  assert.ok(straightOff > 10, `직선 기준으로는 ${straightOff}개 지점이 이탈로 잡힌다`)
+})
+
+test('도로 기준 정류장 상태와 남은 거리', () => {
+  const statuses = (m) => progressStatuses(roadRoute.stations, onRoad(m), roadRoute.path).map((s) => s.status)
+  const describe = (m) => describeNextStop(
+    progressStatuses(roadRoute.stations, onRoad(m), roadRoute.path),
+    progressAlongRoute(roadRoute.stations, onRoad(m), roadRoute.path),
+  )
+  assert.deepEqual(statuses(0), ['ARRIVED', 'BEFORE_ARRIVAL'])
+  assert.deepEqual(statuses(100), ['PASSED', 'BEFORE_ARRIVAL'])
+  // 도로가 직선에서 가장 멀리(약 167m) 벗어난 꺾이는 곳. 직선 기준이었다면 여기서 '노선 이탈'이었다
+  assert.deepEqual(statuses(345), ['PASSED', 'BEFORE_ARRIVAL'])
+  assert.ok(offRouteMeters(progressAlongRoute(roadRoute.stations, onRoad(345))) > 150)
+  assert.deepEqual(statuses(ROAD_LENGTH - 20), ['PASSED', 'ARRIVED'])
+  // 남은 거리는 직선이 아니라 도로를 따라 잰다: 100m 지점이면 도로로 약 900m 남았다 (직선이면 약 610m)
+  const p = progressAlongRoute(roadRoute.stations, onRoad(100), roadRoute.path)
+  near(p.stopDistances[1] - p.along, ROAD_LENGTH - 100, 15)
+  assert.equal(describe(100), `다음 정류장 stop-B · 약 ${formatDistance(p.stopDistances[1] - p.along)}`)
+  assert.match(describe(100), /약 (8|9)\d0m/)
+})
+
+test('도로 기준 노선 이탈: 정류장 사이 직선 위라도 도로에서 100m 넘게 떨어져 있으면 이탈', () => {
+  const mid = busAt(250) // 정류장 사이 직선 위, 도로에서 약 105m (직선 위에서 도로와 가장 먼 곳)
+  const road = progressAlongRoute(roadRoute.stations, mid, roadRoute.path)
+  assert.ok(road.offRoute > OFF_ROUTE_M, `도로에서 ${road.offRoute}m`)
+  assert.deepEqual(progressStatuses(roadRoute.stations, mid, roadRoute.path).map((s) => s.status), ['BEFORE_ARRIVAL', 'BEFORE_ARRIVAL'])
+  assert.equal(offRouteMeters(progressAlongRoute(roadRoute.stations, mid)), null, '직선 기준으로는 노선 위')
+})
+
+test('지도 선: 도로 경로를 따라 그리고, 도로 위 지점에서 나눈다', () => {
+  const bus = onRoad(500)
+  const stations = progressStatuses(roadRoute.stations, bus, roadRoute.path)
+  const { passed, remaining } = routePaths(stations, bus, roadRoute.path)
+  assert.ok(passed.length > 5 && remaining.length > 5, '꺾이는 점들을 그대로 따라간다')
+  assert.equal(passed.length + remaining.length, ROAD.length + 2, '나누는 지점이 양쪽에 한 번씩 들어간다')
+  assert.deepEqual(passed[0], ROAD[0])
+  assert.deepEqual(remaining[remaining.length - 1], ROAD[ROAD.length - 1])
+  assert.deepEqual(passed[passed.length - 1], remaining[0])
+  assert.ok(distanceMeters(remaining[0], bus) < 1)
+
+  // 버스 위치를 모르면(운행 전) 도로 전체가 남은 구간
+  const idle = routePaths(roadRoute.stations, null, roadRoute.path)
+  assert.deepEqual(idle, { passed: [], remaining: roadRoute.path })
+  // 도로에서 멀리 벗어나 있으면 지나온 구간 없이 도로 전체를 남은 구간으로
+  const far = { latitude: 35.8745, longitude: 128.6041 }
+  const off = routePaths(progressStatuses(roadRoute.stations, far, roadRoute.path), far, roadRoute.path)
+  assert.deepEqual(off, { passed: [], remaining: roadRoute.path })
+})
+
+test('시뮬레이션 경로: 도로 경로가 있으면 도로를 따라, 정류장 위치는 도로 위에서 잰다', () => {
+  const sim = simulationRouteFromResponse({
+    stops: [
+      { stopId: 2, stopName: 'stop-B', stopOrder: 2, ...STOP_B },
+      { stopId: 1, stopName: 'stop-A', stopOrder: 1, ...STOP_A },
+    ],
+    path: ROAD,
+  })
+  assert.equal(sim.onRoad, true)
+  assert.equal(sim.path.length, 24)
+  assert.equal(sim.stopDistances.length, 2, '도로의 꺾이는 점은 정류장이 아니다')
+  near(sim.stopDistances[0], 0, 5)
+  near(sim.stopDistances[1], ROAD_LENGTH, 15)
 })

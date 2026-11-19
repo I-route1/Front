@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getBusRoute, sendGpsLocation } from '../services/gpsService'
 import {
-  buildGpsPayload, createFixTracker, fixAgeMs, formatKmh, isFixStale, msToKmh, simulateFix, simulationSpeedAt,
+  buildGpsPayload, createFixTracker, fixAgeMs, formatKmh, isFixStale, msToKmh, pathStopDistances, simulateFix,
+  simulationSpeedAt,
 } from '../utils/gpsTracking'
-import { simulationPathFromRoute } from '../utils/mapStatus'
+import { simulationRouteFromResponse } from '../utils/mapStatus'
 
 // 백엔드 GpsController: 기사 앱은 5초 주기로 위치를 보낸다.
 const SEND_INTERVAL_MS = 5000
@@ -19,6 +20,12 @@ const FALLBACK_SIMULATION_PATH = [
   { latitude: 35.8750, longitude: 128.6045 },
   { latitude: 35.8765, longitude: 128.6060 },
 ]
+// 임시 경로는 점마다 정류장으로 보고 서행한다
+const FALLBACK_SIMULATION_ROUTE = {
+  path: FALLBACK_SIMULATION_PATH,
+  stopDistances: pathStopDistances(FALLBACK_SIMULATION_PATH),
+  onRoad: false,
+}
 
 const SPEED_SOURCE_LABEL = {
   device: 'GPS 기기 측정',
@@ -54,24 +61,24 @@ export default function DriverMapPage({ busId = 1 }) {
   // 시뮬레이션은 '운행 시작'을 누를 때마다 출발점부터 다시 달린다 (실제 GPS에는 영향 없음)
   const [simulationRun, setSimulationRun] = useState(0)
   const simulationKey = mode === 'simulation' ? simulationRun : 0
-  // 시뮬레이션이 따라 달릴 서버 노선(정류장 좌표 순서). 못 받았으면 임시 경로
-  const [routePath, setRoutePath] = useState(null)
-  const simulationPath = routePath ?? FALLBACK_SIMULATION_PATH
+  // 시뮬레이션이 따라 달릴 서버 노선(도로 경로, 없으면 정류장 사이 직선). 못 받았으면 임시 경로
+  const [serverRoute, setServerRoute] = useState(null)
+  const simulationRoute = serverRoute ?? FALLBACK_SIMULATION_ROUTE
   const [starting, setStarting] = useState(false)
 
   const latestFixRef = useRef(null)
 
-  const loadRoutePath = useCallback(async () => {
+  const loadServerRoute = useCallback(async () => {
     try {
-      const path = simulationPathFromRoute(await getBusRoute(busId))
-      if (path) setRoutePath(path)
-      return path
+      const next = simulationRouteFromResponse(await getBusRoute(busId))
+      if (next) setServerRoute(next)
+      return next
     } catch {
       return null // 버스 위치가 아직 없으면 404
     }
   }, [busId])
 
-  useEffect(() => { setRoutePath(null) }, [busId])
+  useEffect(() => { setServerRoute(null) }, [busId])
   const sendingRef = useRef(false)
   const gpsErrorAtRef = useRef(null) // 마지막 측정 뒤 GPS 오류가 난 시각 (정상 측정이 오면 지운다)
 
@@ -114,20 +121,20 @@ export default function DriverMapPage({ busId = 1 }) {
     let distance = 0
     const tick = () => {
       const now = Date.now()
-      const speed = simulationSpeedAt(simulationPath, distance, (now - startedAt) / 1000)
+      const speed = simulationSpeedAt(simulationRoute.stopDistances, distance, (now - startedAt) / 1000)
       distance += speed * ((now - lastTick) / 1000)
       lastTick = now
-      updateFix(simulateFix(simulationPath, distance, speed, now))
+      updateFix(simulateFix(simulationRoute.path, distance, speed, now))
     }
     tick()
     const timer = setInterval(tick, SIMULATION_TICK_MS)
     return () => clearInterval(timer)
-  }, [mode, geolocationSupported, simulationKey, simulationPath])
+  }, [mode, geolocationSupported, simulationKey, simulationRoute])
 
   // 임시 경로로 첫 전송을 한 뒤에는 서버가 노선을 주므로, 받는 즉시 노선 출발점으로 옮겨 간다
   useEffect(() => {
-    if (mode === 'simulation' && running && !routePath && lastSent) loadRoutePath()
-  }, [mode, running, routePath, lastSent, loadRoutePath])
+    if (mode === 'simulation' && running && !serverRoute && lastSent) loadServerRoute()
+  }, [mode, running, serverRoute, lastSent, loadServerRoute])
 
   // 2) 전송: 5초마다 가장 최근 측정값을 m/s 그대로 보낸다 (km/h 변환은 서버가 한다)
   useEffect(() => {
@@ -217,7 +224,10 @@ export default function DriverMapPage({ busId = 1 }) {
         </p>
         <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>
           {fix?.speedSource ? SPEED_SOURCE_LABEL[fix.speedSource] : '속도 정보 없음'}
-          {fix?.speedSource === 'simulated' && (routePath ? ' · 서버 노선 따라 종점까지' : ' · 임시 경로 (노선을 받으면 노선으로 이동)')}
+          {fix?.speedSource === 'simulated' && (
+            !serverRoute ? ' · 임시 경로 (노선을 받으면 노선으로 이동)'
+              : serverRoute.onRoad ? ' · 도로 따라 종점까지' : ' · 정류장 사이 직선으로 종점까지'
+          )}
           {fix?.accuracy != null && ` · 위치 오차 약 ${Math.round(fix.accuracy)}m`}
         </p>
       </div>
@@ -241,9 +251,9 @@ export default function DriverMapPage({ busId = 1 }) {
             return
           }
           // 시뮬레이션이면 서버 노선을 먼저 받아 노선 출발점에서 시작한다 (버스 위치가 없으면 임시 경로로 시작)
-          if (mode === 'simulation' && !routePath) {
+          if (mode === 'simulation' && !serverRoute) {
             setStarting(true)
-            await loadRoutePath()
+            await loadServerRoute()
             setStarting(false)
           }
           setSimulationRun((n) => n + 1)

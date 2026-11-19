@@ -191,16 +191,24 @@ test('시뮬레이션: 편도 운행이라 종점에 닿으면 그 자리에 멈
 })
 
 test('시뮬레이션: 정류장 반경 안에서는 12km/h로 서행 (백엔드 정차 판정 3.0m/s보다 빠름)', () => {
-  const path = [A, B] // 약 157m
-  const total = pathStopDistances(path)[1]
+  const stops = pathStopDistances([A, B]) // 정류장 두 개, 약 157m
+  const total = stops[1]
   assert.equal(SIMULATION_STOP_ZONE_M, 50)
   assert.ok(SIMULATION_STOP_ZONE_SPEED_MS > 3.0, '정류장 서행이 비정상 정차로 잡히면 안 된다')
-  assert.equal(simulationSpeedAt(path, 0, 0), SIMULATION_STOP_ZONE_SPEED_MS, '출발 정류장')
-  assert.equal(simulationSpeedAt(path, 49, 0), SIMULATION_STOP_ZONE_SPEED_MS)
-  assert.equal(simulationSpeedAt(path, total - 10, 0), SIMULATION_STOP_ZONE_SPEED_MS, '도착 정류장 앞')
-  assert.equal(simulationSpeedAt(path, total / 2, 30), simulatedSpeedMs(30), '정류장 사이에서는 보통 속도')
+  assert.equal(simulationSpeedAt(stops, 0, 0), SIMULATION_STOP_ZONE_SPEED_MS, '출발 정류장')
+  assert.equal(simulationSpeedAt(stops, 49, 0), SIMULATION_STOP_ZONE_SPEED_MS)
+  assert.equal(simulationSpeedAt(stops, total - 10, 0), SIMULATION_STOP_ZONE_SPEED_MS, '도착 정류장 앞')
+  assert.equal(simulationSpeedAt(stops, total / 2, 30), simulatedSpeedMs(30), '정류장 사이에서는 보통 속도')
   // 서행 구간(50m)을 지나는 동안 5초 간격 전송이 여러 번 들어간다
   assert.ok(SIMULATION_STOP_ZONE_M / SIMULATION_STOP_ZONE_SPEED_MS >= 15)
+})
+
+test('시뮬레이션: 도로 경로의 꺾이는 점에서는 서행하지 않는다 (정류장 위치에서만)', () => {
+  // 도로 경로는 꺾일 때마다 점이 있다. 정류장은 0m와 1000m 두 곳뿐
+  const stops = [0, 1000]
+  assert.equal(simulationSpeedAt(stops, 300, 30), simulatedSpeedMs(30), '도로 중간의 꺾이는 점')
+  assert.equal(simulationSpeedAt(stops, 980, 30), SIMULATION_STOP_ZONE_SPEED_MS, '도착 정류장 앞')
+  assert.equal(simulationSpeedAt(undefined, 0, 30), simulatedSpeedMs(30), '정류장 정보가 없으면 보통 속도')
 })
 
 test('시뮬레이션 속도는 20~40km/h 사이', () => {
