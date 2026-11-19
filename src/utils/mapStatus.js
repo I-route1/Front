@@ -111,11 +111,17 @@ export function locationErrorMessage(err) {
 
 // ---- ② 노선 ----
 
+const isPoint = (p) => isFiniteNumber(p?.latitude) && isFiniteNumber(p?.longitude)
+  && Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180
+
 // GET /api/gps/buses/{busId}/route 응답 → 화면용 노선
+// - stations: 정류장 (순서대로, 좌표 없는 정류장은 뺀다)
+// - path: 서버가 카카오 모빌리티로 받은 실제 도로 경로 좌표 (첫 정류장 → 마지막 정류장).
+//   없거나 2점 미만이면 []이고, 그때는 정류장 사이 직선을 노선으로 쓴다 (routeLine)
 export function routeFromResponse(route) {
   const stops = Array.isArray(route?.stops) ? route.stops : []
   const stations = stops
-    .filter((s) => isFiniteNumber(s?.latitude) && isFiniteNumber(s?.longitude))
+    .filter(isPoint)
     .map((s) => ({
       stopId: s.stopId,
       name: s.stopName ?? '',
@@ -125,14 +131,25 @@ export function routeFromResponse(route) {
       status: s.status === 'ARRIVED' || s.status === 'PASSED' ? s.status : 'BEFORE_ARRIVAL',
     }))
     .sort((a, b) => a.order - b.order)
-  return { routeName: route?.routeName ?? '', stations }
+  const path = (Array.isArray(route?.path) ? route.path : [])
+    .filter(isPoint)
+    .map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
+  return { routeName: route?.routeName ?? '', stations, path: path.length >= 2 ? path : [] }
 }
 
-// 기사 화면 시뮬레이션이 따라 달릴 경로: 서버 노선의 정류장 좌표 순서대로. 정류장이 2개 미만이면 null
-export function simulationPathFromRoute(route) {
-  const { stations } = routeFromResponse(route)
+// 진행·이탈 판정과 지도 선이 따르는 노선 선: 도로 경로가 있으면 도로, 없으면 정류장을 잇는 직선
+export function routeLine(stations, path) {
+  if (Array.isArray(path) && path.length >= 2) return path
+  return (Array.isArray(stations) ? stations : []).map((s) => ({ latitude: s.latitude, longitude: s.longitude }))
+}
+
+// 기사 화면 시뮬레이션이 따라 달릴 경로와, 그 경로 위 정류장 위치(출발점에서 잰 거리 m).
+// 도로 경로가 있으면 도로를 따라, 없으면 정류장 사이 직선으로 달린다. 정류장이 2개 미만이면 null
+export function simulationRouteFromResponse(route) {
+  const { stations, path } = routeFromResponse(route)
   if (stations.length < 2) return null
-  return stations.map((s) => ({ latitude: s.latitude, longitude: s.longitude }))
+  const line = routeLine(stations, path)
+  return { path: line, stopDistances: stopDistancesOnLine(line, stations), onRoad: path.length >= 2 }
 }
 
 // 정류장 반경(m). 백엔드 RouteProgressService.ARRIVAL_RADIUS_METER와 같은 값
@@ -141,7 +158,7 @@ const ARRIVAL_RADIUS_M = 50
 export const OFF_ROUTE_M = 100
 const EARTH_RADIUS_M = 6371000
 
-// 기준점(origin)에서 본 평면 좌표(m). 정류장 사이 수백 m 범위라 평면으로 봐도 오차가 작다.
+// 기준점(origin)에서 본 평면 좌표(m). 구간 하나는 길어야 수백 m라 평면으로 봐도 오차가 작다.
 function toLocalXY(origin, p) {
   const rad = Math.PI / 180
   return {
@@ -150,38 +167,75 @@ function toLocalXY(origin, p) {
   }
 }
 
-// 노선 위 진행 거리: 버스 위치를 정류장을 잇는 선에 투영해 출발 정류장에서 몇 m 왔는지 구한다.
-// - along: 음수면 출발 정류장 앞, 마지막 정류장까지 거리보다 크면 종점을 지난 것
-// - offRoute: 노선 선(구간)까지의 거리. 노선 끝의 연장선이 아니라 실제 구간까지 잰다
-// - point: 노선 위에서 버스와 가장 가까운 지점 (지도 선을 나누는 곳)
-export function progressAlongRoute(stations, bus) {
-  if (!Array.isArray(stations) || stations.length < 2) return null
-  if (!bus || !isFiniteNumber(bus.latitude) || !isFiniteNumber(bus.longitude)) return null
-  const stopDistances = [0]
+// 이보다 짧은 구간(m)은 건너뛴다. 백엔드 RoadProjectionService가 길이² < 1e-8인 구간을 건너뛰는 것과 같다
+const MIN_SEGMENT_M = 1e-4
+
+// 선(line) 위에서 점 p와 가장 가까운 곳. 백엔드 RoadProjectionService.project와 같은 방식으로,
+// 구간마다 수직으로 투영해 가장 가까운 구간을 고른다.
+// - along: 선 출발점에서 그 지점까지 선을 따라 잰 거리(m). 단, 가장 가까운 곳이 선의 맨 처음·맨 끝이면
+//   연장선으로 재서, 출발점 앞이면 음수, 종점을 지났으면 전체 길이보다 크다
+// - offset: 선(구간)까지의 거리(m). 연장선이 아니라 실제 구간까지 잰다
+// - point, index, t: 선 위 가장 가까운 지점과, 그 지점이 있는 구간(line[index] → line[index + 1]) 안의 위치(0~1)
+function projectOntoLine(line, p) {
+  if (!Array.isArray(line) || line.length < 2 || !isPoint(p)) return null
   let start = 0
   let best = null
-  for (let i = 0; i < stations.length - 1; i++) {
-    const end = toLocalXY(stations[i], stations[i + 1])
-    const pos = toLocalXY(stations[i], bus)
+  let first = -1
+  let last = -1
+  for (let i = 0; i < line.length - 1; i++) {
+    const end = toLocalXY(line[i], line[i + 1])
     const len = Math.hypot(end.x, end.y)
-    const rawT = len > 0 ? (pos.x * end.x + pos.y * end.y) / (len * len) : 0
+    if (len < MIN_SEGMENT_M) continue
+    if (first === -1) first = i
+    last = i
+    const pos = toLocalXY(line[i], p)
+    const rawT = (pos.x * end.x + pos.y * end.y) / (len * len)
     const t = Math.min(1, Math.max(0, rawT))
-    const offRoute = Math.hypot(pos.x - end.x * t, pos.y - end.y * t)
-    if (!best || offRoute < best.offRoute) best = { i, rawT, t, len, start, offRoute }
+    const offset = Math.hypot(pos.x - end.x * t, pos.y - end.y * t)
+    if (!best || offset < best.offset) best = { i, rawT, t, len, start, offset }
     start += len
-    stopDistances.push(start)
   }
-  const lastLeg = stations.length - 2
+  if (!best) return null
   let along = best.start + best.t * best.len
-  if (best.i === 0 && best.rawT < 0) along = best.rawT * best.len
-  if (best.i === lastLeg && best.rawT > 1) along = best.start + best.rawT * best.len
-  const from = stations[best.i]
-  const to = stations[best.i + 1]
-  const point = {
-    latitude: from.latitude + (to.latitude - from.latitude) * best.t,
-    longitude: from.longitude + (to.longitude - from.longitude) * best.t,
+  if (best.i === first && best.rawT < 0) along = best.rawT * best.len
+  if (best.i === last && best.rawT > 1) along = best.start + best.rawT * best.len
+  const from = line[best.i]
+  const to = line[best.i + 1]
+  return {
+    along,
+    offset: best.offset,
+    point: {
+      latitude: from.latitude + (to.latitude - from.latitude) * best.t,
+      longitude: from.longitude + (to.longitude - from.longitude) * best.t,
+    },
+    index: best.i,
+    t: best.t,
   }
-  return { along, stopDistances, offRoute: best.offRoute, point }
+}
+
+// 정류장마다 노선 선 위 위치(선 출발점에서 잰 거리 m). 백엔드도 정류장을 도로에 투영해 순서를 비교한다
+function stopDistancesOnLine(line, stations) {
+  return stations.map((s) => projectOntoLine(line, s)?.along ?? 0)
+}
+
+// 노선 위 진행 거리: 버스 위치를 노선 선(도로 경로, 없으면 정류장 사이 직선)에 투영해 출발점에서 몇 m 왔는지 구한다.
+// - along: 음수면 출발점 앞, 노선 전체 길이보다 크면 종점을 지난 것
+// - stopDistances: 정류장마다 같은 선 위 위치. along과 비교해 지나온 정류장을 가린다
+// - offRoute: 노선 선까지의 거리(m)
+// - point, index, t: 노선 위에서 버스와 가장 가까운 지점 (지도 선을 나누는 곳)
+export function progressAlongRoute(stations, bus, path = null) {
+  if (!Array.isArray(stations) || stations.length < 2 || !isPoint(bus)) return null
+  const line = routeLine(stations, path)
+  const projected = projectOntoLine(line, bus)
+  if (!projected) return null
+  return {
+    along: projected.along,
+    stopDistances: stopDistancesOnLine(line, stations),
+    offRoute: projected.offset,
+    point: projected.point,
+    index: projected.index,
+    t: projected.t,
+  }
 }
 
 // 버스가 노선에서 OFF_ROUTE_M보다 멀리 떨어져 있으면 그 거리(m), 아니면 null
@@ -190,12 +244,13 @@ export function offRouteMeters(progress) {
 }
 
 // 버스 위치가 바뀔 때마다 서버에 다시 묻지 않고 정류장 상태를 갱신한다. (백엔드 RouteProgressService와 같은 규칙)
-// - 노선에서 100m 넘게 벗어나 있으면 진행 거리를 믿을 수 없으므로 어떤 정류장도 통과로 보지 않는다
+// - 노선(도로 경로)에서 100m 넘게 벗어나 있으면 진행 거리를 믿을 수 없으므로 어떤 정류장도 통과로 보지 않는다
 // - 50m 이내 → ARRIVED, 노선 위 진행 거리로 이미 지나온 정류장 → PASSED, 나머지 → BEFORE_ARRIVAL
-export function progressStatuses(stations, bus) {
+// 백엔드와 다른 점 하나: 버스가 노선 끝을 지나 있으면 마지막 정류장도 통과로 본다 (백엔드는 끝에서 멈춰 '도착 전'으로 남는다)
+export function progressStatuses(stations, bus, path = null) {
   if (!Array.isArray(stations) || stations.length === 0) return []
-  if (!bus || !isFiniteNumber(bus.latitude) || !isFiniteNumber(bus.longitude)) return stations
-  const progress = progressAlongRoute(stations, bus)
+  if (!isPoint(bus)) return stations
+  const progress = progressAlongRoute(stations, bus, path)
   const offRoute = offRouteMeters(progress) !== null
   return stations.map((s, i) => {
     if (offRoute) return { ...s, status: 'BEFORE_ARRIVAL' }
@@ -242,21 +297,26 @@ export function signalLostSeconds(updatedAt, now = Date.now(), thresholdMs = 30_
   return elapsed > thresholdMs ? Math.floor(elapsed / 1000) : null
 }
 
-// 지도에 그릴 선: 지나온 구간(회색)과 남은 구간(파랑). 선은 항상 노선(정류장을 잇는 선) 위에만 그리고,
-// 버스와 가장 가까운 노선 위 지점에서 나눈다. 버스가 노선을 벗어나 있으면 버스 쪽으로 선을 잇지 않는다.
-export function routePaths(stations, bus) {
-  const point = (s) => ({ latitude: s.latitude, longitude: s.longitude })
-  const list = Array.isArray(stations) ? stations : []
-  const passed = list.filter((s) => s.status === 'PASSED').map(point)
-  const rest = list.filter((s) => s.status !== 'PASSED').map(point)
-  const hasBus = bus && isFiniteNumber(bus.latitude) && isFiniteNumber(bus.longitude)
-  const progress = hasBus ? progressAlongRoute(list, bus) : null
-  const split = progress && offRouteMeters(progress) === null ? progress.point : null
-  if (!split) {
-    return { passed, remaining: passed.length ? [passed[passed.length - 1], ...rest] : rest }
-  }
+// 노선 선을 at(projectOntoLine 결과) 지점에서 둘로 나눈다. 두 선은 나누는 지점을 함께 가진다
+function splitLine(line, { index, t, point }) {
   return {
-    passed: passed.length ? [...passed, split] : [],
-    remaining: [split, ...rest],
+    passed: t > 0 ? [...line.slice(0, index + 1), point] : line.slice(0, index + 1),
+    remaining: t < 1 ? [point, ...line.slice(index + 1)] : line.slice(index + 1),
   }
+}
+
+// 지도에 그릴 선: 지나온 구간(회색)과 남은 구간(파랑). 선은 항상 노선(도로 경로, 없으면 정류장 사이 직선) 위에만 그리고,
+// 버스와 가장 가까운 노선 위 지점에서 나눈다. 버스가 노선을 벗어나 있으면 버스 쪽으로 선을 잇지 않는다.
+// 버스 위치를 모르거나 노선을 벗어나 있으면 마지막으로 지난 정류장에서 나눈다 (없으면 전체가 남은 구간)
+export function routePaths(stations, bus, path = null) {
+  const list = Array.isArray(stations) ? stations : []
+  const line = routeLine(list, path)
+  if (line.length < 2) return { passed: [], remaining: line }
+  const progress = isPoint(bus) ? progressAlongRoute(list, bus, path) : null
+  let at = progress && offRouteMeters(progress) === null ? progress : null
+  if (!at) {
+    const lastPassed = list.filter((s) => s.status === 'PASSED').pop()
+    at = lastPassed ? projectOntoLine(line, lastPassed) : null
+  }
+  return at ? splitLine(line, at) : { passed: [], remaining: line }
 }

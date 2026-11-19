@@ -204,7 +204,9 @@ export function simulateFix(path, distanceM, speedMs, timestamp = Date.now()) {
 export const SIMULATION_STOP_ZONE_M = 50
 export const SIMULATION_STOP_ZONE_SPEED_MS = 12 / 3.6
 
-export function simulationSpeedAt(path, distanceM, elapsedSec) {
-  const nearStop = pathStopDistances(path).some((s) => Math.abs(distanceM - s) < SIMULATION_STOP_ZONE_M)
+// stopDistances: 경로 출발점에서 잰 정류장 위치(m). 도로 경로는 꺾이는 점마다 좌표가 있어서
+// 경로 점을 정류장으로 볼 수 없으므로, 정류장 위치를 따로 받는다 (mapStatus.simulationRouteFromResponse)
+export function simulationSpeedAt(stopDistances, distanceM, elapsedSec) {
+  const nearStop = (stopDistances ?? []).some((s) => Math.abs(distanceM - s) < SIMULATION_STOP_ZONE_M)
   return nearStop ? SIMULATION_STOP_ZONE_SPEED_MS : simulatedSpeedMs(elapsedSec)
 }

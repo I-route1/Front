@@ -21,6 +21,7 @@ const ETA_REFRESH_MS = 60_000
 const TOAST_MS = 5000
 const CLOCK_TICK_MS = 10_000
 const KAKAO_SDK_ID = 'kakao-map-sdk-script'
+const EMPTY_ROUTE = { routeName: '', stations: [], path: [] }
 
 // 서버에 없는 기사 정보(사진·소속)는 예시 값. 차량 번호·이름·연락처는 서버 값으로 덮어쓴다.
 const mockVehicleInfo = {
@@ -100,7 +101,7 @@ export default function Map() {
   const [busLocation, setBusLocation] = useState(null) // { latitude, longitude }
   const [locationError, setLocationError] = useState(null)
   const [wsState, setWsState] = useState('connecting')
-  const [route, setRoute] = useState({ routeName: '', stations: [] })
+  const [route, setRoute] = useState(EMPTY_ROUTE) // { routeName, stations, path(도로 경로, 없으면 []) }
   const [etas, setEtas] = useState([])
   const [attendance, setAttendance] = useState(null) // 오늘 출결 기록. 조회 못 하면 null
   const [onBoard, setOnBoard] = useState(null)
@@ -112,8 +113,9 @@ export default function Map() {
   const [portalContainer, setPortalContainer] = useState(null)
 
   const isRunning = busLocation !== null
-  const stations = useMemo(() => progressStatuses(route.stations, busLocation), [route.stations, busLocation])
-  const progress = useMemo(() => progressAlongRoute(route.stations, busLocation), [route.stations, busLocation])
+  // 진행·이탈은 서버와 같이 도로 경로 기준 (도로 경로가 없으면 정류장 사이 직선)
+  const stations = useMemo(() => progressStatuses(route.stations, busLocation, route.path), [route.stations, route.path, busLocation])
+  const progress = useMemo(() => progressAlongRoute(route.stations, busLocation, route.path), [route.stations, route.path, busLocation])
   const offRoute = offRouteMeters(progress) // 노선에서 100m 넘게 벗어나 있으면 그 거리(m)
   const signalLoss = isRunning ? describeSignalLoss(signalLostSeconds(updatedAt, now)) : null
   const childEta = findChildEta(etas, childStudentId)
@@ -194,7 +196,7 @@ export default function Map() {
   // 버스가 바뀌면 처음부터 다시 받는다
   useEffect(() => {
     let cancelled = false
-    setRoute({ routeName: '', stations: [] })
+    setRoute(EMPTY_ROUTE)
     setBusLocation(null)
     setSpeed(null)
     setUpdatedAt(null)
@@ -363,7 +365,7 @@ export default function Map() {
     if (!mapInstance || !kakao?.maps || stations.length === 0) return undefined
     const toLatLng = p => new kakao.maps.LatLng(p.latitude, p.longitude)
     const shapes = []
-    const { passed, remaining } = routePaths(stations, busLocation)
+    const { passed, remaining } = routePaths(stations, busLocation, route.path)
     if (passed.length > 1) {
       shapes.push(new kakao.maps.Polyline({ map: mapInstance, path: passed.map(toLatLng), strokeWeight: 5, strokeColor: '#9CA3AF', strokeOpacity: 0.8, strokeStyle: 'solid' }))
     }
@@ -377,17 +379,18 @@ export default function Map() {
         shapes.push(new kakao.maps.Marker({ map: mapInstance, position: toLatLng(s), title: s.name }))
       }
     })
-    // 노선을 처음 받았을 때 한 번 노선 전체가 보이게 맞춘다
-    const routeKey = stations.map(s => s.stopId).join(',')
+    // 노선을 처음 받았을 때 한 번 노선 전체(도로가 정류장 밖으로 돌아가는 부분 포함)가 보이게 맞춘다
+    const routeKey = `${stations.map(s => s.stopId).join(',')}:${route.path.length}`
     if (fittedRouteRef.current !== routeKey) {
       const bounds = new kakao.maps.LatLngBounds()
       stations.forEach(s => bounds.extend(toLatLng(s)))
+      route.path.forEach(p => bounds.extend(toLatLng(p)))
       if (busLocation) bounds.extend(toLatLng(busLocation))
       mapInstance.setBounds(bounds)
       fittedRouteRef.current = routeKey
     }
     return () => shapes.forEach(shape => shape.setMap(null))
-  }, [mapInstance, stations, busLocation, childStopId, childName])
+  }, [mapInstance, stations, route.path, busLocation, childStopId, childName])
 
   const stats = [
     ['우리 아이 정류장까지', childEta ? `${childEta.etaMinutes}분` : '-'],
