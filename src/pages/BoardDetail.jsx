@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { boardAPI } from '../api'
 import { useAuth } from '@/context/AuthContext'
 import { useEffect, useState } from 'react'
+import { AuthorName, AuthorProfileDialog } from '@/components/common/AuthorProfile'
 import BackButton from '../components/common/BackButton'
 
 function normalizePost(rawPost) {
@@ -69,11 +70,13 @@ export default function BoardDetail() {
     const userId = user?.id ?? user?.userId
 
     const [post, setPost] = useState(null)
+    const [selectedAuthor, setSelectedAuthor] = useState(null)
     const [liked, setLiked] = useState(false)
     const [favorite, setFavorite] = useState(false)
     const [commentText, setCommentText] = useState('')
     const [comments, setComments] = useState([])
     const [isLoading, setIsLoading] = useState(true)
+    const [isPostMissing, setIsPostMissing] = useState(false)
     const [noticeMessage, setNoticeMessage] = useState('')
     const [isSubmittingComment, setIsSubmittingComment] = useState(false)
 
@@ -85,6 +88,8 @@ export default function BoardDetail() {
         async function fetchPostDetail() {
             try {
                 setIsLoading(true)
+                setSelectedAuthor(null)
+                setIsPostMissing(false)
                 setNoticeMessage('')
                 if (!/^\d+$/.test(String(postId))) {
                     throw new Error('잘못된 게시글 ID입니다.')
@@ -110,12 +115,13 @@ export default function BoardDetail() {
                     setComments(normalizedComments)
                 }
             } catch (error) {
-                console.error('게시글 상세 조회 실패:', error)
-
                 if (!ignore) {
+                    const missing = /^게시글을 찾을 수 없습니다[.]?$/.test(error.message?.trim())
+                    if (!missing) console.error('게시글 상세 조회 실패:', error)
                     setPost(null)
                     setComments([])
-                    setNoticeMessage(error.message || '게시글을 불러오지 못했습니다.')
+                    setIsPostMissing(missing)
+                    setNoticeMessage(missing ? '' : error.message || '게시글을 불러오지 못했습니다.')
                 }
             } finally {
                 if (!ignore) setIsLoading(false)
@@ -261,9 +267,11 @@ export default function BoardDetail() {
         return (
             <div className="empty-state">
                 <span className="empty-state__icon">📭</span>
-                <p className="empty-state__title">게시글을 찾을 수 없습니다</p>
+                <p className="empty-state__title">
+                    {isPostMissing ? '삭제되었거나 존재하지 않는 게시글입니다' : '게시글을 열 수 없습니다'}
+                </p>
                 <p className="empty-state__desc">
-                    {noticeMessage || '삭제되었거나 존재하지 않는 게시글입니다.'}
+                    {isPostMissing ? '게시판 목록에서 다른 글을 확인해 주세요.' : noticeMessage || '잠시 후 다시 시도해 주세요.'}
                 </p>
                 <Link className="btn btn--primary" to="/board" style={{ marginTop: 12 }}>
                     게시판으로 돌아가기
@@ -274,6 +282,14 @@ export default function BoardDetail() {
 
     return (
         <div>
+            {selectedAuthor && (
+                <AuthorProfileDialog
+                    key={selectedAuthor.userId}
+                    author={selectedAuthor}
+                    currentUserId={userId}
+                    onClose={() => setSelectedAuthor(null)}
+                />
+            )}
             <section
                 style={{
                     padding: '16px 20px',
@@ -337,7 +353,7 @@ export default function BoardDetail() {
                         flexWrap: 'wrap',
                     }}
                 >
-                    <span>{post.author}</span>
+                    <AuthorName author={post} onSelect={setSelectedAuthor} />
                     <span>·</span>
                     <span>{post.updatedAt ?? post.createdAt}</span>
                     <span>·</span>
@@ -442,7 +458,9 @@ export default function BoardDetail() {
                                         marginBottom: 6,
                                     }}
                                 >
-                                    <strong style={{ fontSize: 13 }}>{comment.author}</strong>
+                                    <strong style={{ fontSize: 13 }}>
+                                        <AuthorName author={comment} onSelect={setSelectedAuthor} />
+                                    </strong>
                                     <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                     {comment.createdAt}
                   </span>

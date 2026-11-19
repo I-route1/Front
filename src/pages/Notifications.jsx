@@ -1,12 +1,14 @@
 // src/pages/Notifications.jsx
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import { apiCall } from '@/api/client'
 import { notificationsAPI } from '@/api'
 import { useAuth } from '@/context/AuthContext'
 import { notificationTargets, notificationTargetKey } from '@/utils/notificationTargets'
 
 // 알림 타입별 아이콘/색상
 const NOTI_TYPE = {
+  BOARD_NOTICE: { emoji: '📢', color: '#1A56DB', label: '학원 공지' },
   REVIEW:     { emoji: '📖', color: '#1A56DB', label: '복습 알림' },
   RISK:       { emoji: '⚠️', color: '#FF3B3B', label: '위험 감지' },
   ROADMAP:    { emoji: '🗺️', color: '#9B59B6', label: '로드맵' },
@@ -33,7 +35,51 @@ function timeAgo(dateStr) {
 
 export default function Notifications() {
   const { user } = useAuth()
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
+  const { boardNotifications, setBoardNotifications } = useOutletContext()
+
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function deleteNotification(event, item) {
+    event.stopPropagation()
+    if (deleting || !window.confirm('이 알림을 삭제할까요?')) return
+
+    const isBoardNotice = item.type === 'BOARD_NOTICE'
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const path = isBoardNotice ? '/api/board-notifications/' : '/api/notifications/'
+      await apiCall(path + item.id, { method: 'DELETE' })
+      const update = isBoardNotice ? setBoardNotifications : setNotifications
+      update(items => items.filter(notice => notice.id !== item.id))
+    } catch {
+      setDeleteError('알림을 삭제하지 못했습니다. 다시 시도해 주세요.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function openBoardNotice(item) {
+    if (!item.readAt) {
+      try {
+        await apiCall(`/api/board-notifications/${item.id}/read`, {
+          method: 'PATCH',
+        })
+        setBoardNotifications(items =>
+            items.map(notice =>
+                notice.id === item.id
+                    ? { ...notice, readAt: new Date().toISOString() }
+                    : notice
+            )
+        )
+      } catch {
+        window.alert('공지 알림을 읽음 처리하지 못했습니다.')
+      }
+    }
+
+    navigate(`/posts/${item.postId}`)
+  }
 
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading]             = useState(true)
@@ -100,14 +146,26 @@ export default function Notifications() {
   // 전체 읽음 처리
   const handleMarkAllRead = async () => {
     const unread = notifications.filter(n => !(n.read ?? n.isRead))
-    if (unread.length === 0) return
+    const unreadNotices = boardNotifications.filter(item => !item.readAt)
+    if (unread.length === 0 && unreadNotices.length === 0) return
 
     setMarkingAll(true)
     // 낙관적 업데이트
     setNotifications(prev => prev.map(n => ({ ...n, read: true, isRead: true })))
 
     try {
-      await Promise.all(unread.map(n => notificationsAPI.markAsRead(n.id)))
+      const results = await Promise.allSettled([
+        ...unread.map(n => notificationsAPI.markAsRead(n.id)),
+        ...unreadNotices.map(async item => {
+          await apiCall('/api/board-notifications/' + item.id + '/read', { method: 'PATCH' })
+          setBoardNotifications(items => items.map(notice => notice.id === item.id
+            ? { ...notice, readAt: new Date().toISOString() }
+            : notice))
+        }),
+      ])
+      if (results.some(result => result.status === 'rejected')) {
+        throw new Error('일부 알림을 읽음 처리하지 못했습니다.')
+      }
     } catch (e) {
       console.error('전체 읽음 처리 실패:', e)
       fetchNotifications() // 실패 시 다시 불러오기
@@ -116,11 +174,19 @@ export default function Notifications() {
     }
   }
 
-  const filtered = filter === 'unread'
-    ? notifications.filter(n => !(n.read ?? n.isRead))
-    : notifications
+  const allNotifications = [
+    ...notifications,
+    ...boardNotifications.map(item => ({
+      ...item, type: 'BOARD_NOTICE', read: Boolean(item.readAt),
+    })),
+  ].sort((a, b) => (Date.parse(b.createdAt || b.timestamp || b.sentAt) || 0)
+      - (Date.parse(a.createdAt || a.timestamp || a.sentAt) || 0))
 
-  const unreadCount = notifications.filter(n => !(n.read ?? n.isRead)).length
+  const filtered = filter === 'unread'
+    ? allNotifications.filter(n => !(n.read ?? n.isRead))
+    : allNotifications
+
+  const unreadCount = allNotifications.filter(n => !(n.read ?? n.isRead)).length
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg, #F8FAFF)' }}>
@@ -175,7 +241,7 @@ export default function Notifications() {
         padding: '0 20px',
       }}>
         {[
-          { id: 'all',    label: `전체 ${notifications.length}` },
+          { id: 'all',    label: `전체 ${allNotifications.length}` },
           { id: 'unread', label: `안읽음 ${unreadCount}` },
         ].map(tab => (
           <button
@@ -227,6 +293,8 @@ export default function Notifications() {
           </div>
         )}
 
+        {deleteError && <p role="alert">{deleteError}</p>}
+
         {!loading && filtered.map((noti, i) => {
           const typeInfo = getNotiType(noti)
           const isRead   = noti.read ?? noti.isRead ?? false
@@ -236,8 +304,8 @@ export default function Notifications() {
 
           return (
             <div
-              key={noti.id || i}
-              onClick={() => handleRead(noti)}
+              key={(noti.type === 'BOARD_NOTICE' ? 'board-' : 'existing-') + (noti.id || i)}
+              onClick={() => noti.type === 'BOARD_NOTICE' ? openBoardNotice(noti) : handleRead(noti)}
               style={{
                 display: 'flex', gap: 14, padding: '14px 16px',
                 borderRadius: 14,
@@ -245,7 +313,7 @@ export default function Notifications() {
                   ? 'var(--color-surface, white)'
                   : `${typeInfo.color}08`,
                 border: `1px solid ${isRead ? 'var(--color-border, #E2E8F0)' : typeInfo.color + '25'}`,
-                cursor: isRead ? 'default' : 'pointer',
+                cursor: isRead && noti.type !== 'BOARD_NOTICE' ? 'default' : 'pointer',
                 transition: 'all 0.15s',
                 position: 'relative',
               }}
@@ -253,7 +321,7 @@ export default function Notifications() {
               {/* 읽지 않음 도트 */}
               {!isRead && (
                 <div style={{
-                  position: 'absolute', top: 14, right: 14,
+                  position: 'absolute', top: 14, right: 12,
                   width: 8, height: 8, borderRadius: '50%',
                   background: typeInfo.color,
                 }} />
@@ -307,6 +375,18 @@ export default function Notifications() {
                   </p>
                 )}
               </div>
+              <button
+                type="button"
+                disabled={deleting}
+                aria-label={title + ' 알림 삭제'}
+                onClick={event => deleteNotification(event, noti)}
+                style={{
+                  alignSelf: 'flex-end', flexShrink: 0, minHeight: 32,
+                  color: 'var(--color-text-secondary)', padding: '4px 8px',
+                }}
+              >
+                삭제
+              </button>
             </div>
           )
         })}

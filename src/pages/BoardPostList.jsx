@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { boardAPI } from '../api'
 import { useAuth } from '@/context/AuthContext'
 import BackButton from '../components/common/BackButton'
+import { AuthorName, AuthorProfileDialog } from '@/components/common/AuthorProfile'
 
 const TABS = ['전체', '즐겨찾기', '공지', '자유', '질문', '건의']
 
@@ -100,6 +101,7 @@ export default function BoardPostList() {
         localStorage.getItem('userId')
 
     const [board, setBoard] = useState(null)
+    const [selectedManager, setSelectedManager] = useState(null)
     const [posts, setPosts] = useState([])
     const [activeTab, setActiveTab] = useState('전체')
     const [sortType, setSortType] = useState('latest')
@@ -107,12 +109,14 @@ export default function BoardPostList() {
     const [isLoading, setIsLoading] = useState(true)
     const [noticeMessage, setNoticeMessage] = useState('')
 
+
     useEffect(() => {
         let ignore = false
 
         async function fetchBoardAndPosts() {
             try {
                 setIsLoading(true)
+                setSelectedManager(null)
                 setNoticeMessage('')
 
                 const [boardResponse, postsResponse] = await Promise.all([
@@ -179,6 +183,14 @@ export default function BoardPostList() {
 
     return (
         <div>
+            {selectedManager && (
+                <AuthorProfileDialog
+                    key={selectedManager.userId}
+                    author={selectedManager}
+                    currentUserId={userId}
+                    onClose={() => setSelectedManager(null)}
+                />
+            )}
             {/* 상단 뒤로가기 및 게시판 헤더 */}
             <section
                 style={{
@@ -263,6 +275,21 @@ export default function BoardPostList() {
                         )}
                     </div>
                 </div>
+
+                {board?.boardType === 'ACADEMY' && managerId != null && board.managerNickname && (
+                    <div style={{
+                        display: 'flex', flexWrap: 'wrap', alignItems: 'center',
+                        gap: '4px 10px', marginTop: 10, fontSize: 13,
+                    }}>
+                        <span>학원 관리자</span>
+                        <strong>
+                            <AuthorName
+                                author={{ userId: managerId, author: board.managerNickname }}
+                                onSelect={setSelectedManager}
+                            />
+                        </strong>
+                    </div>
+                )}
 
                 <div style={{ marginTop: 14 }}>
                     <input

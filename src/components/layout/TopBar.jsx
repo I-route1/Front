@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { MessageCircle } from 'lucide-react'
+import { apiCall } from '@/api/client'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { notificationsAPI } from '@/api'
@@ -20,12 +22,39 @@ const PAGE_TITLES = {
     '/admin/learning': '학습 관리',
 }
 
-export default function TopBar() {
+export default function TopBar({ boardNotifications = [] }) {
+    const hasUnreadBoardNotice = boardNotifications.some(item => !item.readAt)
     const { pathname } = useLocation()
     const navigate = useNavigate()
     const { user } = useAuth()
 
     const [hasUnread, setHasUnread] = useState(false)
+    const [unreadMessages, setUnreadMessages] = useState(0)
+    const accountId = user?.id ?? user?.userId
+
+    useEffect(() => {
+        if (!accountId) return
+        const controller = new AbortController()
+        let timer
+
+        async function refreshUnreadMessages() {
+            try {
+                const result = await apiCall('/api/direct-messages/unread', { signal: controller.signal })
+                if (!controller.signal.aborted) setUnreadMessages(result.count)
+            } catch {
+                // The next refresh retries while the user remains signed in.
+            } finally {
+                if (!controller.signal.aborted) timer = setTimeout(refreshUnreadMessages, 5000)
+            }
+        }
+
+        setUnreadMessages(0)
+        void refreshUnreadMessages()
+        return () => {
+            controller.abort()
+            clearTimeout(timer)
+        }
+    }, [accountId])
 
     const avatarSrc = resolveProfileImageUrl(user?.profileImageUrl ?? user?.avatar)
 
@@ -52,36 +81,23 @@ export default function TopBar() {
             )}
 
             <div className="topbar__actions">
+                <button type="button" className="topbar__icon-button" onClick={() => navigate('/messages')}
+                    aria-label={unreadMessages ? '메시지, 읽지 않음 ' + unreadMessages + '개' : '메시지'}>
+                    <MessageCircle size={22} aria-hidden="true" style={{ transform: 'translate(3px, -1px)' }} />
+                    {unreadMessages > 0 && (
+                        <span className="topbar__unread-dot" aria-hidden="true" />
+                    )}
+                </button>
                 {/* 알림 버튼 */}
                 <button
                     type="button"
-                    aria-label="알림"
+                    className="topbar__icon-button"
+                    aria-label={hasUnread || hasUnreadBoardNotice ? '읽지 않은 알림 있음' : '알림'}
                     onClick={() => navigate('/notifications')}
-                    style={{
-                        position: 'relative',
-                        width: 40,
-                        height: 40,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '50%',
-                        cursor: 'pointer',
-                    }}
                 >
                     <BellIcon />
-                    {hasUnread && (
-                        <span
-                            style={{
-                                position: 'absolute',
-                                top: 6,
-                                right: 6,
-                                width: 8,
-                                height: 8,
-                                background: 'var(--color-accent)',
-                                borderRadius: '50%',
-                                border: '2px solid white',
-                            }}
-                        />
+                    {(hasUnread || hasUnreadBoardNotice) && (
+                        <span className="topbar__unread-dot" aria-hidden="true" />
                     )}
                 </button>
 
@@ -121,6 +137,7 @@ export default function TopBar() {
 }
 
 function getPageTitle(pathname) {
+    if (pathname === '/messages' || pathname.startsWith('/messages/')) return '메시지'
     if (PAGE_TITLES[pathname] !== undefined) {
         return PAGE_TITLES[pathname]
     }
@@ -136,11 +153,13 @@ function getPageTitle(pathname) {
 function BellIcon() {
     return (
         <svg
-            width="22"
-            height="22"
+            width="24"
+            height="24"
+            style={{ transform: 'translateX(-2px)' }}
             viewBox="0 0 24 24"
             fill="none"
-            stroke="var(--color-text-secondary)"
+            aria-hidden="true"
+            stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"

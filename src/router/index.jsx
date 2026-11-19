@@ -48,6 +48,7 @@ const PaymentSuccess = lazyPage(() => import('@/pages/PaymentSuccess'))
 const PaymentBillingSuccess = lazyPage(() => import('@/pages/PaymentBillingSuccess'))
 const PaymentFail = lazyPage(() => import('@/pages/PaymentFail'))
 const PaymentHistory = lazyPage(() => import('@/pages/PaymentHistory'))
+const DirectMessages = lazyPage(() => import('@/pages/DirectMessages'))
 const Notifications = lazyPage(() => import('@/pages/Notifications'))
 const Attendance = lazyPage(() => import('@/pages/Attendance'))
 const Help = lazyPage(() => import('@/pages/Help'))
@@ -124,6 +125,8 @@ export const router = createBrowserRouter([
       { path: 'payment/fail', element: page(PaymentFail) },
       { path: 'payment/history', element: page(PaymentHistory) },
       { path: 'notifications', element: page(Notifications) },
+      { path: 'messages', element: page(DirectMessages) },
+      { path: 'messages/:peerId', element: page(DirectMessages) },
 
       // 기사 권한 라우트
       { path: 'driver/boarding', element: page(DriverBoardingList) },

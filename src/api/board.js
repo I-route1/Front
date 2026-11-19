@@ -148,6 +148,17 @@ export const boardAPI = {
       body: JSON.stringify(payload),
     })
   },
+
+  getBookmarkedBoardIds() {
+    return apiCall('/api/boards/bookmarks')
+  },
+
+  setBoardBookmark(boardId, bookmarked) {
+    return apiCall(`/api/boards/${boardId}/bookmark`, {
+      method: bookmarked ? 'PUT' : 'DELETE',
+    })
+  },
+
 }
 
 export default boardAPI

@@ -1,7 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { boardAPI } from '../api'
 import { useAuth } from '@/context/AuthContext'
+
+const ACADEMY_SORT_OPTIONS = [
+  { value: 'default', label: '기본 순' },
+  { value: 'posts', label: '게시글 많은 순' },
+  { value: 'favorites', label: '즐겨찾기 많은 순' },
+]
 
 function normalizeBoard(rawBoard) {
   return {
@@ -11,6 +17,7 @@ function normalizeBoard(rawBoard) {
     boardType: rawBoard.boardType ?? 'FREE',
     academyAddress: rawBoard.academyAddress ?? '',
     postCount: rawBoard.postCount ?? 0,
+    bookmarkCount: rawBoard.bookmarkCount ?? 0,
   }
 }
 
@@ -21,10 +28,16 @@ export default function Board() {
 
   const [boards, setBoards] = useState([])
   const [favoriteIds, setFavoriteIds] = useState([])
+  const [academyFavorites, setAcademyFavorites] = useState(null)
+  const [bookmarkPending, setBookmarkPending] = useState(false)
+  const [bookmarkError, setBookmarkError] = useState('')
   const [keyword, setKeyword] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [noticeMessage, setNoticeMessage] = useState('')
-  const [academySort, setAcademySort] = useState('popular') // 'popular' | 'latest'
+  const [academySort, setAcademySort] = useState('default')
+  const [sortOpen, setSortOpen] = useState(false)
+  const sortButton = useRef(null)
+  const sortLabel = ACADEMY_SORT_OPTIONS.find(option => option.value === academySort).label
 
   // 1. 사용자별 즐겨찾기 게시판 ID 로드
   useEffect(() => {
@@ -35,6 +48,20 @@ export default function Board() {
       setFavoriteIds([])
     }
   }, [storageKey])
+
+  useEffect(() => {
+    let active = true
+    setAcademyFavorites(null)
+    setBookmarkError('')
+    boardAPI.getBookmarkedBoardIds()
+        .then(ids => { if (active) setAcademyFavorites(ids.map(String)) })
+        .catch(() => { if (active) setBookmarkError('학원 즐겨찾기를 불러오지 못했습니다.') })
+    return () => { active = false }
+  }, [userId])
+
+  const isFavorite = board => (board.boardType === 'ACADEMY'
+      ? (academyFavorites ?? [])
+      : favoriteIds).includes(String(board.id))
 
   // 2. 게시판 목록 조회
   useEffect(() => {
@@ -70,11 +97,32 @@ export default function Board() {
   }, [])
 
   // 즐겨찾기 토글 핸들러
-  const toggleFavorite = (e, boardId) => {
+  const toggleFavorite = async (e, board) => {
     e.preventDefault()
     e.stopPropagation()
 
-    const idStr = String(boardId)
+    const idStr = String(board.id)
+    if (board.boardType === 'ACADEMY') {
+      if (academyFavorites === null || bookmarkPending) return
+      const bookmarked = !isFavorite(board)
+      setBookmarkPending(true)
+      setBookmarkError('')
+      try {
+        await boardAPI.setBoardBookmark(board.id, bookmarked)
+        setBoards(items => items.map(item => String(item.id) === idStr
+            ? { ...item, bookmarkCount: Math.max(0, item.bookmarkCount + (bookmarked ? 1 : -1)) }
+            : item))
+        setAcademyFavorites(ids => bookmarked
+            ? [...ids, idStr]
+            : ids.filter(id => id !== idStr))
+      } catch {
+        setBookmarkError('학원 즐겨찾기를 저장하지 못했습니다.')
+      } finally {
+        setBookmarkPending(false)
+      }
+      return
+    }
+
     setFavoriteIds((prev) => {
       const next = prev.includes(idStr)
           ? prev.filter((id) => id !== idStr)
@@ -92,21 +140,17 @@ export default function Board() {
           b.academyAddress.toLowerCase().includes(lowerKeyword),
   )
 
-  const favoriteBoards = filteredBoards.filter((b) => favoriteIds.includes(String(b.id)))
+  const favoriteBoards = filteredBoards.filter(isFavorite)
   const commonBoards = filteredBoards.filter(
       (b) => b.boardType === 'NOTICE' || b.boardType === 'FREE',
   )
 
-  // 학원별 게시판 정렬 적용 (인기순: 게시글 수 많은 순 / 최신순: id 내림차순)
-  const academyBoards = filteredBoards
-      .filter((b) => b.boardType === 'ACADEMY')
-      .sort((a, b) => {
-        if (academySort === 'popular') {
-          const countDiff = Number(b.postCount || 0) - Number(a.postCount || 0)
-          if (countDiff !== 0) return countDiff
-        }
-        return Number(b.id) - Number(a.id)
-      })
+  const academyBoards = filteredBoards.filter(board => board.boardType === 'ACADEMY')
+  if (academySort === 'posts') {
+    academyBoards.sort((a, b) => b.postCount - a.postCount)
+  } else if (academySort === 'favorites') {
+    academyBoards.sort((a, b) => b.bookmarkCount - a.bookmarkCount)
+  }
 
   const otherBoards = filteredBoards.filter(
       (b) =>
@@ -124,7 +168,7 @@ export default function Board() {
 
   // 게시판 행 렌더링 공통 컴포넌트
   const renderBoardRow = (board, isLast) => {
-    const isFav = favoriteIds.includes(String(board.id))
+    const isFav = isFavorite(board)
 
     return (
         <Link
@@ -144,6 +188,7 @@ export default function Board() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
                   gap: 6,
                   fontSize: 15,
                   fontWeight: 800,
@@ -154,20 +199,22 @@ export default function Board() {
               {getBoardIcon(board.boardType)}
               {board.name}
             </span>
-              {board.boardType === 'ACADEMY' && (
-                  <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: 'var(--color-text-muted)',
-                        background: 'var(--color-surface-2)',
-                        padding: '2px 7px',
-                        borderRadius: 999,
-                      }}
-                  >
-                글 {board.postCount}개
-              </span>
-              )}
+              {board.boardType === 'ACADEMY' && [
+                ['posts', '글 ' + board.postCount + '개'],
+                ['bookmarks', '즐겨찾기 ' + board.bookmarkCount + '개'],
+              ].map(([key, label]) => (
+                <span key={key} style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--color-text-muted)',
+                  background: 'var(--color-surface-2)',
+                  padding: '2px 7px',
+                  borderRadius: 999,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {label}
+                </span>
+              ))}
             </div>
 
             {board.description && (
@@ -203,7 +250,9 @@ export default function Board() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <button
                 type="button"
-                onClick={(e) => toggleFavorite(e, board.id)}
+                onClick={(e) => toggleFavorite(e, board)}
+                aria-pressed={isFav}
+                aria-disabled={board.boardType === 'ACADEMY' && (academyFavorites === null || bookmarkPending)}
                 aria-label={isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
                 style={{
                   padding: '4px 6px',
@@ -274,6 +323,7 @@ export default function Board() {
                 </div>
 
                 <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {bookmarkError && <p role="alert">{bookmarkError}</p>}
                   {favoriteBoards.length === 0 ? (
                       <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--color-text-muted)' }}>
                         자주 찾는 게시판의 <strong>☆</strong> 버튼을 눌러 상단에 고정해 보세요.
@@ -305,7 +355,7 @@ export default function Board() {
                 </div>
               </section>
 
-              {/* 섹션 2: 학원별 게시판 (인기순 / 최신순 정렬 탭 포함) */}
+              {/* 섹션 2: 학원별 게시판 */}
               <section className="section" style={{ paddingTop: 0 }}>
                 <div
                     className="section__header"
@@ -313,42 +363,41 @@ export default function Board() {
                 >
                   <h2 className="section__title">학원별 게시판</h2>
 
-                  <div
-                      style={{
-                        display: 'flex',
-                        background: 'var(--color-surface-2)',
-                        padding: 3,
-                        borderRadius: 10,
-                        border: '1px solid var(--color-border)',
-                        gap: 2,
+                  <div className="board-sort"
+                      onBlur={event => {
+                        if (!event.currentTarget.contains(event.relatedTarget)) setSortOpen(false)
+                      }}
+                      onKeyDown={event => {
+                        if (event.key === 'Escape' && sortOpen) {
+                          setSortOpen(false)
+                          sortButton.current.focus()
+                        }
                       }}
                   >
-                    {[
-                      { key: 'popular', label: '인기순' },
-                      { key: 'latest', label: '최신순' },
-                    ].map((tab) => {
-                      const active = academySort === tab.key
-                      return (
-                          <button
-                              key={tab.key}
-                              type="button"
-                              onClick={() => setAcademySort(tab.key)}
-                              style={{
-                                padding: '4px 10px',
-                                borderRadius: 7,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: active ? 'var(--color-surface)' : 'transparent',
-                                color: active ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    <button ref={sortButton} type="button" className="board-sort__trigger"
+                        aria-expanded={sortOpen}
+                        aria-label={'학원별 게시판 정렬, ' + sortLabel}
+                        onClick={() => setSortOpen(open => !open)}
+                    >
+                      {sortLabel}
+                      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                    {sortOpen && (
+                      <div className="board-sort__options" role="group" aria-label="정렬 방식">
+                        {ACADEMY_SORT_OPTIONS.map(option => (
+                          <button type="button" key={option.value} aria-pressed={academySort === option.value}
+                              onClick={() => {
+                                setAcademySort(option.value)
+                                setSortOpen(false)
+                                sortButton.current.focus()
                               }}
                           >
-                            {tab.label}
+                            {option.label}
+                            {academySort === option.value && <span aria-hidden="true">✓</span>}
                           </button>
-                      )
-                    })}
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
