@@ -9,6 +9,9 @@ import { notificationTargets, notificationTargetKey } from '@/utils/notification
 // 알림 타입별 아이콘/색상
 const NOTI_TYPE = {
   BOARD_NOTICE: { emoji: '📢', color: '#1A56DB', label: '학원 공지' },
+  ACADEMY_POST: { emoji: '📝', color: '#1A56DB', label: '학원 게시판 새 글' },
+  POST_LIKE: { emoji: '♥', color: '#B42364', label: '내 게시글에 새 공감' },
+  POST_COMMENT: { emoji: '💬', color: '#057A69', label: '내 게시글에 새 댓글' },
   REVIEW:     { emoji: '📖', color: '#1A56DB', label: '복습 알림' },
   RISK:       { emoji: '⚠️', color: '#FF3B3B', label: '위험 감지' },
   ROADMAP:    { emoji: '🗺️', color: '#9B59B6', label: '로드맵' },
@@ -21,6 +24,7 @@ const NOTI_TYPE = {
 
 function getNotiType(noti) {
   const type = (noti.type || noti.notificationType || noti.category || '').toUpperCase()
+  if (type === 'BOARD_NOTICE') return NOTI_TYPE[noti.kind] || NOTI_TYPE.BOARD_NOTICE
   return NOTI_TYPE[type] || NOTI_TYPE.DEFAULT
 }
 
