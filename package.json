@@ -11,7 +11,8 @@
     "lint:fix": "eslint . --fix",
     "test:learning-records": "node --test tests/learning-records.test.mjs tests/api-client.test.mjs tests/grade-summary.test.mjs tests/saved-reports.test.mjs tests/posture-records.test.mjs tests/academy-detail.test.mjs",
     "test:learning-records:browser": "node --test --test-timeout=180000 tests/learning-records.browser.mjs",
-    "test:gps": "node --test tests/gps-tracking.test.mjs tests/map-status.test.mjs"
+    "test:gps": "node --test tests/gps-tracking.test.mjs tests/map-status.test.mjs",
+    "test:push": "node --test tests/push-notifications.test.mjs"
   },
   "dependencies": {
     "@stomp/stompjs": "^7.3.0",
