@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { boardAPI } from '../api'
+import { apiCall } from '@/api/client'
 import BackButton from '../components/common/BackButton'
 
 export default function BoardManageEdit() {
@@ -17,6 +18,9 @@ export default function BoardManageEdit() {
     })
     const [isLoading, setIsLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [isManager, setIsManager] = useState(false)
+    const [inviteCode, setInviteCode] = useState('')
+    const [inviteFeedback, setInviteFeedback] = useState('')
     const [errorMsg, setErrorMsg] = useState('')
 
     useEffect(() => {
@@ -25,8 +29,14 @@ export default function BoardManageEdit() {
         async function fetchBoard() {
             try {
                 setIsLoading(true)
+                setIsManager(false)
+                setInviteCode('')
+                setInviteFeedback('')
                 const data = await boardAPI.getBoardDetail(boardId)
                 if (!ignore) {
+                    const ownsBoard = data.boardType === 'ACADEMY' && userId != null &&
+                        String(data.managerUserId) === String(userId)
+                    setIsManager(ownsBoard)
                     setForm({
                         name: data.name ?? '',
                         description: data.description ?? '',
@@ -44,7 +54,30 @@ export default function BoardManageEdit() {
         return () => {
             ignore = true
         }
-    }, [boardId])
+    }, [boardId, userId])
+
+    useEffect(() => {
+        if (!isManager) return
+
+        const controller = new AbortController()
+        apiCall('/api/academies/me/invite-code', { method: 'POST', signal: controller.signal })
+            .then(data => {
+                if (!controller.signal.aborted) setInviteCode(data.inviteCode)
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) setInviteFeedback('초대코드를 불러오지 못했습니다.')
+            })
+        return () => controller.abort()
+    }, [isManager, boardId, userId])
+
+    async function copyInviteCode() {
+        try {
+            await navigator.clipboard.writeText(inviteCode)
+            setInviteFeedback('초대코드를 복사했습니다.')
+        } catch {
+            setInviteFeedback('코드를 선택해 직접 복사해 주세요.')
+        }
+    }
 
     const handleSubmit = async () => {
         if (!form.name.trim()) {
@@ -102,6 +135,20 @@ export default function BoardManageEdit() {
                     </h1>
                 </div>
 
+                {isManager && (
+                    <div className="card" style={{ marginBottom: 16, display: 'grid', gap: 8 }}>
+                        <h2 style={{ fontSize: 16 }}>학원 초대코드</h2>
+                        {inviteCode ? (
+                            <>
+                                <code style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{inviteCode}</code>
+                                <button type="button" className="btn btn--secondary" onClick={copyInviteCode}>
+                                    코드 복사
+                                </button>
+                            </>
+                        ) : !inviteFeedback && <p role="status">초대코드를 불러오는 중입니다.</p>}
+                        {inviteFeedback && <p role="status">{inviteFeedback}</p>}
+                    </div>
+                )}
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     <div className="input-group">
                         <label className="input-label">게시판 이름</label>

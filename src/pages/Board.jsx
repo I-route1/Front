@@ -15,7 +15,8 @@ function normalizeBoard(rawBoard) {
     name: rawBoard.name ?? rawBoard.title ?? '게시판',
     description: rawBoard.description ?? '',
     boardType: rawBoard.boardType ?? 'FREE',
-    academyAddress: rawBoard.academyAddress ?? '',
+    academyId: rawBoard.academyId,
+    academyAddress: (rawBoard.academyAddress ?? '').trim(),
     postCount: rawBoard.postCount ?? 0,
     bookmarkCount: rawBoard.bookmarkCount ?? 0,
   }
@@ -133,12 +134,15 @@ export default function Board() {
   }
 
   const lowerKeyword = keyword.trim().toLowerCase()
-  const filteredBoards = boards.filter(
-      (b) =>
-          !lowerKeyword ||
-          b.name.toLowerCase().includes(lowerKeyword) ||
-          b.academyAddress.toLowerCase().includes(lowerKeyword),
-  )
+  const filteredBoards = boards.filter((board) => {
+    if (board.boardType === 'ACADEMY' && (board.academyId == null || !board.academyAddress)) {
+      return false
+    }
+
+    return !lowerKeyword ||
+        board.name.toLowerCase().includes(lowerKeyword) ||
+        board.academyAddress.toLowerCase().includes(lowerKeyword)
+  })
 
   const favoriteBoards = filteredBoards.filter(isFavorite)
   const commonBoards = filteredBoards.filter(
