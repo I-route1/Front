@@ -52,40 +52,6 @@ export default function EditProfile() {
     return pattern.test(normalized)
   }
 
-  const makeDefaultAcademy = () => ({
-    id: `academy-${Date.now()}`,
-    academyName: '',
-    academyAddress: '',
-    businessNumber: '',
-    academyCode: '발급 예정',
-  })
-
-  const normalizeAcademies = (userInfo) => {
-    if (Array.isArray(userInfo?.academies) && userInfo.academies.length > 0) {
-      return userInfo.academies.map((academy, index) => ({
-        id: academy.id ?? academy.academyId ?? `academy-${index}`,
-        academyName: academy.academyName ?? academy.name ?? '',
-        academyAddress: academy.academyAddress ?? academy.address ?? '',
-        businessNumber: academy.businessNumber ?? '',
-        academyCode: academy.academyCode ?? academy.code ?? '발급 예정',
-      }))
-    }
-
-    if (userInfo?.role === USER_ROLES.ACADEMY) {
-      return [
-        {
-          id: userInfo?.id ?? 'academy-001',
-          academyName: userInfo?.academyName ?? '',
-          academyAddress: userInfo?.academyAddress ?? '',
-          businessNumber: userInfo?.businessNumber ?? '',
-          academyCode: userInfo?.academyCode ?? '발급 예정',
-        },
-      ]
-    }
-
-    return [makeDefaultAcademy()]
-  }
-
   const [form, setForm] = useState({
     name: user?.name ?? '',
     nickname: user?.nickname ?? '',
@@ -95,9 +61,6 @@ export default function EditProfile() {
     phoneNumberPublic: user?.phoneNumberPublic === true,
     profileImageUrl: user?.profileImageUrl ?? '',
     children: [],
-    academyName: user?.academyName ?? '',
-    academyAddress: user?.academyAddress ?? '',
-    academies: normalizeAcademies(user),
   })
 
   // 이미지 파일 업로드 및 미리보기 상태
@@ -441,23 +404,6 @@ export default function EditProfile() {
       }
     }
 
-    if (user?.role === USER_ROLES.ACADEMY) {
-      const academyList = form.academies ?? []
-      if (academyList.length < 1) nextErrors.academies = '관리 학원은 최소 1개 이상 필요합니다'
-
-      academyList.forEach((academy) => {
-        if (!academy.academyName.trim()) nextErrors[`${academy.id}-academyName`] = '학원명을 입력해 주세요'
-        if (!academy.academyAddress.trim()) nextErrors[`${academy.id}-academyAddress`] = '학원 주소를 입력해 주세요'
-
-        const businessNumber = academy.businessNumber.replace(/\D/g, '')
-        if (!businessNumber) {
-          nextErrors[`${academy.id}-businessNumber`] = '사업자번호를 입력해 주세요'
-        } else if (businessNumber.length !== 10) {
-          nextErrors[`${academy.id}-businessNumber`] = '사업자번호 10자리를 입력해 주세요'
-        }
-      })
-    }
-
     return nextErrors
   }
 
@@ -465,7 +411,7 @@ export default function EditProfile() {
     const nextErrors = validate()
 
     if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors)
+      setErrors({ ...nextErrors, submit: Object.values(nextErrors)[0] })
       return
     }
 
@@ -564,22 +510,6 @@ export default function EditProfile() {
 
         const freshRes = await studentAPI.getMyChildren()
         updated.children = Array.isArray(freshRes) ? freshRes : freshRes?.data ?? []
-      }
-
-      if (user?.role === USER_ROLES.ACADEMY) {
-        const nextAcademies = (form.academies ?? []).map((academy) => ({
-          id: academy.id,
-          academyName: academy.academyName.trim(),
-          academyAddress: academy.academyAddress.trim(),
-          businessNumber: academy.businessNumber.replace(/\D/g, ''),
-          academyCode: academy.academyCode,
-        }))
-
-        updated.academies = nextAcademies
-        updated.academyName = nextAcademies[0]?.academyName ?? ''
-        updated.academyAddress = nextAcademies[0]?.academyAddress ?? ''
-        updated.businessNumber = nextAcademies[0]?.businessNumber ?? ''
-        updated.academyCode = nextAcademies[0]?.academyCode ?? '발급 예정'
       }
 
       await updateUser(updated)
@@ -881,7 +811,7 @@ export default function EditProfile() {
             )}
 
             {errors.submit && (
-                <div style={{ background: '#FFE9E9', border: '1px solid #FFBCBC', borderRadius: 10, padding: '12px 14px' }}>
+                <div role="alert" style={{ background: '#FFE9E9', border: '1px solid #FFBCBC', borderRadius: 10, padding: '12px 14px' }}>
                   <p style={{ fontSize: 13, color: 'var(--color-danger)', fontWeight: 600 }}>{errors.submit}</p>
                 </div>
             )}

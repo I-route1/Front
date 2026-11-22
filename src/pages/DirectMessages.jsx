@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { apiCall } from '@/api/client'
 import { useAuth } from '@/context/AuthContext'
 import { DEFAULT_PROFILE_IMAGE, resolveProfileImageUrl } from '@/utils/profileImage'
+import { AuthorProfileDialog } from '@/components/common/AuthorProfile'
 import './DirectMessages.css'
 
 const API = '/api/direct-messages'
@@ -36,7 +37,8 @@ function PeerAvatar({ imageUrl }) {
   )
 }
 
-function Inbox() {
+function Inbox({ userId }) {
+  const [selectedContact, setSelectedContact] = useState(null)
   const [keyword, setKeyword] = useState('')
   const [conversations, setConversations] = useState(null)
   const [listError, setListError] = useState('')
@@ -89,6 +91,14 @@ function Inbox() {
 
   return (
     <section className="dm-page" aria-label="대화 목록">
+      {selectedContact && (
+        <AuthorProfileDialog
+          key={selectedContact.id}
+          author={{ userId: selectedContact.id, author: selectedContact.nickname }}
+          currentUserId={userId}
+          onClose={() => setSelectedContact(null)}
+        />
+      )}
       <input type="search" className="input-field" aria-label="상대의 닉네임" placeholder="상대의 닉네임"
         maxLength={100} value={keyword} onChange={event => {
           if (event.target.value.trim() !== query) setSearchResult(null)
@@ -100,13 +110,14 @@ function Inbox() {
           {result?.failed && <p className="dm-error" role="alert">검색 결과를 불러오지 못했습니다.</p>}
           {result?.contacts?.length === 0 && <p className="dm-muted" role="status">일치하는 닉네임이 없습니다.</p>}
           {result?.contacts?.map(contact => (
-            <Link className="dm-conversation" key={contact.id} to={'/messages/' + contact.id}>
+            <button type="button" className="dm-conversation" key={contact.id}
+              aria-haspopup="dialog" onClick={() => setSelectedContact(contact)} style={{ textAlign: 'left' }}>
               <div className="dm-peer">
                 <PeerAvatar imageUrl={contact.profileImageUrl} />
                 <strong>{contact.nickname}</strong>
               </div>
-              <span className="dm-muted">메시지 보내기 ›</span>
-            </Link>
+              <span className="dm-muted">프로필 보기 ›</span>
+            </button>
           ))}
         </div>
       )}
@@ -305,5 +316,5 @@ export default function DirectMessages() {
   const { peerId } = useParams()
   const { user } = useAuth()
   const userId = user?.id ?? user?.userId
-  return peerId ? <Conversation key={userId + ':' + peerId} peerId={peerId} userId={userId} /> : <Inbox key={userId} />
+  return peerId ? <Conversation key={userId + ':' + peerId} peerId={peerId} userId={userId} /> : <Inbox key={userId} userId={userId} />
 }
