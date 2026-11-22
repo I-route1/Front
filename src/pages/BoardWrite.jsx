@@ -1,3 +1,4 @@
+import AnonymousPostOption from '@/components/common/AnonymousPostOption'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
@@ -13,6 +14,7 @@ export default function BoardWrite() {
 
   const [form, setForm] = useState({
     category: '자유',
+    anonymous: false,
     title: '',
     content: '',
   })
@@ -65,6 +67,7 @@ export default function BoardWrite() {
         title: form.title.trim(),
         content: form.content.trim(),
         category: form.category,
+        anonymous: form.anonymous,
         author: user?.name ?? user?.nickname ?? '나',
         userId,
       }
@@ -153,6 +156,8 @@ export default function BoardWrite() {
                   <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.category}</p>
               )}
             </div>
+
+            <AnonymousPostOption checked={form.anonymous} onChange={value => update('anonymous', value)} />
 
             <div className="input-group">
               <label className="input-label">제목</label>

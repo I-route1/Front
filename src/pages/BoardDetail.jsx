@@ -22,6 +22,7 @@ function normalizePost(rawPost) {
         favorite: !!(rawPost.favorite ?? rawPost.bookmarked ?? rawPost.isBookmarked),
         liked: !!(rawPost.liked ?? rawPost.likedByMe ?? rawPost.isLiked),
         userId: rawPost.userId ?? rawPost.authorId ?? rawPost.writerId,
+        ownedByMe: rawPost.ownedByMe,
     }
 }
 
@@ -80,7 +81,7 @@ export default function BoardDetail() {
     const [noticeMessage, setNoticeMessage] = useState('')
     const [isSubmittingComment, setIsSubmittingComment] = useState(false)
 
-    const isOwner = String(post?.userId) === String(userId)
+    const isOwner = post?.ownedByMe ?? (post?.userId != null && String(post.userId) === String(userId))
 
     useEffect(() => {
         let ignore = false

@@ -91,6 +91,8 @@ export default function EditProfile() {
     nickname: user?.nickname ?? '',
     email: user?.email ?? '',
     phone: user?.phoneNumber ?? user?.phone ?? '',
+    emailPublic: user?.emailPublic === true,
+    phoneNumberPublic: user?.phoneNumberPublic === true,
     profileImageUrl: user?.profileImageUrl ?? '',
     children: [],
     academyName: user?.academyName ?? '',
@@ -138,6 +140,8 @@ export default function EditProfile() {
             nickname: fetchedNickname,
             email: fetchedEmail,
             phone: fetchedPhone,
+            emailPublic: userData.emailPublic === true,
+            phoneNumberPublic: userData.phoneNumberPublic === true,
             profileImageUrl: fetchedImageUrl,
           }))
 
@@ -165,10 +169,9 @@ export default function EditProfile() {
                     studentId: child.studentId ?? child.id,
                     name: child.name ?? '',
                     grade: child.grade ?? '',
-                    academyCodeInput: child.academyCode ?? '',
-                    academies: child.academyName
-                        ? [{ id: child.academyId ?? `aca-${index}`, name: child.academyName, code: child.academyCode }]
-                        : [],
+                    academyCodeInput: '',
+                    academies: child.academies ?? [],
+                    academyChanged: false,
                     isNew: false,
                   }
                 }),
@@ -306,7 +309,7 @@ export default function EditProfile() {
     }
 
     const alreadyConnected = targetChild?.academies?.some(
-        (academy) => academy.code.toLowerCase() === academyCode.toLowerCase()
+        (academy) => academy.code?.toLowerCase() === academyCode.toLowerCase()
     )
 
     if (alreadyConnected) {
@@ -324,10 +327,8 @@ export default function EditProfile() {
               ? {
                 ...child,
                 academyCodeInput: '',
-                academies: [
-                  ...child.academies,
-                  { id: `academy-${Date.now()}`, code: academyCode, name: '학원명 확인 예정' },
-                ],
+                academyChanged: true,
+                academies: [{ id: academyCode, code: academyCode, name: '학원명 확인 예정' }],
               }
               : child
       ),
@@ -343,6 +344,7 @@ export default function EditProfile() {
           child.id === childId
               ? {
                 ...child,
+                academyChanged: true,
                 academies: child.academies.filter((academy) => academy.id !== academyId),
               }
               : child
@@ -477,6 +479,8 @@ export default function EditProfile() {
         email: form.email.trim(),
         phone: form.phone.trim(),
         phoneNumber: formattedPhone,
+        emailPublic: form.emailPublic,
+        phoneNumberPublic: form.phoneNumberPublic,
         profileImageUrl: form.profileImageUrl?.trim() ?? '',
       }
 
@@ -509,6 +513,8 @@ export default function EditProfile() {
               nickname: updated.nickname,
               email: updated.email,
               phoneNumber: updated.phoneNumber,
+              emailPublic: updated.emailPublic,
+              phoneNumberPublic: updated.phoneNumberPublic,
               profileImageUrl: updated.profileImageUrl,
             },
             selectedImageFile
@@ -537,7 +543,8 @@ export default function EditProfile() {
         if (form.children.length > 0) {
           const childPromises = form.children.map((child) => {
             const formattedGrade = normalizeGrade(child.grade)
-            const code = child.academyCodeInput || child.academies[0]?.code || ''
+            const inputCode = child.academyCodeInput.trim()
+            const code = inputCode || child.academies[0]?.code || ''
 
             if (child.isNew) {
               return studentAPI.addChild({
@@ -545,11 +552,9 @@ export default function EditProfile() {
                 grade: formattedGrade,
                 academies: code ? [{ code }] : [],
               })
-            } else if (studentAPI.updateChild) {
-              return studentAPI.updateChild(child.studentId, {
-                name: child.name.trim(),
-                grade: formattedGrade,
-              })
+            }
+            if (inputCode || child.academyChanged) {
+              return studentAPI.updateChildAcademy(child.studentId, code || null)
             }
             return Promise.resolve()
           })
@@ -768,6 +773,24 @@ export default function EditProfile() {
               <input className="input-field" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="010-0000-0000" />
             </Field>
 
+            <fieldset className="input-group" style={{ border: 'none', padding: 0, minWidth: 0, display: 'grid', gap: 8 }}>
+              <legend className="input-label" style={{ marginBottom: 8 }}>프로필 연락처 공개</legend>
+              {[
+                { field: 'emailPublic', label: '이메일 공개' },
+                { field: 'phoneNumberPublic', label: '전화번호 공개' },
+              ].map(({ field, label }) => (
+                <label key={field} className="post-privacy-option" style={{ marginBottom: 0 }}>
+                  <strong>{label}</strong>
+                  <input type="checkbox" role="switch" checked={form[field]}
+                    onChange={event => update(field, event.target.checked)} />
+                  <span className="post-privacy-option__track" aria-hidden="true" />
+                </label>
+              ))}
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                켜 둔 연락처만 다른 로그인 사용자에게 프로필 카드에 표시돼요.
+              </p>
+            </fieldset>
+
             {user?.role === USER_ROLES.PARENT && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16, borderRadius: 14, background: 'var(--color-primary-light)', border: '1px solid var(--color-border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -843,7 +866,7 @@ export default function EditProfile() {
                                 <input className="input-field" value={child.academyCodeInput} onChange={(e) => updateChild(child.id, 'academyCodeInput', e.target.value)} placeholder="학원 코드 입력" />
 
                                 <button type="button" onClick={() => addAcademyToChild(child.id)} style={{ width: 72, flexShrink: 0, borderRadius: 12, background: 'var(--color-primary)', color: '#fff', fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-                                  추가
+                                  {child.academies.length ? '변경' : '추가'}
                                 </button>
                               </div>
 

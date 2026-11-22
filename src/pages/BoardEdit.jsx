@@ -1,3 +1,4 @@
+import AnonymousPostOption from '@/components/common/AnonymousPostOption'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
@@ -33,6 +34,7 @@ export default function BoardEdit() {
   const [post, setPost] = useState(null)
   const [form, setForm] = useState({
     category: '자유',
+    anonymous: false,
     title: '',
     content: '',
   })
@@ -60,6 +62,7 @@ export default function BoardEdit() {
           setPost(normalizedPost)
           setForm({
             category: normalizedPost.category || '자유',
+            anonymous: postResponse.anonymous === true,
             title: normalizedPost.title,
             content: normalizedPost.content,
           })
@@ -134,6 +137,7 @@ export default function BoardEdit() {
     try {
       const payload = {
         category: form.category,
+        anonymous: form.anonymous,
         title: form.title.trim(),
         content: form.content.trim(),
       }
@@ -257,6 +261,8 @@ export default function BoardEdit() {
                   <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{errors.category}</p>
               )}
             </div>
+
+            <AnonymousPostOption checked={form.anonymous} onChange={value => update('anonymous', value)} />
 
             <div className="input-group">
               <label className="input-label">제목</label>

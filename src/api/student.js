@@ -21,6 +21,13 @@ export const studentAPI = {
     })
   },
 
+  updateChildAcademy(studentId, code) {
+    return apiCall('/api/students/' + studentId + '/academy', {
+      method: 'PATCH',
+      body: JSON.stringify({ code }),
+    })
+  },
+
   // 자녀 삭제
   deleteChild(studentId) {
     return apiCall(`/api/students/${studentId}`, {

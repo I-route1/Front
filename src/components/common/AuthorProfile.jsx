@@ -74,7 +74,8 @@ export function AuthorProfileDialog({ author, currentUserId, onClose }) {
                 <h2 id="board-author-profile-name" style={{ overflowWrap: 'anywhere', maxWidth: '100%' }}>
                     {profile?.nickname ?? author.author}
                 </h2>
-                {profile?.email && <p style={{ overflowWrap: 'anywhere', maxWidth: '100%' }}>{profile.email}</p>}
+                {profile?.email && <p style={{ overflowWrap: 'anywhere', maxWidth: '100%' }}><strong>E-mail:</strong> {profile.email}</p>}
+                {profile?.phoneNumber && <p><strong>Tel :</strong> {profile.phoneNumber}</p>}
                 {loadError && <p role="alert">프로필을 불러오지 못했습니다.</p>}
                 {!profile && !loadError && <p role="status">프로필을 불러오는 중입니다.</p>}
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>

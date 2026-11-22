@@ -98,9 +98,7 @@ export default function Board() {
   }, [])
 
   // 즐겨찾기 토글 핸들러
-  const toggleFavorite = async (e, board) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const toggleFavorite = async (board) => {
 
     const idStr = String(board.id)
     if (board.boardType === 'ACADEMY') {
@@ -175,104 +173,30 @@ export default function Board() {
     const isFav = isFavorite(board)
 
     return (
-        <Link
-            key={board.id}
-            to={`/board/${board.id}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              padding: '16px',
-              borderBottom: !isLast ? '1px solid var(--color-border)' : 'none',
-            }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                  fontSize: 15,
-                  fontWeight: 800,
-                  color: 'var(--color-text-primary)',
-                }}
-            >
-            <span>
-              {getBoardIcon(board.boardType)}
-              {board.name}
-            </span>
-              {board.boardType === 'ACADEMY' && [
-                ['posts', '글 ' + board.postCount + '개'],
-                ['bookmarks', '즐겨찾기 ' + board.bookmarkCount + '개'],
-              ].map(([key, label]) => (
-                <span key={key} style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: 'var(--color-text-muted)',
-                  background: 'var(--color-surface-2)',
-                  padding: '2px 7px',
-                  borderRadius: 999,
-                  whiteSpace: 'nowrap',
-                }}>
-                  {label}
-                </span>
-              ))}
-            </div>
-
-            {board.description && (
-                <p
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--color-text-muted)',
-                      marginTop: 4,
-                    }}
-                >
-                  {board.description}
-                </p>
+      <div key={board.id} className="board-list-row"
+          style={{ borderBottom: isLast ? 'none' : '1px solid var(--color-border)' }}>
+        <Link to={'/board/' + board.id} className="board-list-row__link">
+          <div className="board-list-row__body">
+            <strong>{getBoardIcon(board.boardType)}{board.name}</strong>
+            {board.description && <p>{board.description}</p>}
+            {board.academyAddress && <p className="board-list-row__address">{board.academyAddress}</p>}
+            {board.boardType === 'ACADEMY' && (
+              <p className="board-list-row__stats">
+                <span>게시글 {board.postCount}</span>
+                <span>즐겨찾기 {board.bookmarkCount}</span>
+              </p>
             )}
-
-            {board.academyAddress && (
-                <p
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: 'var(--color-primary)',
-                      marginTop: 4,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 3,
-                    }}
-                >
-                  <span>🚩</span>
-                  <span>{board.academyAddress}</span>
-                </p>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <button
-                type="button"
-                onClick={(e) => toggleFavorite(e, board)}
-                aria-pressed={isFav}
-                aria-disabled={board.boardType === 'ACADEMY' && (academyFavorites === null || bookmarkPending)}
-                aria-label={isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                style={{
-                  padding: '4px 6px',
-                  fontSize: 18,
-                  lineHeight: 1,
-                  color: isFav ? '#f59e0b' : 'var(--color-text-muted)',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-            >
-              {isFav ? '★' : '☆'}
-            </button>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: 18 }}>›</span>
           </div>
         </Link>
+        <button type="button" className="board-list-row__favorite"
+            onClick={() => toggleFavorite(board)}
+            aria-pressed={isFav}
+            aria-disabled={board.boardType === 'ACADEMY' && (academyFavorites === null || bookmarkPending)}
+            aria-label={board.name + (isFav ? ' 즐겨찾기 해제' : ' 즐겨찾기 추가')}>
+          <span aria-hidden="true">{isFav ? '★' : '☆'}</span>
+        </button>
+        <Link to={'/board/' + board.id} className="board-list-row__arrow" tabIndex={-1} aria-hidden="true">›</Link>
+      </div>
     )
   }
 
@@ -323,14 +247,14 @@ export default function Board() {
               {/* 최상단 섹션: 개인 즐겨찾기 게시판 */}
               <section className="section">
                 <div className="section__header">
-                  <h2 className="section__title">⭐ 즐겨찾는 게시판</h2>
+                  <h2 className="section__title">즐겨찾는 게시판</h2>
                 </div>
 
                 <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                   {bookmarkError && <p role="alert">{bookmarkError}</p>}
                   {favoriteBoards.length === 0 ? (
                       <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--color-text-muted)' }}>
-                        자주 찾는 게시판의 <strong>☆</strong> 버튼을 눌러 상단에 고정해 보세요.
+                        별표를 누른 게시판이 여기에 표시됩니다.
                       </div>
                   ) : (
                       favoriteBoards.map((board, idx) =>
