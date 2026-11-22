@@ -18,6 +18,7 @@ export default function EditProfile() {
     grade: '',
     academyCodeInput: '',
     academies: [],
+    removedAcademyIds: [],
     isNew: true,
   })
 
@@ -134,7 +135,7 @@ export default function EditProfile() {
                     grade: child.grade ?? '',
                     academyCodeInput: '',
                     academies: child.academies ?? [],
-                    academyChanged: false,
+                    removedAcademyIds: [],
                     isNew: false,
                   }
                 }),
@@ -290,8 +291,9 @@ export default function EditProfile() {
               ? {
                 ...child,
                 academyCodeInput: '',
-                academyChanged: true,
-                academies: [{ id: academyCode, code: academyCode, name: '학원명 확인 예정' }],
+                academies: [...child.academies, {
+                  id: 'pending-' + academyCode, code: academyCode, name: '저장 후 학원 확인', pending: true,
+                }],
               }
               : child
       ),
@@ -307,8 +309,10 @@ export default function EditProfile() {
           child.id === childId
               ? {
                 ...child,
-                academyChanged: true,
                 academies: child.academies.filter((academy) => academy.id !== academyId),
+                removedAcademyIds: child.academies.some(academy => academy.id === academyId && !academy.pending)
+                    ? [...child.removedAcademyIds, academyId]
+                    : child.removedAcademyIds,
               }
               : child
       ),
@@ -486,26 +490,35 @@ export default function EditProfile() {
       }
 
       if (user?.role === USER_ROLES.PARENT) {
-        if (form.children.length > 0) {
-          const childPromises = form.children.map((child) => {
-            const formattedGrade = normalizeGrade(child.grade)
-            const inputCode = child.academyCodeInput.trim()
-            const code = inputCode || child.academies[0]?.code || ''
+        for (const child of form.children) {
+          const addCodes = child.academies.filter(academy => academy.pending).map(academy => academy.code)
+          const inputCode = child.academyCodeInput.trim()
+          if (inputCode) addCodes.push(inputCode)
 
-            if (child.isNew) {
-              return studentAPI.addChild({
-                name: child.name.trim(),
-                grade: formattedGrade,
-                academies: code ? [{ code }] : [],
-              })
-            }
-            if (inputCode || child.academyChanged) {
-              return studentAPI.updateChildAcademy(child.studentId, code || null)
-            }
-            return Promise.resolve()
-          })
+          let savedChild
+          if (child.isNew) {
+            savedChild = await studentAPI.addChild({
+              name: child.name.trim(),
+              grade: normalizeGrade(child.grade),
+              academies: addCodes.map(code => ({ code })),
+            })
+          } else if (addCodes.length || child.removedAcademyIds.length) {
+            savedChild = await studentAPI.updateChildAcademies(child.studentId, addCodes, child.removedAcademyIds)
+          }
 
-          await Promise.all(childPromises)
+          if (savedChild) {
+            setForm(prev => ({
+              ...prev,
+              children: prev.children.map(item => item.id === child.id ? {
+                ...item,
+                studentId: savedChild.studentId,
+                isNew: false,
+                academyCodeInput: '',
+                academies: savedChild.academies ?? [],
+                removedAcademyIds: [],
+              } : item),
+            }))
+          }
         }
 
         const freshRes = await studentAPI.getMyChildren()
@@ -796,7 +809,7 @@ export default function EditProfile() {
                                 <input className="input-field" value={child.academyCodeInput} onChange={(e) => updateChild(child.id, 'academyCodeInput', e.target.value)} placeholder="학원 코드 입력" />
 
                                 <button type="button" onClick={() => addAcademyToChild(child.id)} style={{ width: 72, flexShrink: 0, borderRadius: 12, background: 'var(--color-primary)', color: '#fff', fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-                                  {child.academies.length ? '변경' : '추가'}
+                                  추가
                                 </button>
                               </div>
 

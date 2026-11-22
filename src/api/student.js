@@ -21,10 +21,10 @@ export const studentAPI = {
     })
   },
 
-  updateChildAcademy(studentId, code) {
+  updateChildAcademies(studentId, addCodes, removeAcademyIds) {
     return apiCall('/api/students/' + studentId + '/academy', {
       method: 'PATCH',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ addCodes, removeAcademyIds }),
     })
   },
 
