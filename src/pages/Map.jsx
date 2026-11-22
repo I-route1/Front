@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useOutletContext } from 'react-router-dom'
 import { Client } from '@stomp/stompjs'
-import { requestAndGetFCMToken, initForegroundMessageListener } from '../utils/fcm'
 import { getBusCurrentLocation, getBusRoute, getStudentEtas, getStudentCurrentLocation } from '../services/gpsService'
 import { getAttendanceByStudent } from '../api/attendance'
 import { useAuth, USER_ROLES, normalizeRole } from '@/context/AuthContext'
@@ -55,6 +54,26 @@ function Banner({ kind, children }) {
   )
 }
 
+// 지각 위험·경로 이탈 푸시 알림 켜기. 권한은 버튼을 눌렀을 때만 묻는다 (아이폰은 버튼을 눌러야만 권한 창이 뜬다)
+function PushPermissionBanner({ push }) {
+  const { permission, enabling, error, enable } = push
+  if (error) return <Banner kind="danger">{error}</Banner>
+  if (permission === 'denied') {
+    return <Banner kind="muted">알림이 차단돼 있어요. 브라우저 주소창 왼쪽의 사이트 설정에서 알림을 허용해 주세요</Banner>
+  }
+  if (permission !== 'default') return null
+  const s = BANNER_STYLE.info
+  return (
+    <div role="status" style={{ background: s.bg, borderBottom: `1px solid ${s.border}`, color: s.fg, padding: '8px 20px', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, zIndex: 6 }}>
+      <span aria-hidden="true">🔔</span>
+      <span style={{ wordBreak: 'keep-all', flex: 1 }}>지각 위험·경로 이탈을 알림으로 받아 보세요</span>
+      <button type="button" onClick={enable} disabled={enabling} style={{ border: 'none', borderRadius: 8, background: '#1A56DB', color: 'white', fontSize: 12, fontWeight: 700, padding: '6px 10px', cursor: enabling ? 'wait' : 'pointer', opacity: enabling ? 0.7 : 1, whiteSpace: 'nowrap' }}>
+        {enabling ? '켜는 중…' : '알림 켜기'}
+      </button>
+    </div>
+  )
+}
+
 // 자녀 정류장 표시 (카카오 CustomOverlay 내용). 이름은 서버 값이라 innerHTML 대신 textContent로 넣는다.
 function childStopElement(label) {
   const wrap = document.createElement('div')
@@ -87,6 +106,9 @@ export default function Map() {
   const canReadAttendance = Boolean(user?.token) && Number.isInteger(Number(selectedChild?.studentId))
   // 학부모 계정은 로그인 ID가 학생의 parentId다 (백엔드 GpsDummyDataInitializer: 테스트 학부모 userId 14 = parentId)
   const parentId = normalizeRole(user?.role) === USER_ROLES.PARENT && Number.isInteger(Number(user?.id)) ? Number(user.id) : null
+  // 푸시 알림(지각 위험·경로 이탈)은 학부모에게 가므로 학부모에게만 '알림 켜기'를 보여준다 (AppLayout의 usePushNotifications)
+  const push = useOutletContext()?.push ?? null
+  const isParentAccount = normalizeRole(user?.role) === USER_ROLES.PARENT
 
   const mapRef = useRef(null)
   const busOverlayRef = useRef(null)
@@ -245,11 +267,6 @@ export default function Map() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [childStudentId, canReadAttendance])
-
-  useEffect(() => {
-    requestAndGetFCMToken()
-    initForegroundMessageListener()
-  }, [])
 
   // 실시간: 버스 위치 + (학부모 계정이면) 자녀 승하차
   useEffect(() => {
@@ -422,6 +439,7 @@ export default function Map() {
         {signalLoss && <Banner kind="muted">{signalLoss}</Banner>}
         {wsState === 'reconnecting' && <Banner kind="muted">실시간 연결이 끊겨 다시 연결하고 있어요</Banner>}
         {!isRunning && locationError && <Banner kind="muted">{locationError}</Banner>}
+        {isParentAccount && push && <PushPermissionBanner push={push} />}
 
         <div style={{ flex: 1, minHeight: 400, background: '#E8F0FE', position: 'relative' }}>
           <div ref={mapRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
