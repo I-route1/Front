@@ -10,6 +10,7 @@ import { resolveProfileImageUrl, DEFAULT_PROFILE_IMAGE } from '@/utils/profileIm
 const PAGE_TITLES = {
     '/home': null,
     '/map': '실시간 위치',
+    '/driver/map': '운행',
     '/learning': '학습 리포트',
     '/notice': '공지사항',
     '/notifications': '알림',

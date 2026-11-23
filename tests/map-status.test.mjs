@@ -225,6 +225,8 @@ test('거리 표시', () => {
   assert.equal(formatDistance(616), '620m')
   assert.equal(formatDistance(3), '10m')
   assert.equal(formatDistance(1234), '1.2km')
+  assert.equal(formatDistance(996), '1.0km', '10m 단위로 올려 1000m가 되면 km로')
+  assert.equal(formatDistance(994), '990m')
   assert.equal(formatDistance(3081), '3.1km')
   assert.equal(formatDistance(null), '-')
 })

@@ -218,6 +218,11 @@ function projectOntoLine(line, p) {
   }
 }
 
+// 점 p에서 선(line)까지의 거리(m). 선이 2점 미만이거나 좌표가 이상하면 null
+export function distanceToLine(line, p) {
+  return projectOntoLine(line, p)?.offset ?? null
+}
+
 // 정류장마다 노선 선 위 위치(선 출발점에서 잰 거리 m). 백엔드도 정류장을 도로에 투영해 순서를 비교한다
 function stopDistancesOnLine(line, stations) {
   return stations.map((s) => projectOntoLine(line, s)?.along ?? 0)
@@ -268,7 +273,9 @@ export function progressStatuses(stations, bus, path = null) {
 // 거리 표시: 1km 미만은 10m 단위, 그 이상은 0.1km 단위
 export function formatDistance(meters) {
   if (!isFiniteNumber(meters) || meters < 0) return '-'
-  if (meters < 1000) return `${Math.max(10, Math.round(meters / 10) * 10)}m`
+  // 995m처럼 10m 단위로 올리면 1000m가 되는 값은 1.0km로 보여준다
+  const rounded = Math.max(10, Math.round(meters / 10) * 10)
+  if (rounded < 1000) return `${rounded}m`
   return `${(meters / 1000).toFixed(1)}km`
 }
 
