@@ -83,12 +83,18 @@ function AcademyInviteCard() {
                         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
                             학부모가 자녀를 학원에 연결할 때 사용하는 코드예요.
                         </p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-                            <code style={{ minWidth: 0, flex: '1 1 180px', overflowWrap: 'anywhere', userSelect: 'all' }}>
-                                {code}
-                            </code>
-                            <button type="button" className="btn btn--secondary" onClick={copyCode}>코드 복사</button>
-                        </div>
+                        <input
+                            className="input-field"
+                            aria-label="학원 코드"
+                            value={code}
+                            readOnly
+                            onFocus={event => event.currentTarget.select()}
+                            style={{ minWidth: 0, fontWeight: 600 }}
+                        />
+                        <button type="button" className="btn btn--secondary" onClick={copyCode}
+                            style={{ justifySelf: 'end' }}>
+                            코드 복사
+                        </button>
                     </>
                 ) : !message && <p role="status">학원 코드를 불러오는 중입니다.</p>}
                 {message && <p role="status" style={{ fontSize: 12 }}>{message}</p>}

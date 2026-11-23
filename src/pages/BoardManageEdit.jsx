@@ -140,8 +140,16 @@ export default function BoardManageEdit() {
                         <h2 style={{ fontSize: 16 }}>학원 초대코드</h2>
                         {inviteCode ? (
                             <>
-                                <code style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{inviteCode}</code>
-                                <button type="button" className="btn btn--secondary" onClick={copyInviteCode}>
+                                <input
+                                    className="input-field"
+                                    aria-label="학원 코드"
+                                    value={inviteCode}
+                                    readOnly
+                                    onFocus={event => event.currentTarget.select()}
+                                    style={{ minWidth: 0, fontWeight: 600 }}
+                                />
+                                <button type="button" className="btn btn--secondary" onClick={copyInviteCode}
+                                    style={{ justifySelf: 'end' }}>
                                     코드 복사
                                 </button>
                             </>
