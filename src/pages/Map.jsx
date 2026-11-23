@@ -187,7 +187,7 @@ export default function Map() {
     setLocationError(null)
   }, [])
 
-  // 노선: 서버는 버스 현재 위치가 있을 때만 준다 (없으면 404). 운행이 시작되면 다시 시도한다.
+  // 노선은 현재 위치와 별도로 요청한다.
   const loadRoute = useCallback(async () => {
     if (routeLoadingRef.current) return
     routeLoadingRef.current = true
@@ -202,7 +202,7 @@ export default function Map() {
         contact: res?.driverPhoneNumber || prev.contact,
       }))
     } catch {
-      // 운행 전(위치 없음)에는 404가 정상이다
+      // 노선을 받지 못했으면 운행 시작 후 다시 시도한다.
     } finally {
       routeLoadingRef.current = false
     }
@@ -489,6 +489,7 @@ export default function Map() {
                         etaText = `${childEta.etaMinutes}분 후${childEta.lateRisk ? ' 🚨' : ''}`
                         etaColor = childEta.lateRisk ? '#DC2626' : '#10B981'
                       }
+                      else if (stop.scheduledArrivalTime) etaText = `${stop.scheduledArrivalTime} 예정`
                       return (
                           <div key={stop.stopId} style={{ flex: 1, minWidth: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, zIndex: 1 }}>
                             <div style={{ width: isCurrent || isMyChildStop ? 16 : 12, height: isCurrent || isMyChildStop ? 16 : 12, borderRadius: '50%', background: isMyChildStop && !isPassed && !isCurrent ? '#FBBF24' : (isCurrent ? 'white' : dotColor), border: isCurrent ? '4px solid #3B82F6' : (isMyChildStop && !isPassed ? '4px solid #F59E0B' : 'none'), boxShadow: isCurrent ? '0 0 0 4px rgba(59, 130, 246, 0.2)' : 'none', transition: 'all 0.3s ease' }} />
@@ -559,6 +560,11 @@ export default function Map() {
                               <span style={{ marginLeft: '8px', background: '#FEF08A', color: '#A16207', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
                                 {childName ?? '우리 아이'} 하차 정류장
                               </span>
+                          )}
+                          {stop.scheduledArrivalTime && (
+                              <div style={{ marginTop: 3, color: '#6B7280', fontSize: 12 }}>
+                                <time dateTime={stop.scheduledArrivalTime}>{stop.scheduledArrivalTime}</time> 예정
+                              </div>
                           )}
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: '700', color: isCurrent ? '#FF3B3B' : (isPassed ? '#9CA3AF' : '#2563EB') }}>

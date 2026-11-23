@@ -106,6 +106,18 @@ test('노선 응답은 순서대로 정렬하고 좌표 없는 정류장은 뺀�
   assert.deepEqual(routeFromResponse(null).stations, [])
 })
 
+test('예정 시각은 유효한 정류장에만 분 단위로 표시된다', () => {
+  const { stations, path } = routeFromResponse({
+    ...routeResponse,
+    stops: [
+      { ...routeResponse.stops[0], scheduledArrivalTime: '18:02:00' },
+      routeResponse.stops[1],
+      { ...routeResponse.stops[2], scheduledArrivalTime: '25:10' },
+    ],
+  })
+  assert.deepEqual(progressStatuses(stations, null, path).map((stop) => stop.scheduledArrivalTime), [null, '18:02', null])
+})
+
 test('시뮬레이션 경로: 도로 경로가 없으면 정류장 순서대로 직선, 정류장이 2개 미만이면 null', () => {
   // 운영 서버 1번 버스 테스트 노선(test-route)과 같은 모양
   const testRoute = {

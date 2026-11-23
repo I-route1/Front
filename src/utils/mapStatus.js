@@ -114,6 +114,8 @@ export function locationErrorMessage(err) {
 const isPoint = (p) => isFiniteNumber(p?.latitude) && isFiniteNumber(p?.longitude)
   && Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180
 
+const localTimePattern = /^((?:[01]\d|2[0-3]):[0-5]\d)(?::[0-5]\d(?:\.\d{1,9})?)?$/
+
 // GET /api/gps/buses/{busId}/route 응답 → 화면용 노선
 // - stations: 정류장 (순서대로, 좌표 없는 정류장은 뺀다)
 // - path: 서버가 카카오 모빌리티로 받은 실제 도로 경로 좌표 (첫 정류장 → 마지막 정류장).
@@ -129,6 +131,9 @@ export function routeFromResponse(route) {
       latitude: s.latitude,
       longitude: s.longitude,
       status: s.status === 'ARRIVED' || s.status === 'PASSED' ? s.status : 'BEFORE_ARRIVAL',
+      scheduledArrivalTime: typeof s.scheduledArrivalTime === 'string'
+        ? localTimePattern.exec(s.scheduledArrivalTime)?.[1] ?? null
+        : null,
     }))
     .sort((a, b) => a.order - b.order)
   const path = (Array.isArray(route?.path) ? route.path : [])
