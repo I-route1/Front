@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth, USER_ROLES } from '@/context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { studentAPI } from '@/api'
+import { apiCall } from '@/api/client'
 import { resolveProfileImageUrl, DEFAULT_PROFILE_IMAGE } from '@/utils/profileImage'
 
 const ROLE_LABEL = {
@@ -45,6 +46,55 @@ function normalizeAcademyList(user) {
     }
 
     return []
+}
+
+function AcademyInviteCard() {
+    const [code, setCode] = useState('')
+    const [message, setMessage] = useState('')
+
+    useEffect(() => {
+        const controller = new AbortController()
+        apiCall('/api/academies/me/invite-code', { method: 'POST', signal: controller.signal })
+            .then(data => {
+                if (!controller.signal.aborted) setCode(data.inviteCode)
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) setMessage('학원 코드를 불러오지 못했습니다.')
+            })
+        return () => controller.abort()
+    }, [])
+
+    async function copyCode() {
+        try {
+            await navigator.clipboard.writeText(code)
+            setMessage('학원 코드를 복사했습니다.')
+        } catch {
+            setMessage('코드를 선택해 직접 복사해 주세요.')
+        }
+    }
+
+    return (
+        <section aria-labelledby="profile-academy-code"
+            style={{ padding: '0 16px', marginTop: -44, marginBottom: 8, position: 'relative', zIndex: 10 }}>
+            <div className="card" style={{ padding: 16, display: 'grid', gap: 8 }}>
+                <h2 id="profile-academy-code" style={{ fontSize: 15 }}>학원 코드</h2>
+                {code ? (
+                    <>
+                        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                            학부모가 자녀를 학원에 연결할 때 사용하는 코드예요.
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                            <code style={{ minWidth: 0, flex: '1 1 180px', overflowWrap: 'anywhere', userSelect: 'all' }}>
+                                {code}
+                            </code>
+                            <button type="button" className="btn btn--secondary" onClick={copyCode}>코드 복사</button>
+                        </div>
+                    </>
+                ) : !message && <p role="status">학원 코드를 불러오는 중입니다.</p>}
+                {message && <p role="status" style={{ fontSize: 12 }}>{message}</p>}
+            </div>
+        </section>
+    )
 }
 
 export default function Profile() {
@@ -100,20 +150,6 @@ export default function Profile() {
         }))
 
         setAcademyFormError('')
-    }
-
-    const handleCopyAcademyCode = async (academyCode) => {
-        if (!academyCode || academyCode === '발급 예정') {
-            alert('아직 발급된 학원 고유코드가 없습니다.')
-            return
-        }
-
-        try {
-            await navigator.clipboard.writeText(academyCode)
-            alert('학원 고유코드가 복사되었습니다.')
-        } catch {
-            alert('복사에 실패했습니다. 코드를 직접 선택해서 복사해 주세요.')
-        }
     }
 
     const handleAddAcademy = async () => {
@@ -227,6 +263,8 @@ export default function Profile() {
                     </div>
                 </div>
             </div>
+
+            {user?.role === USER_ROLES.ACADEMY && <AcademyInviteCard key={user.id ?? user.userId} />}
 
             {/* 자녀 정보 카드 */}
             {user?.role === USER_ROLES.PARENT && (
