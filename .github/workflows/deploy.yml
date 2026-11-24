@@ -5,11 +5,39 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: frontend-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DEPLOY_AWS_ACCOUNT_ID: '363183905447'
+      DEPLOY_AWS_REGION: ap-southeast-2
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      CF_DIST_ID: ${{ vars.CF_DIST_ID }}
+      AWS_PAGER: ''
 
     steps:
+      - name: Check deployment variables
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$AWS_DEPLOY_ROLE_ARN" != "arn:aws:iam::$DEPLOY_AWS_ACCOUNT_ID:role/"?* ]]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN must be a role in the frontend AWS account."
+            exit 1
+          fi
+          if [[ ! "$S3_BUCKET" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ || ! "$CF_DIST_ID" =~ ^[A-Z0-9]+$ ]]; then
+            echo "::error::Set the S3_BUCKET and CF_DIST_ID repository variables."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -25,12 +53,12 @@ jobs:
       - name: Build
         run: npm run test:learning-records && npm run build
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_URL }}
-          VITE_WS_URL: ${{ secrets.VITE_WS_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || secrets.VITE_API_URL }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_URL || secrets.VITE_API_URL }}
+          VITE_WS_URL: ${{ vars.VITE_WS_URL || secrets.VITE_WS_URL }}
           VITE_KAKAO_MAP_KEY: ${{ secrets.VITE_KAKAO_MAP_KEY }}
           VITE_KAKAO_CLIENT_ID: ${{ secrets.VITE_KAKAO_CLIENT_ID }}
-          VITE_KAKAO_REDIRECT_URI: ${{ secrets.VITE_KAKAO_REDIRECT_URI }}
+          VITE_KAKAO_REDIRECT_URI: ${{ vars.VITE_KAKAO_REDIRECT_URI || secrets.VITE_KAKAO_REDIRECT_URI }}
           VITE_TOSS_CLIENT_KEY: ${{ secrets.VITE_TOSS_CLIENT_KEY }}
           # FCM 푸시 알림. Secret이 비어 있으면 Firebase 초기화를 건너뛸 뿐 빌드·화면은 그대로 동작한다
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -41,15 +69,53 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
 
-      - name: Deploy to S3
+      - name: Authenticate to AWS with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-2
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.DEPLOY_AWS_REGION }}
 
-      - name: S3 Upload
-        run: aws s3 sync dist/ s3://${{ secrets.S3_BUCKET }} --delete
+      - name: Verify AWS targets and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s dist/index.html || ! -d dist/assets ]]; then
+            echo "::error::Frontend build is incomplete."
+            exit 1
+          fi
+          if [[ "$(aws sts get-caller-identity --query Account --output text)" != "$DEPLOY_AWS_ACCOUNT_ID" ]]; then
+            echo "::error::Deployment credentials belong to the wrong AWS account."
+            exit 1
+          fi
+          bucket_region="$(aws s3api get-bucket-location --bucket "$S3_BUCKET" \
+            --expected-bucket-owner "$DEPLOY_AWS_ACCOUNT_ID" \
+            --query LocationConstraint --output text)"
+          if [[ "$bucket_region" != "$DEPLOY_AWS_REGION" ]]; then
+            echo "::error::The frontend bucket is in the wrong AWS region."
+            exit 1
+          fi
 
-      - name: CloudFront Invalidation
-        run: aws cloudfront create-invalidation --distribution-id ${{ secrets.CF_DIST_ID }} --paths "/*"
+          distribution="$(aws cloudfront get-distribution --id "$CF_DIST_ID" --output json \
+            --query 'Distribution.{Arn:ARN,Status:Status,Enabled:DistributionConfig.Enabled,DefaultOrigin:DistributionConfig.DefaultCacheBehavior.TargetOriginId,Origins:DistributionConfig.Origins.Items[].{Id:Id,Domain:DomainName,Path:OriginPath}}')"
+          FRONTEND_DISTRIBUTION="$distribution" python3 - <<'PY'
+          import json
+          import os
+
+          distribution = json.loads(os.environ["FRONTEND_DISTRIBUTION"])
+          account = os.environ["DEPLOY_AWS_ACCOUNT_ID"]
+          region = os.environ["DEPLOY_AWS_REGION"]
+          bucket = os.environ["S3_BUCKET"]
+          distribution_id = os.environ["CF_DIST_ID"]
+          if distribution["Arn"] != f"arn:aws:cloudfront::{account}:distribution/{distribution_id}":
+              raise SystemExit("CloudFront distribution belongs to the wrong AWS account.")
+          if not distribution["Enabled"] or distribution["Status"] != "Deployed":
+              raise SystemExit("CloudFront distribution must be enabled and deployed.")
+          bucket_domains = {f"{bucket}.s3.{region}.amazonaws.com", f"{bucket}.s3.amazonaws.com"}
+          if not any(origin["Id"] == distribution["DefaultOrigin"]
+                     and origin["Domain"] in bucket_domains and not origin["Path"]
+                     for origin in distribution["Origins"]):
+              raise SystemExit("CloudFront's default origin does not serve the root of the frontend bucket.")
+          PY
+
+          aws s3 sync dist/ "s3://$S3_BUCKET/" --delete
+          aws cloudfront create-invalidation --distribution-id "$CF_DIST_ID" --paths "/*"

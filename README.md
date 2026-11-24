@@ -125,7 +125,7 @@ npm run dev
 
 ## 🔑 환경변수
 
-`.env`는 `.gitignore`에 포함되어 있어 커밋되지 않습니다. 비어 있는 키 값은 팀원에게 받습니다. 운영 배포에서는 같은 값이 GitHub Secrets에 등록되어 있습니다.
+`.env`는 `.gitignore`에 포함되어 있어 커밋되지 않습니다. 비어 있는 키 값은 팀원에게 받습니다. 운영 배포 설정은 아래 배포 절을 참고하세요.
 
 | 변수 | 설명 | 없으면 |
 | --- | --- | --- |
@@ -222,10 +222,23 @@ git push -u origin feat/작업이름     # GitHub에서 main으로 PR
 
 `.github/workflows/deploy.yml`
 
-1. `main`에 push되거나 Actions 탭에서 수동 실행하면
-2. Node 20으로 `npm ci` → `npm run build` (환경변수는 GitHub Secrets)
-3. `dist/`를 S3에 업로드 (`--delete`)
-4. CloudFront 캐시 무효화
+프런트 배포 대상은 AWS 계정 `363183905447`의 시드니 리전입니다. GitHub 저장소의
+**Settings → Secrets and variables → Actions → Variables**에 다음 값을 등록합니다.
+
+| 변수 | 값 |
+| --- | --- |
+| `AWS_DEPLOY_ROLE_ARN` | AWS에서 `I-route1/Front`의 `main` 브랜치를 신뢰하도록 설정한 OIDC 역할 ARN |
+| `S3_BUCKET` | 프런트 빌드 파일 전용 S3 버킷 이름 |
+| `CF_DIST_ID` | 해당 버킷을 기본 오리진으로 쓰는 CloudFront 배포 ID |
+| `VITE_API_URL` | 운영 백엔드 API의 HTTPS 주소 |
+| `VITE_WS_URL` | 운영 WebSocket의 WSS 주소 (`/ws`) |
+| `VITE_KAKAO_REDIRECT_URI` | 프런트 주소의 카카오 로그인 콜백 (`/oauth/kakao/callback`) |
+
+`main`의 push 또는 수동 실행 시 테스트와 빌드를 진행합니다. 공개 주소 변수 3개는
+비어 있으면 같은 이름의 GitHub Secret 값을 사용합니다. 나머지 `VITE_*` 값은
+GitHub Secrets에서 읽습니다. AWS는 GitHub OIDC로 인증하며, 계정·버킷 소유자·리전과
+CloudFront 오리진을 확인한 뒤 `dist/`를 S3에 동기화하고 CloudFront 캐시를 무효화합니다.
+동기화는 빌드에 없는 기존 파일을 버킷에서 삭제하므로 프런트 파일만 보관하세요.
 
 배포 직후 예전 화면이 보이면 PWA 캐시 때문일 수 있습니다. 시크릿 창으로 열거나 새로고침을 몇 번 해 봅니다.
 
