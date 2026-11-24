@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { studentAPI } from '@/api'
 import { ScopedActivityRecord } from '@/components/learning/AttentionRecords'
+import { isAdmin, useAuth } from '@/context/AuthContext'
 import OverviewTab from './OverviewTab'
 import StudentsTab from './StudentsTab'
 import FeedbackTab from './FeedbackTab'
@@ -14,6 +16,9 @@ const TABS = [
 ]
 
 export default function AdminLearning() {
+  const { user } = useAuth()
+  const isAdministrator = isAdmin(user?.role)
+  const getStudents = isAdministrator ? studentAPI.getAdminStudents : studentAPI.getAcademyStudents
   const [activeTab, setActiveTab] = useState('overview')
   const [searchParams, setSearchParams] = useSearchParams()
   const activityId = searchParams.get('activityId')
@@ -45,10 +50,10 @@ export default function AdminLearning() {
           }}>{t.label}</button>
         ))}
       </div>
-      {activeTab === 'overview' && <OverviewTab />}
-      {activeTab === 'students' && <StudentsTab />}
-      {activeTab === 'feedback' && <FeedbackTab />}
-      {activeTab === 'grade'    && <GradeRegisterTab />}   
+      {activeTab === 'overview' && <OverviewTab getStudents={getStudents} isAdministrator={isAdministrator} />}
+      {activeTab === 'students' && <StudentsTab getStudents={getStudents} isAdministrator={isAdministrator} />}
+      {activeTab === 'feedback' && <FeedbackTab getStudents={getStudents} />}
+      {activeTab === 'grade' && <GradeRegisterTab getStudents={getStudents} />}
     </div>
   )
 }

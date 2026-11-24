@@ -9,6 +9,10 @@ export const studentAPI = {
     return apiCall('/api/students/academy/students')
   },
 
+  getAdminStudents() {
+    return apiCall('/api/students/admin/students')
+  },
+
   getAcademies() {
     return apiCall('/api/academies')
   },

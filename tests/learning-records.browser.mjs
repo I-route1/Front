@@ -65,7 +65,13 @@ async function openPage(options = {}) {
     const respond = (json, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) })
     if (path === '/api/auth/token/refresh') return respond({ accessToken: 'renewed' })
     if (path === '/api/students/my-children') return respond(children)
-    if (path === '/api/students/academy/students') return respond(state.academyStudents || children)
+    if (path === '/api/students/academy/students') {
+      return state.role === 'ADMIN' ? respond({}, 403) : respond(state.academyStudents || children)
+    }
+    if (path === '/api/students/admin/students') {
+      if (state.role !== 'ADMIN') return respond({}, 403)
+      return state.adminRosterStatus ? respond({}, state.adminRosterStatus) : respond(state.adminStudents || children)
+    }
     if (path === '/api/posture-records') {
       const studentId = url.searchParams.get('studentId')
       if (state.poseDelay && studentId === '14') await state.poseDelay
@@ -648,6 +654,51 @@ test('학원 전체현황은 예시 학생이 아니라 실제 학원 학생·�
     await page.getByRole('button', { name: '중2', exact: true }).click()
     await page.getByLabel('중2 통계').getByText('1명', { exact: true }).first().waitFor()
     assert.equal(await page.getByRole('region', { name: '상담 필요 학생' }).count(), 0)
+    assert(state.requests.some(r => r.path === '/api/students/academy/students'))
+    assert(!state.requests.some(r => r.path === '/api/students/admin/students'))
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('관리자 전체현황과 학생 선택은 관리자 목록만 사용한다', async () => {
+  const { page, context, state, errors } = await openPage({
+    role: 'ADMIN',
+    adminStudents: [{ studentId: 33, name: '관리자검증학생', grade: '초5' }],
+  })
+  try {
+    await page.goto(`${BASE}/admin/learning`)
+    await page.getByRole('heading', { name: '전체 학생 현황' }).waitFor()
+    await page.getByText('학생 1명 · 성적 등록 0명', { exact: true }).waitFor()
+
+    await page.getByRole('button', { name: /학생관리/ }).click()
+    await page.getByText('관리자검증학생', { exact: true }).waitFor()
+    await page.getByText('총 1명 등록', { exact: true }).waitFor()
+
+    for (const name of [/피드백/, /성적 등록/]) {
+      await page.getByRole('button', { name }).click()
+      await page.getByRole('option', { name: '관리자검증학생 (초5)' }).waitFor({ state: 'attached' })
+    }
+    const requests = state.requests.filter(r => r.path === '/api/students/admin/students')
+    assert(requests.length >= 4)
+    assert(requests.every(r => r.method === 'GET' && r.auth === 'Bearer test-token'))
+    assert(!state.requests.some(r => r.path === '/api/students/academy/students'))
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+})
+
+test('관리자 학생관리에서 조회 실패를 표시하고 다시 불러올 수 있다', async () => {
+  const { page, context, state, errors } = await openPage({ role: 'ADMIN' })
+  try {
+    await page.goto(`${BASE}/admin/learning`)
+    await page.getByText('학생 2명 · 성적 등록 0명', { exact: true }).waitFor()
+    state.adminRosterStatus = 403
+    await page.getByRole('button', { name: /학생관리/ }).click()
+    await page.getByRole('alert').getByText('학생 목록을 불러오지 못했어요.').waitFor()
+    assert.equal(await page.getByText('등록된 학생이 없어요', { exact: true }).count(), 0)
+
+    state.adminRosterStatus = undefined
+    await page.getByRole('button', { name: '다시 불러오기' }).click()
+    await page.getByText('연결검증학생', { exact: true }).waitFor()
     assert.deepEqual(errors, [])
   } finally { await context.close() }
 })

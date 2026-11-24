@@ -1,37 +1,41 @@
 import { useState, useEffect } from 'react'
-import { analysisAPI, studentAPI } from '@/api'
-import { useAuth } from '@/context/AuthContext'
+import { analysisAPI } from '@/api'
 import StudentDetail from './studentDetail/StudentDetail'
 import { mapLimited } from '@/utils/mapLimited'
 
-export default function StudentsTab() {
-  const { user } = useAuth()
+export default function StudentsTab({ getStudents, isAdministrator }) {
   const [students, setStudents]               = useState([])
-  const [studentsLoading, setStudentsLoading] = useState(true)
+  const [studentsState, setStudentsState] = useState('loading')
+  const [reloadKey, setReloadKey] = useState(0)
   const [search, setSearch]                   = useState('')
   const [filterGrade, setFilterGrade]         = useState('전체')
   const [sortBy, setSortBy]                   = useState('name')
   const [selectedId, setSelectedId]           = useState(null)
   const [riskMap, setRiskMap]                 = useState({})
 
-  // 학원 학생 목록 조회
   useEffect(() => {
-    setStudentsLoading(true)
-    studentAPI.getAcademyStudents()
+    let active = true
+    setStudentsState('loading')
+    setStudents([])
+    setRiskMap({})
+    setSelectedId(null)
+    getStudents()
       .then(data => {
-        const list = Array.isArray(data) ? data : []
+        if (!active) return
+        const list = (Array.isArray(data) ? data : []).filter(s => s?.studentId != null)
         setStudents(list.map(s => ({
           id:             s.studentId,
-          name:           s.name,
+          name:           s.name || `학생 ${s.studentId}`,
           grade:          s.grade || '',
           gradeStudentId: s.gradeStudentId || '',
           academyId:      s.academyId,
           risk:           'low',
         })))
+        setStudentsState('ready')
       })
-      .catch(() => setStudents([]))
-      .finally(() => setStudentsLoading(false))
-  }, [])
+      .catch(() => { if (active) setStudentsState('error') })
+    return () => { active = false }
+  }, [getStudents, reloadKey])
 
   // 위험도 조회 (학생이 많아도 서버에 한 번에 6개까지만 요청)
   useEffect(() => {
@@ -67,11 +71,20 @@ export default function StudentsTab() {
       return a.name.localeCompare(b.name, 'ko')
     })
 
-  if (studentsLoading) {
+  if (studentsState === 'loading') {
     return (
       <div style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
         <p style={{ fontSize: 28, marginBottom: 12 }}>⏳</p>
         <p style={{ fontSize: 14 }}>학생 목록을 불러오는 중...</p>
+      </div>
+    )
+  }
+
+  if (studentsState === 'error') {
+    return (
+      <div role="alert" style={{ margin: 16 }}>
+        <p>학생 목록을 불러오지 못했어요.</p>
+        <button type="button" onClick={() => setReloadKey(key => key + 1)}>다시 불러오기</button>
       </div>
     )
   }
@@ -142,9 +155,11 @@ export default function StudentsTab() {
           <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--color-text-muted)' }}>
             <p style={{ fontSize: 28, marginBottom: 12 }}>👥</p>
             <p style={{ fontSize: 14 }}>등록된 학생이 없어요</p>
-            <p style={{ fontSize: 12, marginTop: 6, opacity: 0.7, lineHeight: 1.6 }}>
-              학부모가 자녀 등록 시 학원 코드를 입력하면<br />자동으로 추가됩니다
-            </p>
+            {!isAdministrator && (
+              <p style={{ fontSize: 12, marginTop: 6, opacity: 0.7, lineHeight: 1.6 }}>
+                학부모가 자녀 등록 시 학원 코드를 입력하면<br />자동으로 추가됩니다
+              </p>
+            )}
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)', fontSize: 13 }}>

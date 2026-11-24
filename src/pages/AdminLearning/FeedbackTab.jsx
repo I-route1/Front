@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react'
-import { activitiesAPI, studentAPI } from '@/api'
+import { activitiesAPI } from '@/api'
 import { MeasurementDetails } from '@/components/learning/AttentionRecords'
 import { cameraActivityMetrics, formatElapsedSeconds } from '@/components/learning/recordUtils'
 
-export default function FeedbackTab() {
+export default function FeedbackTab({ getStudents }) {
   const [students, setStudents] = useState([])
   const [studentsError, setStudentsError] = useState('')
   const [activityError, setActivityError] = useState('')
   useEffect(() => {
     let active = true
-    studentAPI.getAcademyStudents()
+    setStudentsError('')
+    getStudents()
       .then(list => {
         if (active) setStudents((Array.isArray(list) ? list : []).map(s => ({ ...s, id: s.studentId ?? s.id })))
       })
       .catch(error => { if (active) setStudentsError(error.message) })
     return () => { active = false }
-  }, [])
+  }, [getStudents])
   const [selectedStudent, setSelectedStudent] = useState('')
   const [activities, setActivities] = useState([])      
   const [loadingActivities, setLoadingActivities] = useState(false)

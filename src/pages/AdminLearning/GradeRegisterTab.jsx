@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { gradesAPI, studentAPI } from '@/api'
+import { gradesAPI } from '@/api'
 import { SUBJECTS, SUBJECT_COLORS } from './data/mockData'
 
 const EXAM_TYPES = [
@@ -24,13 +24,12 @@ function gradeLevelOf(grade) {
   return m ? Number(m[1]) : 1
 }
 
-export default function GradeRegisterTab() {
-  // 학원 학생 목록 (실제 API)
+export default function GradeRegisterTab({ getStudents }) {
   const [students, setStudents] = useState([])
   const [studentsState, setStudentsState] = useState('loading') // loading | ready | error
   const loadStudents = useCallback(() => {
     setStudentsState('loading')
-    studentAPI.getAcademyStudents()
+    getStudents()
       .then(data => {
         const list = (Array.isArray(data) ? data : [])
           .filter(s => s?.studentId != null)
@@ -40,7 +39,7 @@ export default function GradeRegisterTab() {
         setStudentsState('ready')
       })
       .catch(() => setStudentsState('error'))
-  }, [])
+  }, [getStudents])
   useEffect(() => { loadStudents() }, [loadStudents])
 
   // 폼 상태
