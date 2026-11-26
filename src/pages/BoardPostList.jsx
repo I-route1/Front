@@ -274,8 +274,19 @@ export default function BoardPostList() {
                         )}
 
                         {board && isAdmin && (
-                            <button type="button" className="btn btn--danger"
-                                disabled={deletingBoard} onClick={handleDeleteBoard}>
+                            <button
+                                type="button"
+                                className="btn btn--danger"
+                                disabled={deletingBoard}
+                                onClick={handleDeleteBoard}
+                                style={{
+                                    padding: '10px 12px',
+                                    borderRadius: 12,
+                                    border: '1px solid transparent',
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                }}
+                            >
                                 {deletingBoard ? '삭제 중…' : '게시판 삭제'}
                             </button>
                         )}
