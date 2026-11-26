@@ -100,6 +100,7 @@ export default function BoardPostList() {
         user?.memberId ??
         localStorage.getItem('userId')
 
+    const [deletingBoard, setDeletingBoard] = useState(false)
     const [board, setBoard] = useState(null)
     const [selectedManager, setSelectedManager] = useState(null)
     const [posts, setPosts] = useState([])
@@ -116,6 +117,7 @@ export default function BoardPostList() {
         async function fetchBoardAndPosts() {
             try {
                 setIsLoading(true)
+                setBoard(null)
                 setSelectedManager(null)
                 setNoticeMessage('')
 
@@ -159,6 +161,22 @@ export default function BoardPostList() {
         userId != null &&
         managerId != null &&
         Number(userId) === Number(managerId)
+    async function handleDeleteBoard() {
+        if (!board || !isAdmin || deletingBoard) return
+        if (!window.confirm('게시판과 그 안의 모든 게시글을 삭제하시겠습니까?')) return
+
+        setDeletingBoard(true)
+        setNoticeMessage('')
+        try {
+            await boardAPI.deleteBoard(boardId)
+            navigate('/board', { replace: true })
+        } catch (error) {
+            setNoticeMessage(error.message || '게시판을 삭제하지 못했습니다.')
+        } finally {
+            setDeletingBoard(false)
+        }
+    }
+
     const canWrite = board?.boardType !== 'NOTICE' || isAdmin
 
     const filteredPosts = useMemo(() => {
@@ -236,7 +254,7 @@ export default function BoardPostList() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                        {isAcademyManager && (
+                        {board && (isAdmin || isAcademyManager) && (
                             <button
                                 type="button"
                                 onClick={() => navigate(`/board/${boardId}/manage`)}
@@ -251,7 +269,14 @@ export default function BoardPostList() {
                                     cursor: 'pointer',
                                 }}
                             >
-                                ⚙️ 관리
+                                {isAdmin ? '게시판 수정' : '⚙️ 관리'}
+                            </button>
+                        )}
+
+                        {board && isAdmin && (
+                            <button type="button" className="btn btn--danger"
+                                disabled={deletingBoard} onClick={handleDeleteBoard}>
+                                {deletingBoard ? '삭제 중…' : '게시판 삭제'}
                             </button>
                         )}
 

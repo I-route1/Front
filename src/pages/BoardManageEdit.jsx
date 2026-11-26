@@ -9,13 +9,14 @@ export default function BoardManageEdit() {
     const { boardId } = useParams()
     const navigate = useNavigate()
     const { user } = useAuth()
+    const isAdmin = ['ADMIN', 'ROLE_ADMIN'].includes(user?.role)
     const userId = user?.id ?? user?.userId
 
     const [form, setForm] = useState({
         name: '',
         description: '',
-        academyAddress: '',
     })
+    const [boardLoaded, setBoardLoaded] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [isManager, setIsManager] = useState(false)
@@ -29,6 +30,8 @@ export default function BoardManageEdit() {
         async function fetchBoard() {
             try {
                 setIsLoading(true)
+                setBoardLoaded(false)
+                setErrorMsg('')
                 setIsManager(false)
                 setInviteCode('')
                 setInviteFeedback('')
@@ -37,10 +40,10 @@ export default function BoardManageEdit() {
                     const ownsBoard = data.boardType === 'ACADEMY' && userId != null &&
                         String(data.managerUserId) === String(userId)
                     setIsManager(ownsBoard)
+                    setBoardLoaded(true)
                     setForm({
                         name: data.name ?? '',
                         description: data.description ?? '',
-                        academyAddress: data.academyAddress ?? '',
                     })
                 }
             } catch (error) {
@@ -80,6 +83,7 @@ export default function BoardManageEdit() {
     }
 
     const handleSubmit = async () => {
+        if (!isAdmin || !boardLoaded || saving) return
         if (!form.name.trim()) {
             setErrorMsg('게시판 이름을 입력해 주세요.')
             return
@@ -94,7 +98,6 @@ export default function BoardManageEdit() {
                 {
                     name: form.name.trim(),
                     description: form.description.trim(),
-                    academyAddress: form.academyAddress.trim(),
                 },
                 userId,
             )
@@ -157,7 +160,8 @@ export default function BoardManageEdit() {
                         {inviteFeedback && <p role="status">{inviteFeedback}</p>}
                     </div>
                 )}
-                <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {!(isAdmin && boardLoaded) && errorMsg && <p role="alert">{errorMsg}</p>}
+                {isAdmin && boardLoaded && <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     <div className="input-group">
                         <label className="input-label">게시판 이름</label>
                         <input
@@ -175,16 +179,6 @@ export default function BoardManageEdit() {
                             value={form.description}
                             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
                             placeholder="학부모 및 학생 안내 문구를 입력해 주세요"
-                        />
-                    </div>
-
-                    <div className="input-group">
-                        <label className="input-label">학원 주소</label>
-                        <input
-                            className="input-field"
-                            value={form.academyAddress}
-                            onChange={(e) => setForm((prev) => ({ ...prev, academyAddress: e.target.value }))}
-                            placeholder="예: 서울특별시 강남구 테헤란로 123"
                         />
                     </div>
 
@@ -211,7 +205,7 @@ export default function BoardManageEdit() {
                     >
                         {saving ? '저장 중...' : '변경사항 저장'}
                     </button>
-                </div>
+                </div>}
             </section>
         </div>
     )

@@ -70,6 +70,7 @@ export default function BoardDetail() {
 
     const userId = user?.id ?? user?.userId
 
+    const [managedBoardId, setManagedBoardId] = useState(null)
     const [post, setPost] = useState(null)
     const [selectedAuthor, setSelectedAuthor] = useState(null)
     const [liked, setLiked] = useState(false)
@@ -82,6 +83,27 @@ export default function BoardDetail() {
     const [isSubmittingComment, setIsSubmittingComment] = useState(false)
 
     const isOwner = post?.ownedByMe ?? (post?.userId != null && String(post.userId) === String(userId))
+
+    const isAdmin = ['ADMIN', 'ROLE_ADMIN'].includes(user?.role)
+    const isAcademy = ['ACADEMY', 'ROLE_ACADEMY'].includes(user?.role)
+    const canEditPost = isOwner || isAdmin
+    const canDeletePost = canEditPost || (isAcademy && managedBoardId != null && managedBoardId === post?.boardId)
+
+    useEffect(() => {
+        const boardId = post?.boardId
+        if (!isAcademy || boardId == null || userId == null) return
+
+        let ignore = false
+        boardAPI.getBoardDetail(boardId)
+            .then(board => {
+                if (!ignore) {
+                    const isManager = board.boardType === 'ACADEMY' && String(board.managerUserId) === String(userId)
+                    setManagedBoardId(isManager ? boardId : null)
+                }
+            })
+            .catch(() => { if (!ignore) setManagedBoardId(null) })
+        return () => { ignore = true }
+    }, [isAcademy, post?.boardId, userId])
 
     useEffect(() => {
         let ignore = false
@@ -398,19 +420,15 @@ export default function BoardDetail() {
                         {favorite ? '★ 즐겨찾기 완료' : '☆ 즐겨찾기'}
                     </button>
 
-                    {isOwner && (
-                        <>
-                            <button
-                                onClick={() => navigate(`/posts/${postId}/edit`)}
-                                className="btn btn--secondary"
-                            >
-                                수정
-                            </button>
-
-                            <button onClick={handleDeletePost} className="btn btn--danger">
-                                삭제
-                            </button>
-                        </>
+                    {canEditPost && (
+                        <button onClick={() => navigate(`/posts/${postId}/edit`)} className="btn btn--secondary">
+                            수정
+                        </button>
+                    )}
+                    {canDeletePost && (
+                        <button onClick={handleDeletePost} className="btn btn--danger">
+                            삭제
+                        </button>
                     )}
                 </div>
             </article>

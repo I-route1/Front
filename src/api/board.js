@@ -149,6 +149,10 @@ export const boardAPI = {
     })
   },
 
+  deleteBoard(boardId) {
+    return apiCall(`/api/boards/${boardId}`, { method: 'DELETE' })
+  },
+
   getBookmarkedBoardIds() {
     return apiCall('/api/boards/bookmarks')
   },
